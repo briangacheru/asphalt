@@ -1,0 +1,160 @@
+/* -------------------------------------------------------------------------- */
+/*                                Falcon Button                               */
+/* -------------------------------------------------------------------------- */
+/* prettier-ignore */
+/*# sourceMappingURL=user.css.map */
+
+:root {
+    /* Apple-Inspired Monochrome Palette */
+    --black: #000000;
+    --gray-950: #0a0a0a;
+    --gray-900: #1d1d1f;
+    --gray-850: #252528;
+    --gray-800: #333336;
+    --gray-700: #48484a;
+    --gray-600: #636366;
+    --gray-500: #86868b;
+    --gray-400: #aeaeb2;
+    --gray-300: #c7c7cc;
+    --gray-200: #d1d1d6;
+    --gray-100: #e5e5ea;
+    --gray-50: #f2f2f7;
+    --white: #ffffff;
+
+    /* Gradients - BLACK & WHITE */
+    --gradient-dark: linear-gradient(180deg, #000000 0%, #1d1d1f 50%, #0a0a0a 100%);
+    --gradient-card: linear-gradient(145deg, rgba(45, 45, 48, 0.9) 0%, rgba(28, 28, 30, 0.95) 100%);
+
+
+    /* Typography - Apple System Fonts */
+    --font-primary: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    --font-mono: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+
+    /* Spacing */
+    --spacing-xs: 0.25rem;
+    --spacing-sm: 0.5rem;
+    --spacing-md: 1rem;
+    --spacing-lg: 1.5rem;
+    --spacing-xl: 2rem;
+    --spacing-2xl: 3rem;
+
+    /* Border Radius */
+    --radius-sm: 8px;
+    --radius-md: 12px;
+    --radius-lg: 18px;
+    --radius-xl: 24px;
+    --radius-full: 50%;
+
+    /* Shadows */
+    --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.3);
+    --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.4);
+    --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.5);
+    --shadow-glow: 0 0 20px rgba(255, 255, 255, 0.1);
+    --shadow-glow-strong: 0 0 40px rgba(255, 255, 255, 0.15);
+
+    /* Transitions */
+    --transition-fast: 0.15s ease;
+    --transition-normal: 0.3s cubic-bezier(0.25, 0.1, 0.25, 1);
+
+    /* Sidebar */
+    --sidebar-width: 260px;
+}
+
+
+/* Empty State */
+.empty-state {
+    text-align: center;
+    padding: var(--spacing-2xl);
+}
+
+.empty-state-icon {
+    font-size: 3.5rem;
+    color: rgba(255, 255, 255, 0.15);
+    margin-bottom: var(--spacing-lg);
+}
+
+.empty-state-title {
+    font-size: 1.2rem;
+    color: var(--white);
+    margin-bottom: var(--spacing-sm);
+    font-weight: 500;
+}
+
+.empty-state-text {
+    color: var(--gray-500);
+    margin-bottom: var(--spacing-lg);
+}
+
+
+/* Custom styling for radio button cards */
+.btn-check:checked + label {
+    background-color: #198754;
+    color: white;
+    border-color: #198754;
+}
+
+.btn-check:checked + label .text-muted {
+    color: rgba(255, 255, 255, 0.8) !important;
+}
+
+.btn-check:disabled + label {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.btn-outline-success {
+    transition: all 0.2s ease;
+}
+
+.btn-outline-success:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+.vehicle-card {
+    transition: all 0.3s ease;
+    cursor: pointer;
+    border: 2px solid #dee2e6;
+}
+
+.vehicle-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.vehicle-card.selected {
+    border-color: #198754 !important;
+    box-shadow: 0 0 0 0.25rem rgba(25, 135, 84, 0.25);
+}
+
+.vehicle-card.selected .card-title {
+    color: #0f5132;
+}
+
+.vehicle-card.selected::before {
+    content: '';
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    width: 16px;
+    height: 16px;
+    background-color: #198754;
+    border-radius: 50%;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.hover-lift {
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.hover-lift:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 0.5rem 1.5rem rgba(0, 0, 0, 0.1) !important;
+}
+
+.icon-box {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 56px;
+    height: 56px;
+}
