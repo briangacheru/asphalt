@@ -6,20 +6,20 @@ if (session_status() === PHP_SESSION_NONE) {
 }
 
 // Database Configuration
-define('DB_HOST', 'localhost');
-define('DB_NAME', 'vehicle_service_tracker');
-define('DB_USER', 'root');
-define('DB_PASS', '');
+define('DB_HOST', getenv('DB_HOST') ?: 'localhost');
+define('DB_NAME', getenv('DB_NAME') ?: 'your_database_name');
+define('DB_USER', getenv('DB_USER') ?: 'your_database_user');
+define('DB_PASS', getenv('DB_PASS') ?: 'your_database_password');
 
 // Email Configuration (PHPMailer SMTP)
-define('SMTP_HOST', 'mail.monkbrian.com');
-define('SMTP_PORT', 465);
-define('SMTP_SECURE', 'ssl'); // 'tls' or 'ssl'
-define('SMTP_USER', 'support@monkbrian.com');
-define('SMTP_PASS', 'EDU+pass.'); // Use App Password for Gmail
-define('ADMIN_EMAIL', 'bryo4419@gmail.com');
-define('FROM_EMAIL', 'support@monkbrian.com');
-define('FROM_NAME', 'iVehicle');
+define('SMTP_HOST', getenv('SMTP_HOST') ?: 'smtp.example.com');
+define('SMTP_PORT', getenv('SMTP_PORT') ?: 587);
+define('SMTP_SECURE', getenv('SMTP_SECURE') ?: 'tls'); // 'tls' or 'ssl'
+define('SMTP_USER', getenv('SMTP_USER') ?: 'your_email@example.com');
+define('SMTP_PASS', getenv('SMTP_PASS') ?: 'your_email_password'); // Use App Password for Gmail
+define('ADMIN_EMAIL', getenv('ADMIN_EMAIL') ?: 'admin@example.com');
+define('FROM_EMAIL', getenv('FROM_EMAIL') ?: 'noreply@example.com');
+define('FROM_NAME', getenv('FROM_NAME') ?: 'iVehicle');
 
 // Application Settings
 define('APP_NAME', 'iVehicle');
