@@ -14,11 +14,12 @@
  * - Low mileage warnings (vehicle hasn't been driven much)
  */
 
-require_once __DIR__ . '/../includes/config.php';
-require_once __DIR__ . '/../includes/EmailHelper.php';
+require_once __DIR__ . '/../vendor/autoload.php';
+use App\Database\Database;
+use App\Services\EmailService;
 
-$pdo = getDBConnection();
-$emailHelper = new EmailHelper($pdo);
+$pdo = Database::getInstance()->getConnection();
+$emailService = new EmailService($pdo);
 
 echo "╔══════════════════════════════════════════════════════════╗\n";
 echo "║     Service Reminder Email Job - " . date('Y-m-d H:i:s') . "     ║\n";
@@ -100,7 +101,7 @@ foreach ($vehicles as $vehicle) {
         echo "Status: 🚨 OVERDUE by " . number_format(abs($vehicle['km_remaining'])) . " km\n";
 
         try {
-            $emailSent = $emailHelper->sendServiceReminderEmail($vehicle['id'], $vehicle['km_remaining']);
+            $emailSent = $emailService->sendServiceReminderEmail($vehicle['id'], $vehicle['km_remaining']);
             if ($emailSent) {
                 echo "Action: ✓ Overdue reminder email sent\n";
                 $stats['emails_sent']++;
@@ -121,7 +122,7 @@ foreach ($vehicles as $vehicle) {
         echo "Status: ⚠ URGENT - Only " . number_format($vehicle['km_remaining']) . " km left\n";
 
         try {
-            $emailSent = $emailHelper->sendServiceReminderEmail($vehicle['id'], $vehicle['km_remaining']);
+            $emailSent = $emailService->sendServiceReminderEmail($vehicle['id'], $vehicle['km_remaining']);
             if ($emailSent) {
                 echo "Action: ✓ Urgent reminder email sent\n";
                 $stats['emails_sent']++;
@@ -144,7 +145,7 @@ foreach ($vehicles as $vehicle) {
         // Only send if user wants upcoming reminders
         if ($vehicle['email_frequency'] === 'all' || $vehicle['email_frequency'] === 'important') {
             try {
-                $emailSent = $emailHelper->sendServiceReminderEmail($vehicle['id'], $vehicle['km_remaining']);
+                $emailSent = $emailService->sendServiceReminderEmail($vehicle['id'], $vehicle['km_remaining']);
                 if ($emailSent) {
                     echo "Action: ✓ Upcoming reminder email sent\n";
                     $stats['emails_sent']++;
@@ -169,7 +170,7 @@ foreach ($vehicles as $vehicle) {
     }
 
     // 5. LOW MILEAGE WARNING - Vehicle hasn't been driven much
-    checkLowMileageWarning($pdo, $emailHelper, $vehicle, $stats);
+    checkLowMileageWarning($pdo, $emailService, $vehicle, $stats);
 }
 
 // Print summary
@@ -237,7 +238,7 @@ function shouldSendReminder($pdo, $vehicleId, $kmRemaining, $emailFrequency) {
 /**
  * Check for low mileage warning
  */
-function checkLowMileageWarning($pdo, $emailHelper, $vehicle, &$stats) {
+function checkLowMileageWarning($pdo, $emailService, $vehicle, &$stats) {
     // Skip if no last service date
     if (!$vehicle['last_service_date']) {
         return;
@@ -267,7 +268,7 @@ function checkLowMileageWarning($pdo, $emailHelper, $vehicle, &$stats) {
             $stats['low_mileage']++;
 
             try {
-                $sent = $emailHelper->sendLowMileageWarning($vehicle['id'], $kmDrivenSinceService, $daysSinceService);
+                $sent = $emailService->sendLowMileageWarning($vehicle['id'], $kmDrivenSinceService, $daysSinceService);
                 if ($sent) {
                     echo "Action: ✓ Low mileage warning email sent\n";
                     $stats['emails_sent']++;

@@ -8,11 +8,12 @@
  * This will run at 9:00 AM on the 1st of every month
  */
 
-require_once __DIR__ . '/../includes/config.php';
-require_once __DIR__ . '/../includes/EmailHelper.php';
+require_once __DIR__ . '/../vendor/autoload.php';
+use App\Database\Database;
+use App\Services\EmailService;
 
-$pdo = getDBConnection();
-$emailHelper = new EmailHelper($pdo);
+$pdo = Database::getInstance()->getConnection();
+$emailService = new EmailService($pdo);
 
 echo "Starting monthly email job at " . date('Y-m-d H:i:s') . "\n";
 
@@ -27,7 +28,7 @@ foreach ($vehicles as $vehicle) {
     echo "Processing vehicle: {$vehicle['make']} {$vehicle['model']} (ID: {$vehicle['id']})\n";
 
     try {
-        $result = $emailHelper->sendMonthlyCheckEmail($vehicle['id']);
+        $result = $emailService->sendMonthlyCheckEmail($vehicle['id']);
         if ($result) {
             $emailsSent++;
             echo "  ✓ Monthly check email sent\n";

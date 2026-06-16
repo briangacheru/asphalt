@@ -1,10 +1,9 @@
 <?php
 require_once __DIR__ . '/../includes/config.php';
 
-$pdo = getDBConnection();
-
 // Delete remember token if exists
 if (isset($_COOKIE['remember_token'])) {
+    $pdo = \App\Database\Database::getInstance()->getConnection();
     $token = $_COOKIE['remember_token'];
     $pdo->prepare("DELETE FROM remember_tokens WHERE token = ?")->execute([$token]);
     setcookie('remember_token', '', time() - 3600, '/', '', false, true);

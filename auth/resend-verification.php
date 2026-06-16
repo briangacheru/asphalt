@@ -1,8 +1,7 @@
 <?php
-require_once __DIR__ . '/../includes/config.php';
-require_once __DIR__ . '/../includes/EmailHelper.php';
+require_once __DIR__ . '/../vendor/autoload.php';
 
-$pdo = getDBConnection();
+$pdo = \App\Database\Database::getInstance()->getConnection();
 $email = $_GET['email'] ?? '';
 $success = false;
 
@@ -18,8 +17,8 @@ if (!empty($email)) {
         $pdo->prepare("UPDATE users SET verification_token = ? WHERE id = ?")->execute([$token, $user['id']]);
 
         // Send email
-        $emailHelper = new EmailHelper($pdo);
-        $emailHelper->sendWelcomeEmail($user['email'], $token, $user['first_name']);
+        $emailService = new \App\Services\EmailService($pdo);
+        $emailService->sendWelcomeEmail($user['email'], $token, $user['first_name']);
 
         $success = true;
     }
