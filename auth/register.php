@@ -2,15 +2,18 @@
 /**
  * Registration Page
  */
-require_once __DIR__ . '/../includes/config.php';
-require_once __DIR__ . '/../includes/EmailHelper.php';
+require_once __DIR__ . '/../includes/bootstrap.php';
+
+use App\Middleware\AuthMiddleware;
+use App\Database\Database;
+use App\Services\EmailService;
 
 // Redirect if already logged in
-if (isLoggedIn()) {
+if (AuthMiddleware::isLoggedIn()) {
     redirect(APP_URL . '/index.php');
 }
 
-$pdo = getDBConnection();
+$pdo = Database::getInstance()->getConnection();
 $errors = [];
 $formData = [
     'first_name' => '',
@@ -77,8 +80,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             ]);
             
             // Send verification email
-            $emailHelper = new EmailHelper($pdo);
-            $emailSent = $emailHelper->sendWelcomeEmail($formData['email'], $verificationToken, $formData['first_name']);
+            $emailService = new EmailService($pdo);
+            $emailSent = $emailService->sendWelcomeEmail($formData['email'], $verificationToken, $formData['first_name']);
             
             if ($emailSent) {
                 setFlashMessage('success', 'Account created! Please check your email to verify your account.');
