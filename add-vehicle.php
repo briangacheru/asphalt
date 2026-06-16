@@ -1,9 +1,9 @@
 <?php
-require_once 'includes/config.php';
-requireAuth();
+require_once 'includes/bootstrap.php';
+\App\Middleware\AuthMiddleware::check();
 
-$pdo = getDBConnection();
-$userId = getCurrentUserId();
+$pdo = \App\Database\Database::getInstance()->getConnection();
+$userId = \App\Middleware\AuthMiddleware::getCurrentUserId();
 
 // Handle form submission BEFORE any output
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {

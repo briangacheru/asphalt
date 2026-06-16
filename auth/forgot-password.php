@@ -2,15 +2,14 @@
 /**
  * Forgot Password Page
  */
-require_once __DIR__ . '/../includes/config.php';
-require_once __DIR__ . '/../includes/EmailHelper.php';
+require_once __DIR__ . '/../vendor/autoload.php';
 
 // Redirect if already logged in
-if (isLoggedIn()) {
+if (\App\Middleware\AuthMiddleware::isLoggedIn()) {
     redirect(APP_URL . '/index.php');
 }
 
-$pdo = getDBConnection();
+$pdo = \App\Database\Database::getInstance()->getConnection();
 $errors = [];
 $success = false;
 $email = '';
@@ -43,8 +42,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmt->execute([$user['id'], $token, $expires]);
 
             // Send reset email
-            $emailHelper = new EmailHelper($pdo);
-            $emailHelper->sendPasswordResetEmail($user['email'], $token, $user['first_name']);
+            $emailService = new \App\Services\EmailService($pdo);
+            $emailService->sendPasswordResetEmail($user['email'], $token, $user['first_name']);
         }
 
         // Always show success message to prevent email enumeration

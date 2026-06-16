@@ -1,11 +1,11 @@
 <?php
-require_once __DIR__ . '/config.php';
+require_once __DIR__ . '/bootstrap.php';
 
-requireAuth();
-$pdo = getDBConnection();
+\App\Middleware\AuthMiddleware::check();
+$pdo = \App\Database\Database::getInstance()->getConnection();
 
 $currentUser = getCurrentUser();
-$userId = getCurrentUserId();
+$userId = \App\Middleware\AuthMiddleware::getCurrentUserId();
 
 // Get all active vehicles for current user
 $vehiclesStmt = $pdo->prepare("SELECT id, make, model, year, current_mileage FROM vehicles WHERE user_id = ? AND is_active = 1 ORDER BY make, model");
