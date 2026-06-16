@@ -1,5 +1,5 @@
 <?php
-require_once __DIR__ . '/../includes/config.php';
+require_once __DIR__ . '/../includes/bootstrap.php';
 
 // Delete remember token if exists
 if (isset($_COOKIE['remember_token'])) {
