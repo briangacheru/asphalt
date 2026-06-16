@@ -4,6 +4,7 @@ namespace App\Database;
 
 use PDO;
 use PDOException;
+use App\Helpers\Environment;
 
 /**
  * Database connection manager using singleton pattern
@@ -53,8 +54,8 @@ class Database
         try {
             $dsn = sprintf(
                 "mysql:host=%s;dbname=%s;charset=utf8mb4",
-                DB_HOST,
-                DB_NAME
+                Environment::get('DB_HOST', 'localhost'),
+                Environment::get('DB_NAME', 'your_database_name')
             );
 
             $options = [
@@ -64,7 +65,12 @@ class Database
                 PDO::ATTR_PERSISTENT => true
             ];
 
-            $this->connection = new PDO($dsn, DB_USER, DB_PASS, $options);
+            $this->connection = new PDO(
+                $dsn,
+                Environment::get('DB_USER', 'your_database_user'),
+                Environment::get('DB_PASS', 'your_database_password'),
+                $options
+            );
         } catch (PDOException $e) {
             error_log("Database connection failed: " . $e->getMessage());
             throw new \RuntimeException("Database connection failed. Please check your configuration.");

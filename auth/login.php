@@ -2,14 +2,17 @@
 /**
  * Login Page
  */
-require_once __DIR__ . '/../includes/config.php';
+require_once __DIR__ . '/../includes/bootstrap.php';
+
+use App\Middleware\AuthMiddleware;
+use App\Database\Database;
 
 // Redirect if already logged in
-if (isLoggedIn()) {
+if (AuthMiddleware::isLoggedIn()) {
     redirect(APP_URL . '/index.php');
 }
 
-$pdo = getDBConnection();
+$pdo = Database::getInstance()->getConnection();
 $errors = [];
 $email = '';
 

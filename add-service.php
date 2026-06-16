@@ -1,9 +1,11 @@
 <?php
-require_once 'includes/config.php';
-require_once 'includes/EmailHelper.php';
-requireAuth();
+require_once 'includes/bootstrap.php';
 
-$pdo = getDBConnection();
+use App\Database\Database;
+use App\Models\Vehicle;
+use App\Services\EmailService;
+
+$pdo = Database::getInstance()->getConnection();
 $userId = getCurrentUserId();
 
 // Get all active vehicles
@@ -110,8 +112,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmt->execute([$vehicle_id, $mileage, $service_date]);
 
             // Send email asking for service details
-            $emailHelper = new EmailHelper($pdo);
-            $emailHelper->sendServiceDetailsEmail($serviceRecordId);
+            $emailService = new EmailService($pdo);
+            $emailService->sendServiceDetailsEmail($serviceRecordId);
 
             setFlashMessage('success', 'Service record added successfully! Check your email for a reminder to add service item details.');
             redirect('service-items.php?service_id=' . $serviceRecordId);
