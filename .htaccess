@@ -1,0 +1,78 @@
+# Enable Rewrite Engine
+RewriteEngine On
+
+# Set the base directory (adjust if your site is in a subfolder)
+RewriteBase /
+
+# ---------------------------------------------------------
+# SECURITY: Block Direct Access to Sensitive Folders/Files
+# ---------------------------------------------------------
+
+# Block direct access to vendor directory (Composer dependencies)
+RewriteRule ^vendor/ - [F,L]
+
+# Block direct access to src directory (Core logic)
+RewriteRule ^src/ - [F,L]
+
+# Block direct access to .env file
+RewriteRule ^\.env$ - [F,L]
+
+# Block direct access to .git directory
+RewriteRule ^\.git/ - [F,L]
+
+# Block direct access to SQL files
+RewriteRule \.sql$ - [F,L]
+
+# ---------------------------------------------------------
+# ERROR LOGGING CONFIGURATION
+# ---------------------------------------------------------
+
+# Disable displaying errors directly in the browser (Production Best Practice)
+php_flag display_errors Off
+
+# Enable error logging
+php_flag log_errors On
+
+# Write error log to root folder
+php_value error_log error.log
+
+# Optional: Define a custom 404 error page (uncomment if you have a 404.php)
+# ErrorDocument 404 /404.php
+
+# Optional: Define a custom 500 error page (uncomment if you have a 500.php)
+# ErrorDocument 500 /500.php
+
+# ---------------------------------------------------------
+# URL REWRITING (Clean URLs - Remove .php extension)
+# ---------------------------------------------------------
+
+# If the requested file or directory exists, serve it directly
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+
+# If the request has no extension and a matching .php file exists, serve it
+RewriteCond %{REQUEST_FILENAME}.php -f
+RewriteRule ^(.+)$ $1.php [L]
+
+# For everything else, route to index.php
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^(.*)$ index.php [QSA,L]
+
+# ---------------------------------------------------------
+# ADDITIONAL SECURITY HEADERS
+# ---------------------------------------------------------
+
+<IfModule mod_headers.c>
+    # Prevent MIME type sniffing
+    Header set X-Content-Type-Options "nosniff"
+
+    # Enable XSS Filter in browsers
+    Header set X-XSS-Protection "1; mode=block"
+
+    # Prevent clickjacking
+    Header set X-Frame-Options "SAMEORIGIN"
+</IfModule>
+
+# Disable directory listing (if not already disabled by server config)
+Options -Indexes
