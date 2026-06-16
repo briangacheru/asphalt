@@ -2,14 +2,17 @@
 /**
  * Forgot Password Page
  */
-require_once __DIR__ . '/../vendor/autoload.php';
+require_once __DIR__ . '/../includes/bootstrap.php';
+
+use App\Middleware\AuthMiddleware;
+use App\Database\Database;
 
 // Redirect if already logged in
-if (\App\Middleware\AuthMiddleware::isLoggedIn()) {
+if (AuthMiddleware::isLoggedIn()) {
     redirect(APP_URL . '/index.php');
 }
 
-$pdo = \App\Database\Database::getInstance()->getConnection();
+$pdo = Database::getInstance()->getConnection();
 $errors = [];
 $success = false;
 $email = '';
