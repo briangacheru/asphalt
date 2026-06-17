@@ -1,6 +1,8 @@
 <?php
 $pageTitle = 'Update Mileage';
 require_once 'includes/header.php';
+use App\Database\Database;
+use App\Services\EmailService;
 
 // Get all active vehicles
 $vehiclesStmt = $pdo->query("
@@ -51,12 +53,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($lastService) {
                 $kmRemaining = $lastService['next_service_mileage'] - $new_mileage;
                 if ($kmRemaining <= 1000 && $kmRemaining > 0) {
-                    require_once __DIR__ . '/../vendor/autoload.php';
-                    use App\Database\Database;
-                    use App\Services\EmailService;
-                    
-                    $db = Database::getInstance()->getConnection();
-                    $emailService = new EmailService($db);
+                    $emailService = new EmailService($pdo);
                     $emailService->sendServiceReminderEmail($vehicle_id, $kmRemaining);
                 }
             }

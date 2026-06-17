@@ -355,4 +355,153 @@ class EmailService
 
         return $sent;
     }
+
+    /**
+     * Send service reminder email
+     */
+    public function sendServiceReminderEmail(int $vehicleId, int $kmRemaining): bool
+    {
+        $stmt = $this->pdo->prepare("
+            SELECT v.*, u.email, u.first_name,
+                   (SELECT next_service_mileage FROM service_records WHERE vehicle_id = v.id ORDER BY id DESC LIMIT 1) as next_service
+            FROM vehicles v
+            JOIN users u ON v.user_id = u.id
+            WHERE v.id = ?
+        ");
+        $stmt->execute([$vehicleId]);
+        $data = $stmt->fetch();
+
+        if (!$data) {
+            return false;
+        }
+
+        $vehicleName = $data['make'] . ' ' . $data['model'] . ' (' . $data['year'] . ')';
+
+        // Determine urgency level and message
+        $urgencyHtml = '';
+        $subjectPrefix = '';
+        if ($kmRemaining < 0) {
+            $urgencyHtml = sprintf(
+                '<div style="background: rgba(255,59,48,0.2); border: 1px solid rgba(255,59,48,0.3); border-radius: 12px; padding: 20px; margin: 20px 0; color: #ff3b30;"><strong>🚨 OVERDUE!</strong> Your service is %s km overdue. Please schedule service immediately.</div>',
+                number_format(abs($kmRemaining))
+            );
+            $subjectPrefix = 'OVERDUE: ';
+        } elseif ($kmRemaining <= 500) {
+            $urgencyHtml = sprintf(
+                '<div style="background: rgba(255,59,48,0.2); border: 1px solid rgba(255,59,48,0.3); border-radius: 12px; padding: 20px; margin: 20px 0; color: #ff3b30;"><strong>⚠️ URGENT!</strong> Only %s km remaining until service is due.</div>',
+                number_format($kmRemaining)
+            );
+            $subjectPrefix = 'URGENT: ';
+        } else {
+            $urgencyHtml = sprintf(
+                '<div style="background: rgba(255,149,0,0.2); border: 1px solid rgba(255,149,0,0.3); border-radius: 12px; padding: 20px; margin: 20px 0; color: #ff9500;"><strong>📅 Service Reminder</strong> You have %s km remaining until your next service.</div>',
+                number_format($kmRemaining)
+            );
+        }
+
+        $content = sprintf('
+            <h2 style="margin: 0 0 20px; color: #ffffff; font-size: 20px;">Service Reminder</h2>
+            <p style="margin: 0 0 20px; line-height: 1.6;">Hi %s,</p>
+            <p style="margin: 0 0 20px; line-height: 1.6;">This is a friendly reminder about your upcoming service for <strong>%s</strong>.</p>
+            
+            %s
+            
+            <div style="background: rgba(0,0,0,0.3); border-radius: 12px; padding: 20px; margin: 20px 0;">
+                <table style="width: 100%%; color: #e5e5ea;">
+                    <tr><td style="padding: 8px 0; color: #86868b;">Vehicle:</td><td style="padding: 8px 0; text-align: right;">%s</td></tr>
+                    <tr><td style="padding: 8px 0; color: #86868b;">Current Mileage:</td><td style="padding: 8px 0; text-align: right;">%s km</td></tr>
+                    <tr><td style="padding: 8px 0; color: #86868b;">Next Service At:</td><td style="padding: 8px 0; text-align: right;">%s km</td></tr>
+                    <tr><td style="padding: 8px 0; color: #86868b;">Km Remaining:</td><td style="padding: 8px 0; text-align: right; color: %s;">%s km</td></tr>
+                </table>
+            </div>
+            
+            <p style="margin: 20px 0; line-height: 1.6;">Regular maintenance helps keep your vehicle running smoothly and prevents costly repairs down the road.</p>
+            
+            <p style="margin: 30px 0; text-align: center;">
+                <a href="%s/update-mileage?vehicle_id=%d" style="display: inline-block; padding: 14px 32px; background: #ffffff; color: #000000; text-decoration: none; border-radius: 8px; font-weight: 600;">Update Mileage</a>
+            </p>
+        ',
+            htmlspecialchars($data['first_name']),
+            htmlspecialchars($vehicleName),
+            $urgencyHtml,
+            htmlspecialchars($vehicleName),
+            number_format($data['current_mileage']),
+            number_format($data['next_service']),
+            $kmRemaining <= 500 ? '#ff3b30' : '#ff9500',
+            number_format($kmRemaining),
+            APP_URL,
+            $vehicleId
+        );
+
+        $subject = $subjectPrefix . "Service Reminder: $vehicleName";
+        $html = $this->getEmailTemplate($content, $subject);
+
+        $sent = $this->send($data['email'], $subject, $html);
+        $this->logEmail($vehicleId, 'service_reminder', $data['email'], $subject, $html, $sent ? 'sent' : 'failed');
+
+        return $sent;
+    }
+
+    /**
+     * Send low mileage warning email
+     */
+    public function sendLowMileageWarning(int $vehicleId, int $kmDriven, int $daysSinceService): bool
+    {
+        $stmt = $this->pdo->prepare("
+            SELECT v.*, u.email, u.first_name
+            FROM vehicles v
+            JOIN users u ON v.user_id = u.id
+            WHERE v.id = ?
+        ");
+        $stmt->execute([$vehicleId]);
+        $data = $stmt->fetch();
+
+        if (!$data) {
+            return false;
+        }
+
+        $vehicleName = $data['make'] . ' ' . $data['model'] . ' (' . $data['year'] . ')';
+
+        $content = sprintf('
+            <h2 style="margin: 0 0 20px; color: #ffffff; font-size: 20px;">Low Mileage Alert</h2>
+            <p style="margin: 0 0 20px; line-height: 1.6;">Hi %s,</p>
+            <p style="margin: 0 0 20px; line-height: 1.6;">We noticed that your <strong>%s</strong> hasn\'t been driven much recently.</p>
+            
+            <div style="background: rgba(0,0,0,0.3); border-radius: 12px; padding: 20px; margin: 20px 0;">
+                <table style="width: 100%%; color: #e5e5ea;">
+                    <tr><td style="padding: 8px 0; color: #86868b;">Days Since Last Service:</td><td style="padding: 8px 0; text-align: right;">%s days</td></tr>
+                    <tr><td style="padding: 8px 0; color: #86868b;">Kilometers Driven:</td><td style="padding: 8px 0; text-align: right;">%s km</td></tr>
+                </table>
+            </div>
+            
+            <p style="margin: 20px 0; line-height: 1.6;">Even if you don\'t drive much, regular maintenance is still important. Vehicles that sit idle can develop issues like:</p>
+            <ul style="margin: 0 0 20px; padding-left: 20px; line-height: 1.8;">
+                <li>Battery drain</li>
+                <li>Tire flat spots</li>
+                <li>Brake corrosion</li>
+                <li>Fluid degradation</li>
+            </ul>
+            
+            <p style="margin: 20px 0; line-height: 1.6;">Consider taking your vehicle for a drive or scheduling a maintenance check.</p>
+            
+            <p style="margin: 30px 0; text-align: center;">
+                <a href="%s/vehicle-details?id=%d" style="display: inline-block; padding: 14px 32px; background: #ffffff; color: #000000; text-decoration: none; border-radius: 8px; font-weight: 600;">View Vehicle Details</a>
+            </p>
+        ',
+            htmlspecialchars($data['first_name']),
+            htmlspecialchars($vehicleName),
+            round($daysSinceService),
+            number_format($kmDriven),
+            APP_URL,
+            $vehicleId
+        );
+
+        $subject = "Low Mileage Alert: $vehicleName";
+        $html = $this->getEmailTemplate($content, $subject);
+
+        $sent = $this->send($data['email'], $subject, $html);
+        $this->logEmail($vehicleId, 'low_mileage_warning', $data['email'], $subject, $html, $sent ? 'sent' : 'failed');
+
+        return $sent;
+    }
 }
