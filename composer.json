@@ -2,7 +2,8 @@
     "name": "ivehicle/app",
     "type": "project",
     "require": {
-        "phpunit/phpunit": "^10.0"
+        "phpunit/phpunit": "^10.0",
+        "phpmailer/phpmailer": "^6.8"
     },
     "autoload": {
         "psr-4": {
