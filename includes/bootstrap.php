@@ -154,3 +154,30 @@ function getCurrentUser(): ?array {
     $stmt->execute([getCurrentUserId()]);
     return $stmt->fetch() ?: null;
 }
+
+/**
+ * Generate CSRF token
+ */
+function generateCSRFToken(): string {
+    if (empty($_SESSION['csrf_token'])) {
+        $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+    }
+    return $_SESSION['csrf_token'];
+}
+
+/**
+ * Verify CSRF token
+ */
+function verifyCSRFToken(?string $token): bool {
+    if (empty($token) || empty($_SESSION['csrf_token'])) {
+        return false;
+    }
+    return hash_equals($_SESSION['csrf_token'], $token);
+}
+
+/**
+ * Get CSRF token field HTML
+ */
+function csrfField(): string {
+    return '<input type="hidden" name="csrf_token" value="' . generateCSRFToken() . '">';
+}

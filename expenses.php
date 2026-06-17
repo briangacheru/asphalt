@@ -70,6 +70,12 @@ function handleReceiptUpload($file) {
 
 // Handle Add
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'add') {
+    // Verify CSRF token
+    if (!verifyCSRFToken($_POST['csrf_token'] ?? '')) {
+        setFlashMessage('danger', 'Invalid security token. Please try again.');
+        redirect('expenses' . ($vehicleFilter ? '?vehicle_id=' . $vehicleFilter : ''));
+    }
+    
     $vehicle_id = (int)($_POST['vehicle_id'] ?? 0);
     $category_id = (int)($_POST['category_id'] ?? 0);
     $expense_date = $_POST['expense_date'] ?? date('Y-m-d');
@@ -121,6 +127,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 
 // Handle Edit
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'edit') {
+    // Verify CSRF token
+    if (!verifyCSRFToken($_POST['csrf_token'] ?? '')) {
+        setFlashMessage('danger', 'Invalid security token. Please try again.');
+        redirect('expenses' . ($vehicleFilter ? '?vehicle_id=' . $vehicleFilter : ''));
+    }
+    
     $expense_id    = (int)($_POST['expense_id'] ?? 0);
     $vehicle_id    = (int)($_POST['vehicle_id'] ?? 0);
     $category_id   = (int)($_POST['category_id'] ?? 0);
@@ -175,6 +187,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 
 // Handle Delete
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'delete') {
+    // Verify CSRF token
+    if (!verifyCSRFToken($_POST['csrf_token'] ?? '')) {
+        setFlashMessage('danger', 'Invalid security token. Please try again.');
+        redirect('expenses' . ($vehicleFilter ? '?vehicle_id=' . $vehicleFilter : ''));
+    }
+    
     $expense_id = (int)($_POST['expense_id'] ?? 0);
 
     if ($expense_id) {
@@ -530,6 +548,7 @@ if ($flash): ?>
                 </div>
                 <form method="POST" enctype="multipart/form-data">
                     <input type="hidden" name="action" value="add">
+                    <?php echo csrfField(); ?>
                     <div class="modal-body">
                         <!-- Basic Info -->
                         <div class="row">
@@ -651,6 +670,7 @@ if ($flash): ?>
                     <input type="hidden" name="action" value="edit">
                     <input type="hidden" name="expense_id" id="edit_expense_id">
                     <input type="hidden" name="existing_receipt_path" id="edit_existing_receipt_path">
+                    <?php echo csrfField(); ?>
                     <div class="modal-body">
 
                         <!-- Basic Info -->
@@ -794,6 +814,7 @@ if ($flash): ?>
                 <form method="POST">
                     <input type="hidden" name="action" value="delete">
                     <input type="hidden" name="expense_id" id="delete_expense_id">
+                    <?php echo csrfField(); ?>
                     <div class="modal-body">
                         <p>Are you sure you want to delete this expense?</p>
                         <p class="text-muted" id="delete_expense_details"></p>
