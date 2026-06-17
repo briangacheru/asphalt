@@ -291,7 +291,7 @@ require_once 'includes/header.php';
                     <?php endforeach; ?>
                 </div>
 
-                <div class="alert alert-info d-flex align-items-center gap-2 mt-3 mb-0">
+                <div class="alert alert-info alert-sticky d-flex align-items-center gap-2 mt-3 mb-0">
                     <i class="fas fa-calculator"></i>
                     <span>
                 Next service will be due at:
