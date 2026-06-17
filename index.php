@@ -107,9 +107,9 @@ $vehicles = $stmt->fetchAll();
                 </div>
             </div>
             <div class="col-md-auto mt-4 mt-md-0">
-                <a class="btn btn-outline-success btn-sm me-2" href="add-vehicle.php" role="button">
+                <a class="btn btn-outline-success btn-sm me-2" href="add-vehicle" role="button">
                     <i class="fas fa-plus"></i> Add Vehicle</a>
-                <a class="btn btn-outline-primary btn-sm" href="add-service.php"  role="button">
+                <a class="btn btn-outline-primary btn-sm" href="add-service"  role="button">
                     <i class="fas fa-wrench"></i> Record Service </a>
             </div>
         </div>
@@ -124,7 +124,7 @@ $vehicles = $stmt->fetchAll();
             <!--/.bg-holder-->
             <div class="card-body position-relative">
                 <h6>Total Vehicles</h6>
-                <div class="display-4 fs-5 mb-2 fw-normal font-sans-serif text-80" ><?php echo $stats['total_vehicles']; ?></div><a class="fw-semi-bold fs-10 text-nowrap stretched-link" href="vehicles.php">See all</a>
+                <div class="display-4 fs-5 mb-2 fw-normal font-sans-serif text-80" ><?php echo $stats['total_vehicles']; ?></div><a class="fw-semi-bold fs-10 text-nowrap stretched-link" href="vehicles">See all</a>
             </div>
         </div>
     </div>
@@ -135,7 +135,7 @@ $vehicles = $stmt->fetchAll();
             <!--/.bg-holder-->
             <div class="card-body position-relative">
                 <h6>Total Services</h6>
-                <div class="display-4 fs-5 mb-2 fw-normal font-sans-serif text-800" ><?php echo $stats['total_services']; ?></div><a class="fw-semi-bold fs-10 text-nowrap stretched-link" href="service-history.php">See all</a>
+                <div class="display-4 fs-5 mb-2 fw-normal font-sans-serif text-800" ><?php echo $stats['total_services']; ?></div><a class="fw-semi-bold fs-10 text-nowrap stretched-link" href="service-history">See all</a>
             </div>
         </div>
     </div>
@@ -146,7 +146,7 @@ $vehicles = $stmt->fetchAll();
             <!--/.bg-holder-->
             <div class="card-body position-relative">
                 <h6>Spent This Year</h6>
-                <div class="display-4 fs-5 mb-2 fw-normal font-sans-serif text-800" >Ksh. <?php echo formatNumber($stats['spent_this_year']); ?></div><a class="fw-semi-bold fs-10 text-nowrap stretched-link" href="service-history.php">See all</a>
+                <div class="display-4 fs-5 mb-2 fw-normal font-sans-serif text-800" >Ksh. <?php echo formatNumber($stats['spent_this_year']); ?></div><a class="fw-semi-bold fs-10 text-nowrap stretched-link" href="service-history">See all</a>
             </div>
         </div>
     </div>
@@ -163,7 +163,7 @@ $vehicles = $stmt->fetchAll();
                 </h6>
                 <div class="display-4 fs-5 mb-2 fw-normal font-sans-serif text-800" ><?php echo $stats['upcoming_services']; ?>
                 </div>
-                <a class="fw-semi-bold fs-10 text-nowrap stretched-link" href="service-reminders.php">See all</a>
+                <a class="fw-semi-bold fs-10 text-nowrap stretched-link" href="service-reminders">See all</a>
             </div>
         </div>
     </div>
@@ -179,7 +179,7 @@ $vehicles = $stmt->fetchAll();
                         <h6 class="mb-0"><i class="fas fa-exclamation-circle text-warning"></i> Service Due Soon</h6>
                     </div>
                     <div class="col-auto text-center pe-x1">
-                        <a href="service-reminders.php" class="btn btn-sm btn-outline-primary"><i class="fas fa-eye"></i> View All</a>
+                        <a href="service-reminders" class="btn btn-sm btn-outline-primary"><i class="fas fa-eye"></i> View All</a>
                     </div>
                 </div>
             </div>
@@ -237,7 +237,7 @@ $vehicles = $stmt->fetchAll();
                         <h6 class="mb-0"><i class="fas fa-history"></i> Recent Services</h6>
                     </div>
                     <div class="col-auto text-center pe-x1">
-                        <a href="service-history.php" class="btn btn-sm btn-outline-primary"><i class="fas fa-eye"></i> View All</a>
+                        <a href="service-history" class="btn btn-sm btn-outline-primary"><i class="fas fa-eye"></i> View All</a>
                     </div>
                 </div>
             </div>
@@ -247,7 +247,7 @@ $vehicles = $stmt->fetchAll();
                         <i class="fas fa-wrench empty-state-icon fs-3 text-300 mb-3"></i>
                         <h6 class="fs-9 mb-1">No services yet!</h6>
                         <p class="fs-10 mb-0">Record your first service to get started.</p>
-                        <a href="add-service.php" class="btn btn-primary btn-sm">
+                        <a href="add-service" class="btn btn-primary btn-sm">
                             <i class="fas fa-plus"></i> Add Service
                         </a>
                     </div>
@@ -293,7 +293,7 @@ $vehicles = $stmt->fetchAll();
         <div class="card">
             <div class="card-header d-flex flex-between-center bg-body-tertiary py-2">
                 <h6 class="mb-0"><i class="fas fa-car"></i> My Vehicles</h6>
-                <a class="btn btn-sm btn-outline-success py-1 fs-10 font-sans-serif" href="add-vehicle.php">
+                <a class="btn btn-sm btn-outline-success py-1 fs-10 font-sans-serif" href="add-vehicle">
                     <i class="fas fa-plus"></i> Add Vehicle
                 </a>
             </div>
@@ -303,7 +303,7 @@ $vehicles = $stmt->fetchAll();
                         <i class="fas fa-car empty-state-icon fs-1 text-muted mb-3"></i>
                         <h6 class="fs-9 mb-1">No vehicles added!</h6>
                         <p class="fs-10 mb-3">Add your first vehicle to start tracking services.</p>
-                        <a href="add-vehicle.php" class="btn btn-outline-success">
+                        <a href="add-vehicle" class="btn btn-outline-success">
                             <i class="fas fa-plus"></i> Add Vehicle
                         </a>
                     </div>
@@ -417,7 +417,7 @@ $vehicles = $stmt->fetchAll();
                                         </div>
                                     </div>
 
-                                    <a class="stretched-link" href="vehicle-details.php?id=<?php echo $vehicle['id']; ?>"></a>
+                                    <a class="stretched-link" href="vehicle-details?id=<?php echo $vehicle['id']; ?>"></a>
                                 </div>
                             </div>
                         <?php endforeach; ?>

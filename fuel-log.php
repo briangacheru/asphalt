@@ -26,7 +26,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             $pdo->prepare("UPDATE vehicles SET current_mileage = GREATEST(current_mileage, ?) WHERE id = ?")->execute([$mileage, $vehicle_id]);
 
             setFlashMessage('success', 'Fuel record added!');
-            redirect('fuel-log.php' . ($vehicleFilter ? '?vehicle_id=' . $vehicleFilter : ''));
+            redirect('fuel-log' . ($vehicleFilter ? '?vehicle_id=' . $vehicleFilter : ''));
         } catch (PDOException $e) {
             setFlashMessage('danger', 'Error: ' . $e->getMessage());
         }
@@ -55,7 +55,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             $pdo->prepare("UPDATE vehicles SET current_mileage = GREATEST(current_mileage, ?) WHERE id = ?")->execute([$mileage, $vehicle_id]);
 
             setFlashMessage('success', 'Fuel record updated!');
-            redirect('fuel-log.php' . ($vehicleFilter ? '?vehicle_id=' . $vehicleFilter : ''));
+            redirect('fuel-log' . ($vehicleFilter ? '?vehicle_id=' . $vehicleFilter : ''));
         } catch (PDOException $e) {
             setFlashMessage('danger', 'Error: ' . $e->getMessage());
         }
@@ -71,7 +71,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             $stmt = $pdo->prepare("DELETE FROM fuel_log WHERE id = ?");
             $stmt->execute([$fuel_id]);
             setFlashMessage('success', 'Fuel record deleted!');
-            redirect('fuel-log.php' . ($vehicleFilter ? '?vehicle_id=' . $vehicleFilter : ''));
+            redirect('fuel-log' . ($vehicleFilter ? '?vehicle_id=' . $vehicleFilter : ''));
         } catch (PDOException $e) {
             setFlashMessage('danger', 'Error: ' . $e->getMessage());
         }
@@ -148,7 +148,7 @@ if ($flash): ?>
                         <option value="<?php echo $v['id']; ?>" <?php echo $vehicleFilter == $v['id'] ? 'selected' : ''; ?>><?php echo sanitize($v['make'] . ' ' . $v['model']); ?></option>
                     <?php endforeach; ?>
                 </select>
-                <?php if ($vehicleFilter): ?><a href="fuel-log.php" class="btn btn-outline"><i class="fas fa-times"></i></a><?php endif; ?>
+                <?php if ($vehicleFilter): ?><a href="fuel-log" class="btn btn-outline"><i class="fas fa-times"></i></a><?php endif; ?>
             </form>
         </div>
     </div>

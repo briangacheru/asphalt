@@ -104,14 +104,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             $stmt = $pdo->prepare("INSERT INTO expenses (vehicle_id, category_id, expense_date, amount, description, item_type, item_name, brand, part_number, quantity, cost_per_unit, item_notes, receipt_path) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
             $stmt->execute([$vehicle_id, $category_id, $expense_date, $amount, $description, $item_type ?: null, $item_name ?: null, $brand ?: null, $part_number ?: null, $quantity ?: null, $cost_per_unit ?: null, $item_notes ?: null, $receipt_path]);
             setFlashMessage('success', 'Expense added!');
-            redirect('expenses.php' . ($vehicleFilter ? '?vehicle_id=' . $vehicleFilter : ''));
+            redirect('expenses' . ($vehicleFilter ? '?vehicle_id=' . $vehicleFilter : ''));
         } catch (PDOException $e) {
             // Fallback: try without new columns in case migration hasn't run
             try {
                 $stmt = $pdo->prepare("INSERT INTO expenses (vehicle_id, category_id, expense_date, amount, description) VALUES (?, ?, ?, ?, ?)");
                 $stmt->execute([$vehicle_id, $category_id, $expense_date, $amount, $description]);
                 setFlashMessage('success', 'Expense added! (Note: Run DB migration to save item details.)');
-                redirect('expenses.php' . ($vehicleFilter ? '?vehicle_id=' . $vehicleFilter : ''));
+                redirect('expenses' . ($vehicleFilter ? '?vehicle_id=' . $vehicleFilter : ''));
             } catch (PDOException $e2) {
                 setFlashMessage('danger', 'Error: ' . $e2->getMessage());
             }
@@ -158,14 +158,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             $stmt = $pdo->prepare("UPDATE expenses SET vehicle_id=?, category_id=?, expense_date=?, amount=?, description=?, item_type=?, item_name=?, brand=?, part_number=?, quantity=?, cost_per_unit=?, item_notes=?, receipt_path=? WHERE id=?");
             $stmt->execute([$vehicle_id, $category_id, $expense_date, $amount, $description, $item_type ?: null, $item_name ?: null, $brand ?: null, $part_number ?: null, $quantity ?: null, $cost_per_unit ?: null, $item_notes ?: null, $receipt_path ?: null, $expense_id]);
             setFlashMessage('success', 'Expense updated!');
-            redirect('expenses.php' . ($vehicleFilter ? '?vehicle_id=' . $vehicleFilter : ''));
+            redirect('expenses' . ($vehicleFilter ? '?vehicle_id=' . $vehicleFilter : ''));
         } catch (PDOException $e) {
             // Fallback without new columns
             try {
                 $stmt = $pdo->prepare("UPDATE expenses SET vehicle_id=?, category_id=?, expense_date=?, amount=?, description=? WHERE id=?");
                 $stmt->execute([$vehicle_id, $category_id, $expense_date, $amount, $description, $expense_id]);
                 setFlashMessage('success', 'Expense updated! (Note: Run DB migration to save item details.)');
-                redirect('expenses.php' . ($vehicleFilter ? '?vehicle_id=' . $vehicleFilter : ''));
+                redirect('expenses' . ($vehicleFilter ? '?vehicle_id=' . $vehicleFilter : ''));
             } catch (PDOException $e2) {
                 setFlashMessage('danger', 'Error: ' . $e2->getMessage());
             }
@@ -182,7 +182,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             $stmt = $pdo->prepare("DELETE FROM expenses WHERE id = ?");
             $stmt->execute([$expense_id]);
             setFlashMessage('success', 'Expense deleted!');
-            redirect('expenses.php' . ($vehicleFilter ? '?vehicle_id=' . $vehicleFilter : ''));
+            redirect('expenses' . ($vehicleFilter ? '?vehicle_id=' . $vehicleFilter : ''));
         } catch (PDOException $e) {
             setFlashMessage('danger', 'Error: ' . $e->getMessage());
         }
@@ -262,7 +262,7 @@ if ($flash): ?>
                         <option value="<?php echo $v['id']; ?>" <?php echo $vehicleFilter == $v['id'] ? 'selected' : ''; ?>><?php echo sanitize($v['make'] . ' ' . $v['model']); ?></option>
                     <?php endforeach; ?>
                 </select>
-                <?php if ($vehicleFilter): ?><a href="expenses.php" class="btn btn-outline"><i class="fas fa-times"></i></a><?php endif; ?>
+                <?php if ($vehicleFilter): ?><a href="expenses" class="btn btn-outline"><i class="fas fa-times"></i></a><?php endif; ?>
             </form>
         </div>
     </div>

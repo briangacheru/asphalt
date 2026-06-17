@@ -44,7 +44,7 @@ if ($flash): ?>
                     </div>
                 </div>
                 <div class="col-md-auto mt-4 mt-md-0">
-                    <a class="btn btn-outline-success btn-sm me-2" href="add-vehicle.php" role="button">
+                    <a class="btn btn-outline-success btn-sm me-2" href="add-vehicle" role="button">
                         <i class="fas fa-plus"></i> Add Vehicle
                     </a>
                 </div>
@@ -61,7 +61,7 @@ if ($flash): ?>
                             <i class="fas fa-car empty-state-icon fs-1 text-muted mb-3"></i>
                             <h6 class="fs-9 mb-1">No vehicles added!</h6>
                             <p class="fs-10 mb-3">Add your first vehicle to start tracking services.</p>
-                            <a href="add-vehicle.php" class="btn btn-outline-success">
+                            <a href="add-vehicle" class="btn btn-outline-success">
                                 <i class="fas fa-plus"></i> Add Vehicle
                             </a>
                         </div>
@@ -200,7 +200,7 @@ if ($flash): ?>
                                             </div>
                                         </div>
 
-                                        <a class="stretched-link" href="vehicle-details.php?id=<?php echo $vehicle['id']; ?>"></a>
+                                        <a class="stretched-link" href="vehicle-details?id=<?php echo $vehicle['id']; ?>"></a>
                                     </div>
                                 </div>
                             <?php endforeach; ?>

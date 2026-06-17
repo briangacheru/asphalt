@@ -161,7 +161,7 @@ $monthNames = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep'
                             <i class="fas fa-filter"></i> Apply Filters
                         </button>
                         <?php if ($vehicleFilter || $yearFilter != date('Y')): ?>
-                            <a href="reports.php" class="btn btn-outline-secondary">
+                            <a href="reports" class="btn btn-outline-secondary">
                                 <i class="fas fa-times"></i> Reset
                             </a>
                         <?php endif; ?>

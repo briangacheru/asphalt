@@ -49,7 +49,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } catch (PDOException $e) {
             setFlashMessage('danger', 'Error: ' . $e->getMessage());
         }
-        redirect('maintenance-schedule.php' . ($vehicleFilter ? '?vehicle_id=' . $vehicleFilter : ''));
+        redirect('maintenance-schedule' . ($vehicleFilter ? '?vehicle_id=' . $vehicleFilter : ''));
     }
 
     if ($action === 'edit_schedule') {
@@ -74,7 +74,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } catch (PDOException $e) {
             setFlashMessage('danger', 'Error: ' . $e->getMessage());
         }
-        redirect('maintenance-schedule.php' . ($vehicleFilter ? '?vehicle_id=' . $vehicleFilter : ''));
+        redirect('maintenance-schedule' . ($vehicleFilter ? '?vehicle_id=' . $vehicleFilter : ''));
     }
 
     if ($action === 'mark_done') {
@@ -98,14 +98,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             setFlashMessage('success', 'Maintenance marked as completed!');
         }
-        redirect('maintenance-schedule.php' . ($vehicleFilter ? '?vehicle_id=' . $vehicleFilter : ''));
+        redirect('maintenance-schedule' . ($vehicleFilter ? '?vehicle_id=' . $vehicleFilter : ''));
     }
 
     if ($action === 'delete') {
         $id = (int)$_POST['schedule_id'];
         $pdo->prepare("DELETE FROM maintenance_schedule WHERE id = ?")->execute([$id]);
         setFlashMessage('success', 'Maintenance item deleted successfully.');
-        redirect('maintenance-schedule.php' . ($vehicleFilter ? '?vehicle_id=' . $vehicleFilter : ''));
+        redirect('maintenance-schedule' . ($vehicleFilter ? '?vehicle_id=' . $vehicleFilter : ''));
     }
 }
 
@@ -187,7 +187,7 @@ foreach ($schedules as $s) {
                                 <?php endforeach; ?>
                             </select>
                             <?php if ($vehicleFilter): ?>
-                                <a href="maintenance-schedule.php" class="btn btn-sm btn-outline-secondary">Clear</a>
+                                <a href="maintenance-schedule" class="btn btn-sm btn-outline-secondary">Clear</a>
                             <?php endif; ?>
                         </form>
                     </div>

@@ -123,7 +123,7 @@ if (!empty($email)) {
                                 <span class="fs-10">We couldn't find an unverified account with that email address, or the account is already verified.</span>
                             </div>
                         <?php endif; ?>
-                        <a class="btn btn-primary btn-sm mt-3" href="../auth/login.php">
+                        <a class="btn btn-primary btn-sm mt-3" href="../auth/login">
                             <span class="fas fa-chevron-left me-1" data-fa-transform="shrink-4 down-1"></span>Return to Login
                         </a>
                     </div>

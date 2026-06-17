@@ -6,7 +6,7 @@ $vehicleId = (int)($_GET['id'] ?? 0);
 
 if (!$vehicleId) {
     setFlashMessage('danger', 'Invalid vehicle.');
-    redirect('vehicles.php');
+    redirect('vehicles');
 }
 
 // Get vehicle
@@ -16,7 +16,7 @@ $vehicle = $stmt->fetch();
 
 if (!$vehicle) {
     setFlashMessage('danger', 'Vehicle not found.');
-    redirect('vehicles.php');
+    redirect('vehicles');
 }
 
 // Get service history
@@ -67,10 +67,10 @@ $pageTitle = $vehicle['make'] . ' ' . $vehicle['model'];
                 </div>
             </div>
             <div class="col-md-auto mt-4 mt-md-0">
-                <a href="edit-vehicle.php?id=<?php echo $vehicleId; ?>" class="btn btn-sm btn-outline-primary">
+                <a href="edit-vehicle?id=<?php echo $vehicleId; ?>" class="btn btn-sm btn-outline-primary">
                     <i class="fas fa-edit"></i> Edit
                 </a>
-                <a href="add-service.php?vehicle_id=<?php echo $vehicleId; ?>" class="btn btn-sm  btn-outline-success">
+                <a href="add-service?vehicle_id=<?php echo $vehicleId; ?>" class="btn btn-sm  btn-outline-success">
                     <i class="fas fa-wrench"></i> Add Service
                 </a>
             </div>
@@ -302,7 +302,7 @@ if ($flash): ?>
                     </p>
                 </div>
                 <div class="card-footer">
-                    <a href="add-service.php?vehicle_id=<?php echo $vehicleId; ?>" class="btn btn-sm btn-outline-primary w-100">
+                    <a href="add-service?vehicle_id=<?php echo $vehicleId; ?>" class="btn btn-sm btn-outline-primary w-100">
                         <i class="fas fa-wrench me-1"></i>Record New Service
                     </a>
                 </div>
@@ -316,7 +316,7 @@ if ($flash): ?>
                         <h6 class="mb-0"><i class="fas fa-history"></i> Recent Services</h6>
                     </div>
                     <div class="col-auto text-center pe-x1">
-                        <a href="service-history.php?vehicle_id=<?php echo $vehicleId; ?>" class="btn btn-sm btn-outline-primary"><i class="fas fa-eye"></i> View All</a>
+                        <a href="service-history?vehicle_id=<?php echo $vehicleId; ?>" class="btn btn-sm btn-outline-primary"><i class="fas fa-eye"></i> View All</a>
                     </div>
                 </div>
             </div>
@@ -326,7 +326,7 @@ if ($flash): ?>
                         <i class="fas fa-wrench empty-state-icon fs-3 text-300 mb-3"></i>
                         <h6 class="fs-9 mb-1">No services yet!</h6>
                         <p class="fs-10 mb-0">Record your first service to get started.</p>
-                        <a href="add-service.php?vehicle_id=<?php echo $vehicleId; ?>" class="btn btn-primary btn-sm">
+                        <a href="add-service?vehicle_id=<?php echo $vehicleId; ?>" class="btn btn-primary btn-sm">
                             <i class="fas fa-plus"></i> Add Service
                         </a>
                     </div>
@@ -357,7 +357,7 @@ if ($flash): ?>
                                                     &bull; <?php echo sanitize($service['service_location']); ?>
                                                 <?php endif; ?>
                                                 <br>
-                                                <a href="service-items.php?service_id=<?php echo $service['id']; ?>" class="btn rounded-sm-pill btn-sm btn-outline-secondary mt-1">
+                                                <a href="service-items?service_id=<?php echo $service['id']; ?>" class="btn rounded-sm-pill btn-sm btn-outline-secondary mt-1">
                                                     View Details
                                                 </a>
                                             </p>

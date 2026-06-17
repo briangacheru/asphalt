@@ -9,7 +9,7 @@ use App\Database\Database;
 
 // Redirect if already logged in
 if (AuthMiddleware::isLoggedIn()) {
-    redirect(APP_URL . '/index.php');
+    redirect(APP_URL . '/');
 }
 
 $pdo = Database::getInstance()->getConnection();
@@ -39,7 +39,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($user && verifyPassword($password, $user['password'])) {
             // Check if verified
             if (!$user['is_verified']) {
-                $errors[] = 'Please verify your email address first. <a href="resend-verification.php?email=' . urlencode($email) . '">Resend verification email</a>';
+                $errors[] = 'Please verify your email address first. <a href="resend-verification?email=' . urlencode($email) . '">Resend verification email</a>';
             } else {
                 // Login successful
                 $_SESSION['user_id'] = $user['id'];
@@ -61,7 +61,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
                 
                 // Redirect
-                $redirectTo = $_SESSION['redirect_after_login'] ?? APP_URL . '/index.php';
+                $redirectTo = $_SESSION['redirect_after_login'] ?? APP_URL . '/';
                 unset($_SESSION['redirect_after_login']);
                 
                 setFlashMessage('success', 'Welcome back, ' . $user['first_name'] . '!');
@@ -88,7 +88,7 @@ if (!isLoggedIn() && isset($_COOKIE['remember_token'])) {
         $_SESSION['user_id'] = $user['id'];
         $_SESSION['user_email'] = $user['email'];
         $_SESSION['user_name'] = $user['first_name'];
-        redirect(APP_URL . '/index.php');
+        redirect(APP_URL . '/');
     }
 }
 ?>
@@ -174,13 +174,13 @@ if (!isLoggedIn() && isset($_COOKIE['remember_token'])) {
             <div class="row justify-content-center g-0">
               <div class="col-lg-9 col-xl-8 col-xxl-6">
                 <div class="card">
-                  <div class="card-header bg-circle-shape bg-shape text-center p-2"><a class="font-sans-serif fw-bolder fs-5 z-1 position-relative link-light" href="../index.php" data-bs-theme="light"><?php echo APP_NAME; ?></a></div>
+                  <div class="card-header bg-circle-shape bg-shape text-center p-2"><a class="font-sans-serif fw-bolder fs-5 z-1 position-relative link-light" href="../index" data-bs-theme="light"><?php echo APP_NAME; ?></a></div>
                   <div class="card-body p-4">
                     <div class="row flex-between-center">
                       <div class="col-auto">
                         <h3>Login</h3>
                       </div>
-                      <div class="col-auto fs-10 text-600"><span class="mb-0 fw-semi-bold">New User?</span> <span><a href="../auth/register.php">Create account</a></span></div>
+                      <div class="col-auto fs-10 text-600"><span class="mb-0 fw-semi-bold">New User?</span> <span><a href="../auth/register">Create account</a></span></div>
                     </div>
                     <?php if (!empty($errors)): ?>
                       <div class="alert alert-danger">
@@ -220,7 +220,7 @@ if (!isLoggedIn() && isset($_COOKIE['remember_token'])) {
                             <label class="form-check-label mb-0" for="split-checkbox">Remember me</label>
                           </div>
                         </div>
-                        <div class="col-auto"><a class="fs-10" href="forgot-password.php">Forgot Password?</a></div>
+                        <div class="col-auto"><a class="fs-10" href="forgot-password">Forgot Password?</a></div>
                       </div>
                       <div class="mb-3">
                         <button class="btn btn-primary d-block w-100 mt-3" type="submit" name="submit">Log in</button>

@@ -257,7 +257,7 @@ class EmailService
             <p style="margin: 0 0 20px; line-height: 1.6;">Record what was changed during this service (oil filter, cabin filter, brake pads, etc.) along with brands and costs.</p>
             
             <p style="margin: 30px 0; text-align: center;">
-                <a href="%s/service-items.php?vehicle_id=%d" style="display: inline-block; padding: 14px 32px; background: #ffffff; color: #000000; text-decoration: none; border-radius: 8px; font-weight: 600;">Add Service Items</a>
+                <a href="%s/service-items?vehicle_id=%d" style="display: inline-block; padding: 14px 32px; background: #ffffff; color: #000000; text-decoration: none; border-radius: 8px; font-weight: 600;">Add Service Items</a>
             </p>
         ',
             htmlspecialchars($data['first_name']),
@@ -332,7 +332,7 @@ class EmailService
             <p style="margin: 20px 0; line-height: 1.6;">Please update your mileage and let us know if anything has changed:</p>
             
             <p style="margin: 30px 0; text-align: center;">
-                <a href="%s/update-mileage.php?vehicle_id=%d" style="display: inline-block; padding: 14px 32px; background: #ffffff; color: #000000; text-decoration: none; border-radius: 8px; font-weight: 600;">Update Mileage</a>
+                <a href="%s/update-mileage?vehicle_id=%d" style="display: inline-block; padding: 14px 32px; background: #ffffff; color: #000000; text-decoration: none; border-radius: 8px; font-weight: 600;">Update Mileage</a>
             </p>
         ',
             htmlspecialchars($data['first_name']),

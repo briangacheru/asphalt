@@ -116,7 +116,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $emailService->sendServiceDetailsEmail($serviceRecordId);
 
             setFlashMessage('success', 'Service record added successfully! Check your email for a reminder to add service item details.');
-            redirect('service-items.php?service_id=' . $serviceRecordId);
+            redirect('service-items?service_id=' . $serviceRecordId);
 
         } catch (PDOException $e) {
             $errors[] = 'Database error: ' . $e->getMessage();
@@ -146,7 +146,7 @@ require_once 'includes/header.php';
                     </div>
                 </div>
                 <div class="col-md-auto mt-4 mt-md-0">
-                    <a class="btn btn-outline-secondary btn-sm me-2" href="service-history.php" role="button">
+                    <a class="btn btn-outline-secondary btn-sm me-2" href="service-history" role="button">
                         <i class="fas fa-history"></i> Service History
                     </a>
                 </div>
@@ -173,7 +173,7 @@ require_once 'includes/header.php';
                 <i class="fas fa-car empty-state-icon text-secondary"></i>
                 <h6 class="fs-9 mb-1">No Vehicles Found!</h6>
                 <p class="fs-10 mb-0">You need to add a vehicle before recording a service.</p>
-                <a href="add-vehicle.php" class="btn btn-outline--primary btn-sm">
+                <a href="add-vehicle" class="btn btn-outline--primary btn-sm">
                     <i class="fas fa-plus"></i> Add Vehicle First
                 </a>
             </div>

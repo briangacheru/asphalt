@@ -10,7 +10,7 @@ use App\Services\EmailService;
 
 // Redirect if already logged in
 if (AuthMiddleware::isLoggedIn()) {
-    redirect(APP_URL . '/index.php');
+    redirect(APP_URL . '/');
 }
 
 $pdo = Database::getInstance()->getConnection();
@@ -47,7 +47,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $stmt = $pdo->prepare("SELECT id FROM users WHERE email = ?");
         $stmt->execute([$formData['email']]);
         if ($stmt->fetch()) {
-            $errors[] = 'An account with this email already exists. <a href="login.php">Sign in instead?</a>';
+            $errors[] = 'An account with this email already exists. <a href="login">Sign in instead?</a>';
         }
     }
     
@@ -89,7 +89,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 setFlashMessage('success', 'Account created! Please contact support if you don\'t receive a verification email.');
             }
             
-            redirect('login.php');
+            redirect('login');
             
         } catch (PDOException $e) {
             $errors[] = 'An error occurred. Please try again.';
@@ -181,13 +181,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <div class="row justify-content-center g-0">
               <div class="col-lg-9 col-xl-8 col-xxl-6">
                 <div class="card">
-                  <div class="card-header bg-circle-shape bg-shape text-center p-2"><a class="font-sans-serif fw-bolder fs-5 z-1 position-relative link-light" href="../index.php" data-bs-theme="light"><?php echo APP_NAME; ?></a></div>
+                  <div class="card-header bg-circle-shape bg-shape text-center p-2"><a class="font-sans-serif fw-bolder fs-5 z-1 position-relative link-light" href="../index" data-bs-theme="light"><?php echo APP_NAME; ?></a></div>
                   <div class="card-body p-4">
                     <div class="row flex-between-center">
                       <div class="col-auto">
                         <h3>Register</h3>
                       </div>
-                      <div class="col-auto fs-10 text-600"><span class="mb-0 fw-semi-bold">Already User?</span> <span><a href="../auth/login.php">Login</a></span></div>
+                      <div class="col-auto fs-10 text-600"><span class="mb-0 fw-semi-bold">Already User?</span> <span><a href="../auth/login">Login</a></span></div>
                     </div>
                     <?php if (!empty($errors)): ?>
                       <div class="alert alert-danger">

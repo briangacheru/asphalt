@@ -9,7 +9,7 @@ use App\Database\Database;
 
 // Redirect if already logged in
 if (AuthMiddleware::isLoggedIn()) {
-    redirect(APP_URL . '/index.php');
+    redirect(APP_URL . '/');
 }
 
 $pdo = Database::getInstance()->getConnection();
@@ -137,7 +137,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <div class="row justify-content-center g-0">
               <div class="col-lg-9 col-xl-8 col-xxl-6">
                 <div class="card">
-                  <div class="card-header bg-circle-shape bg-shape text-center p-2"><a class="font-sans-serif fw-bolder fs-5 z-1 position-relative link-light" href="../index.php" data-bs-theme="light"><?php echo APP_NAME; ?></a></div>
+                  <div class="card-header bg-circle-shape bg-shape text-center p-2"><a class="font-sans-serif fw-bolder fs-5 z-1 position-relative link-light" href="../index" data-bs-theme="light"><?php echo APP_NAME; ?></a></div>
                   <div class="card-body p-4">
                     <div class="text-center">
                         <?php if ($success): ?>
@@ -152,7 +152,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                     </p>
                             </div>
 
-                            <a href="login.php" class="btn btn-secondary btn-lg w-100">
+                            <a href="login" class="btn btn-secondary btn-lg w-100">
                                 <i class="fas fa-arrow-left"></i> Back to Login
                             </a>
 
@@ -179,7 +179,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         <div class="mb-3"></div>
                         <button class="btn btn-primary d-block w-100 mt-3" type="submit" name="submit">Send reset link</button>
                       </form>
-                            <a class="fs-10 text-600" href="../auth/login.php">Back to Login<span class="d-inline-block ms-1">&rarr;</span></a>
+                            <a class="fs-10 text-600" href="../auth/login">Back to Login<span class="d-inline-block ms-1">&rarr;</span></a>
                         <?php endif; ?>
                     </div>
                   </div>

@@ -62,7 +62,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
 
             setFlashMessage('success', 'Mileage updated successfully!');
-            redirect('update-mileage.php');
+            redirect('update-mileage');
         } catch (PDOException $e) {
             $errors[] = 'Database error: ' . $e->getMessage();
         }
@@ -117,7 +117,7 @@ if ($flash): ?>
     <div class="card"><div class="card-body"><div class="empty-state">
                 <i class="fas fa-car empty-state-icon"></i>
                 <h3 class="empty-state-title">No Vehicles Found</h3>
-                <a href="add-vehicle.php" class="btn btn-primary"><i class="fas fa-plus"></i> Add Vehicle</a>
+                <a href="add-vehicle" class="btn btn-primary"><i class="fas fa-plus"></i> Add Vehicle</a>
             </div></div></div>
 <?php else: ?>
 <div class="row g-0">

@@ -1748,6 +1748,6 @@
             "install-path": "../theseer/tokenizer"
         }
     ],
-    "dev": true,
+    "dev": false,
     "dev-package-names": []
 }

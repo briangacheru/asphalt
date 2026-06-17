@@ -64,7 +64,7 @@ if ($flash): ?>
                 </div>
             </div>
             <div class="col-md-auto mt-4 mt-md-0">
-                <a class="btn btn-outline-primary btn-sm" href="add-service.php"  role="button">
+                <a class="btn btn-outline-primary btn-sm" href="add-service"  role="button">
                     <i class="fas fa-wrench"></i> Record Service </a>
             </div>
         </div>
@@ -80,7 +80,7 @@ if ($flash): ?>
             <div class="card-body position-relative">
                 <h6>Overdue</h6>
                 <div class="display-4 fs-5 mb-2 fw-normal font-sans-serif text-80" ><?php echo count($overdue); ?></div>
-                <a class="fw-semi-bold fs-10 text-nowrap stretched-link" href="vehicles.php">See all</a>
+                <a class="fw-semi-bold fs-10 text-nowrap stretched-link" href="vehicles">See all</a>
             </div>
         </div>
     </div>
@@ -91,7 +91,7 @@ if ($flash): ?>
             <!--/.bg-holder-->
             <div class="card-body position-relative">
                 <h6>Urgent (< 500 km)</h6>
-                <div class="display-4 fs-5 mb-2 fw-normal font-sans-serif text-800" ><?php echo count($urgent); ?></div><a class="fw-semi-bold fs-10 text-nowrap stretched-link" href="vehicles.php">See all</a>
+                <div class="display-4 fs-5 mb-2 fw-normal font-sans-serif text-800" ><?php echo count($urgent); ?></div><a class="fw-semi-bold fs-10 text-nowrap stretched-link" href="vehicles">See all</a>
             </div>
         </div>
     </div>
@@ -102,7 +102,7 @@ if ($flash): ?>
             <!--/.bg-holder-->
             <div class="card-body position-relative">
                 <h6>Coming Up (< 1500 km)</h6>
-                <div class="display-4 fs-5 mb-2 fw-normal font-sans-serif text-800" ><?php echo count($upcoming); ?></div><a class="fw-semi-bold fs-10 text-nowrap stretched-link" href="vehicles.php">See all</a>
+                <div class="display-4 fs-5 mb-2 fw-normal font-sans-serif text-800" ><?php echo count($upcoming); ?></div><a class="fw-semi-bold fs-10 text-nowrap stretched-link" href="vehicles">See all</a>
             </div>
         </div>
     </div>
@@ -116,7 +116,7 @@ if ($flash): ?>
                 </h6>
                 <div class="display-4 fs-5 mb-2 fw-normal font-sans-serif text-800" ><?php echo count($healthy); ?>
                 </div>
-                <a class="fw-semi-bold fs-10 text-nowrap stretched-link" href="vehicles.php">See all</a>
+                <a class="fw-semi-bold fs-10 text-nowrap stretched-link" href="vehicles">See all</a>
             </div>
         </div>
     </div>
@@ -160,7 +160,7 @@ if ($flash): ?>
                             </td>
                             <td><?php echo formatDate($v['last_service_date']); ?></td>
                             <td>
-                                <a href="add-service.php?vehicle_id=<?php echo $v['id']; ?>" class="btn btn-sm btn-danger">
+                                <a href="add-service?vehicle_id=<?php echo $v['id']; ?>" class="btn btn-sm btn-danger">
                                     <i class="fas fa-wrench"></i> Service Now
                                 </a>
                             </td>
@@ -208,7 +208,7 @@ if ($flash): ?>
                             </span>
                             </td>
                             <td>
-                                <a href="add-service.php?vehicle_id=<?php echo $v['id']; ?>" class="btn btn-sm btn-warning">
+                                <a href="add-service?vehicle_id=<?php echo $v['id']; ?>" class="btn btn-sm btn-warning">
                                     <i class="fas fa-wrench"></i> Schedule
                                 </a>
                             </td>
@@ -330,7 +330,7 @@ if ($flash): ?>
                 <i class="fas fa-clipboard-check empty-state-icon"></i>
                 <h6 class="fs-9 mb-1">No Service Records Yet!</h6>
                 <p class="fs-10 mb-0">Record a service to start tracking reminders.</p>
-                <a href="add-service.php" class="btn btn-sm btn-outline-primary">
+                <a href="add-service" class="btn btn-sm btn-outline-primary">
                     <i class="fas fa-plus"></i> Add Service
                 </a>
             </div>

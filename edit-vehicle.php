@@ -12,7 +12,7 @@ $vehicle = $stmt->fetch();
 
 if (!$vehicle) {
     setFlashMessage('error', 'Vehicle not found!');
-    redirect('vehicles.php');
+    redirect('vehicles');
 }
 
 // Handle delete request
@@ -31,7 +31,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_vehicle'])) {
         $stmt->execute([$vehicleId, $userId]);
 
         setFlashMessage('success', 'Vehicle deleted successfully!');
-        redirect('vehicles.php');
+        redirect('vehicles');
     } else {
         $errors[] = 'License plate does not match. Vehicle not deleted.';
     }
@@ -120,7 +120,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['delete_vehicle'])) {
             }
 
             setFlashMessage('success', 'Vehicle updated successfully!');
-            redirect('vehicle-details.php?id=' . $vehicleId);
+            redirect('vehicle-details?id=' . $vehicleId);
         } catch (PDOException $e) {
             $errors[] = 'Database error: ' . $e->getMessage();
         }
@@ -146,7 +146,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['delete_vehicle'])) {
                     </div>
                 </div>
                 <div class="col-md-auto mt-4 mt-md-0">
-                    <a href="vehicle-details.php?id=<?php echo $vehicleId; ?>" class="btn btn-outline-secondary btn-sm me-2"  role="button">
+                    <a href="vehicle-details?id=<?php echo $vehicleId; ?>" class="btn btn-outline-secondary btn-sm me-2"  role="button">
                         <i class="fas fa-arrow-left"></i> Back to Vehicle
                     </a>
                 </div>
@@ -299,7 +299,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['delete_vehicle'])) {
                     <button type="button" class="btn btn-danger btn-sm me-2" data-bs-toggle="modal" data-bs-target="#deleteVehicleModal">
                         <i class="fas fa-trash"></i> Delete Vehicle
                     </button>
-                    <a href="vehicle-details.php?id=<?php echo $vehicleId; ?>" class="btn btn-falcon-default btn-sm me-2">Cancel</a>
+                    <a href="vehicle-details?id=<?php echo $vehicleId; ?>" class="btn btn-falcon-default btn-sm me-2">Cancel</a>
                     <button class="btn btn-outline-primary btn-sm" type="submit" form="vehicleForm">
                         <i class="fas fa-save"></i> Update Vehicle
                     </button>

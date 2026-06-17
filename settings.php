@@ -29,7 +29,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } catch (PDOException $e) {
             setFlashMessage('danger', 'Error updating settings: ' . $e->getMessage());
         }
-        redirect('settings.php');
+        redirect('settings');
     }
 
     if ($action === 'update_profile') {
@@ -50,7 +50,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } catch (PDOException $e) {
             setFlashMessage('danger', 'Error updating profile: ' . $e->getMessage());
         }
-        redirect('settings.php');
+        redirect('settings');
     }
 
     if ($action === 'change_password') {
@@ -61,18 +61,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // Verify current password
         if (!password_verify($current_password, $user['password'])) {
             setFlashMessage('danger', 'Current password is incorrect.');
-            redirect('settings.php');
+            redirect('settings');
         }
 
         // Validate new password
         if ($new_password !== $confirm_password) {
             setFlashMessage('danger', 'New passwords do not match.');
-            redirect('settings.php');
+            redirect('settings');
         }
 
         if (strlen($new_password) < 6) {
             setFlashMessage('danger', 'New password must be at least 6 characters long.');
-            redirect('settings.php');
+            redirect('settings');
         }
 
         try {
@@ -83,7 +83,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } catch (PDOException $e) {
             setFlashMessage('danger', 'Error changing password: ' . $e->getMessage());
         }
-        redirect('settings.php');
+        redirect('settings');
     }
 
     if ($action === 'update_preferences') {
@@ -106,7 +106,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } catch (PDOException $e) {
             setFlashMessage('danger', 'Error updating preferences: ' . $e->getMessage());
         }
-        redirect('settings.php');
+        redirect('settings');
     }
 
     if ($action === 'update_avatar') {
@@ -123,12 +123,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             if (!in_array($mime, $allowed_types)) {
                 setFlashMessage('danger', 'Invalid file type. Please upload a JPEG, PNG, GIF, or WebP image.');
-                redirect('settings.php');
+                redirect('settings');
             }
 
             if ($_FILES['custom_avatar']['size'] > $max_size) {
                 setFlashMessage('danger', 'File too large. Maximum size is 2MB.');
-                redirect('settings.php');
+                redirect('settings');
             }
 
             $upload_dir = 'assets/img/avatars/uploads/';
@@ -144,7 +144,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $avatar_path = $dest;
             } else {
                 setFlashMessage('danger', 'Failed to upload image. Please try again.');
-                redirect('settings.php');
+                redirect('settings');
             }
 
         } elseif (!empty($_POST['preset_avatar'])) {
@@ -159,7 +159,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $avatar_path = 'assets/img/avatars/' . $chosen;
             } else {
                 setFlashMessage('danger', 'Invalid avatar selection.');
-                redirect('settings.php');
+                redirect('settings');
             }
         }
 
@@ -175,7 +175,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             setFlashMessage('danger', 'Please select or upload an avatar.');
         }
 
-        redirect('settings.php');
+        redirect('settings');
     }
 }
 
@@ -208,7 +208,7 @@ foreach ($emailStatsRaw as $stat) {
                 <p class="text-muted">Manage your account settings and preferences</p>
             </div>
             <div class="col-auto">
-                <a href="email-history.php" class="btn btn-outline-primary">
+                <a href="email-history" class="btn btn-outline-primary">
                     <i class="fas fa-envelope"></i> Email History
                 </a>
             </div>
@@ -474,7 +474,7 @@ foreach ($emailStatsRaw as $stat) {
                             <div class="alert alert-info">
                                 <i class="fas fa-info-circle me-2"></i>
                                 <strong>How it works:</strong> The system checks your vehicles daily and sends reminders based on your preference.
-                                You can always view your <a href="email-history.php" class="alert-link">email history</a>.
+                                You can always view your <a href="email-history" class="alert-link">email history</a>.
                             </div>
 
                             <div class="d-flex justify-content-end">
@@ -706,13 +706,13 @@ foreach ($emailStatsRaw as $stat) {
                     </div>
                     <div class="card-body">
                         <div class="d-grid gap-2">
-                            <a href="email-history.php" class="btn btn-outline-primary">
+                            <a href="email-history" class="btn btn-outline-primary">
                                 <i class="fas fa-envelope"></i> View Email History
                             </a>
-                            <a href="vehicles.php" class="btn btn-outline-secondary">
+                            <a href="vehicles" class="btn btn-outline-secondary">
                                 <i class="fas fa-car"></i> Manage Vehicles
                             </a>
-                            <a href="service-reminders.php" class="btn btn-outline-warning">
+                            <a href="service-reminders" class="btn btn-outline-warning">
                                 <i class="fas fa-bell"></i> Service Reminders
                             </a>
                             <button type="button" class="btn btn-outline-success" data-bs-toggle="modal" data-bs-target="#testEmailModal">
@@ -739,12 +739,12 @@ foreach ($emailStatsRaw as $stat) {
                     <p>This will send a test email to <strong><?php echo sanitize($user['email']); ?></strong> to verify your email settings are working correctly.</p>
                     <div class="alert alert-info mb-0">
                         <i class="fas fa-info-circle me-2"></i>
-                        The test email will appear in your <a href="email-history.php" class="alert-link">email history</a>.
+                        The test email will appear in your <a href="email-history" class="alert-link">email history</a>.
                     </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <form method="POST" action="send-test-email.php" class="d-inline">
+                    <form method="POST" action="send-test-email" class="d-inline">
                         <button type="submit" class="btn btn-primary">
                             <i class="fas fa-paper-plane"></i> Send Test Email
                         </button>

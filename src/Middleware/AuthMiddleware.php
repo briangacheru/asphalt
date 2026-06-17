@@ -24,7 +24,7 @@ class AuthMiddleware
             self::setFlashMessage('warning', 'Please log in to continue.');
             
             // Redirect to login
-            header('Location: ' . APP_URL . '/auth/login.php');
+            header('Location: ' . APP_URL . '/auth/login');
             exit;
         }
     }
@@ -39,7 +39,7 @@ class AuthMiddleware
         }
 
         if (isset($_SESSION['user_id']) && !empty($_SESSION['user_id'])) {
-            header('Location: ' . APP_URL . '/index.php');
+            header('Location: ' . APP_URL . '/');
             exit;
         }
     }

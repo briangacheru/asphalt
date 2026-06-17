@@ -15,4 +15,4 @@ session_destroy();
 
 // Redirect to login
 setFlashMessage('success', 'You have been logged out successfully.');
-redirect(APP_URL . '/auth/login.php');
+redirect(APP_URL . '/auth/login');

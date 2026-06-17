@@ -44,7 +44,7 @@ $totalCost = array_sum(array_column($services, 'service_cost'));
                 </div>
             </div>
             <div class="col-md-auto mt-4 mt-md-0">
-                <a class="btn btn-outline-primary btn-sm" href="add-service.php"  role="button">
+                <a class="btn btn-outline-primary btn-sm" href="add-service"  role="button">
                     <i class="fas fa-plus"></i> Add Service</a>
             </div>
         </div>
@@ -75,7 +75,7 @@ if ($flash): ?>
             <input type="date" name="date_to" class="form-control" style="width: auto;" value="<?php echo $dateTo; ?>">
             <button type="submit" class="btn btn-sm rounded-sm-pill btn-outline-primary"><i class="fas fa-filter"></i> Filter</button>
             <?php if ($vehicleFilter || $dateFrom || $dateTo): ?>
-                <a href="service-history.php" class="btn btn-sm btn-falcon-default rounded-sm-pill"><i class="fas fa-times"></i> Clear</a>
+                <a href="service-history" class="btn btn-sm btn-falcon-default rounded-sm-pill"><i class="fas fa-times"></i> Clear</a>
             <?php endif; ?>
         </form>
     </div>
@@ -135,7 +135,7 @@ if ($flash): ?>
             <div class="empty-state">
                 <i class="fas fa-history empty-state-icon"></i>
                 <h3 class="empty-state-title">No Records Found</h3>
-                <a href="add-service.php" class="btn btn-primary"><i class="fas fa-plus"></i> Add Service</a>
+                <a href="add-service" class="btn btn-primary"><i class="fas fa-plus"></i> Add Service</a>
             </div>
         <?php else: ?>
             <div class="table-responsive">

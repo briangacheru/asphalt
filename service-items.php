@@ -6,7 +6,7 @@ $serviceId = (int)($_GET['service_id'] ?? 0);
 
 if (!$serviceId) {
     setFlashMessage('danger', 'Invalid service record.');
-    redirect('service-history.php');
+    redirect('service-history');
 }
 
 // Get service record with vehicle info
@@ -21,7 +21,7 @@ $service = $stmt->fetch();
 
 if (!$service) {
     setFlashMessage('danger', 'Service record not found.');
-    redirect('service-history.php');
+    redirect('service-history');
 }
 
 // Get existing service items
@@ -79,7 +79,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $stmt->execute([$serviceId, $serviceId]);
 
                 setFlashMessage('success', 'Item added successfully!');
-                redirect('service-items.php?service_id=' . $serviceId);
+                redirect('service-items?service_id=' . $serviceId);
             } catch (PDOException $e) {
                 setFlashMessage('danger', 'Error adding item: ' . $e->getMessage());
             }
@@ -112,7 +112,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $stmt->execute([$serviceId, $serviceId]);
 
                 setFlashMessage('success', 'Item updated successfully!');
-                redirect('service-items.php?service_id=' . $serviceId);
+                redirect('service-items?service_id=' . $serviceId);
             } catch (PDOException $e) {
                 setFlashMessage('danger', 'Error updating item: ' . $e->getMessage());
             }
@@ -133,7 +133,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $stmt->execute([$serviceId, $serviceId]);
 
                 setFlashMessage('success', 'Item deleted successfully!');
-                redirect('service-items.php?service_id=' . $serviceId);
+                redirect('service-items?service_id=' . $serviceId);
             } catch (PDOException $e) {
                 setFlashMessage('danger', 'Error deleting item.');
             }
@@ -176,10 +176,10 @@ $totalCost = array_reduce($existingItems, function($sum, $item) {
                     </div>
                 </div>
                 <div class="col-md-auto mt-4 mt-md-0">
-                    <a class="btn btn-outline-primary btn-sm me-2" href="vehicle-details.php?id=<?php echo $service['vehicle_id']; ?>" role="button">
+                    <a class="btn btn-outline-primary btn-sm me-2" href="vehicle-details?id=<?php echo $service['vehicle_id']; ?>" role="button">
                         <i class="fas fa-car"></i> Vehicle Details
                     </a>
-                    <a class="btn btn-outline-secondary btn-sm me-2" href="service-history.php" role="button">
+                    <a class="btn btn-outline-secondary btn-sm me-2" href="service-history" role="button">
                         <i class="fas fa-arrow-left"></i> Back to History
                     </a>
                 </div>

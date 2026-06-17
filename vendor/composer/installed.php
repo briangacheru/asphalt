@@ -1,19 +1,19 @@
 <?php return array(
     'root' => array(
         'name' => 'ivehicle/app',
-        'pretty_version' => 'dev-main',
-        'version' => 'dev-main',
-        'reference' => '039b056533e07db612708e147552318e597a4bb9',
+        'pretty_version' => '1.0.0+no-version-set',
+        'version' => '1.0.0.0',
+        'reference' => null,
         'type' => 'project',
         'install_path' => __DIR__ . '/../../',
         'aliases' => array(),
-        'dev' => true,
+        'dev' => false,
     ),
     'versions' => array(
         'ivehicle/app' => array(
-            'pretty_version' => 'dev-main',
-            'version' => 'dev-main',
-            'reference' => '039b056533e07db612708e147552318e597a4bb9',
+            'pretty_version' => '1.0.0+no-version-set',
+            'version' => '1.0.0.0',
+            'reference' => null,
             'type' => 'project',
             'install_path' => __DIR__ . '/../../',
             'aliases' => array(),

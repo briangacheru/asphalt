@@ -44,7 +44,7 @@ $emailTypes = [
                 <p class="text-muted">View all sent email notifications</p>
             </div>
             <div class="col-auto">
-                <a href="settings.php" class="btn btn-secondary">
+                <a href="settings" class="btn btn-secondary">
                     <i class="fas fa-cog"></i> Email Settings
                 </a>
             </div>
@@ -154,7 +154,7 @@ $emailTypes = [
                             <i class="fas fa-filter"></i> Apply Filters
                         </button>
                         <?php if ($typeFilter || $statusFilter): ?>
-                            <a href="email-history.php" class="btn btn-outline-secondary">
+                            <a href="email-history" class="btn btn-outline-secondary">
                                 <i class="fas fa-times"></i> Clear Filters
                             </a>
                         <?php endif; ?>

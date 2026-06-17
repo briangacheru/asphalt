@@ -46,6 +46,10 @@ php_value error_log error.log
 # URL REWRITING (Clean URLs - Remove .php extension)
 # ---------------------------------------------------------
 
+# Externally redirect any .php URL to the clean version (removes .php from browser bar)
+RewriteCond %{THE_REQUEST} \s/+(.*?)\.php[\s?] [NC]
+RewriteRule ^ /%1 [R=301,L]
+
 # If the requested file or directory exists, serve it directly
 RewriteCond %{REQUEST_FILENAME} !-f
 RewriteCond %{REQUEST_FILENAME} !-d

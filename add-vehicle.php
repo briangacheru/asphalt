@@ -76,7 +76,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             ]);
 
             setFlashMessage('success', 'Vehicle added successfully!');
-            redirect('vehicles.php');
+            redirect('vehicles');
         } catch (PDOException $e) {
             $errors[] = 'Database error: ' . $e->getMessage();
         }
@@ -120,7 +120,7 @@ require_once 'includes/header.php';
                 </div>
             </div>
             <div class="col-md-auto mt-4 mt-md-0">
-                <a class="btn btn-outline-secondary btn-sm me-2" href="vehicles.php" role="button">
+                <a class="btn btn-outline-secondary btn-sm me-2" href="vehicles" role="button">
                     <i class="fas fa-arrow-left"></i> Back to Vehicles
                 </a>
             </div>

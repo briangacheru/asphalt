@@ -119,7 +119,7 @@ $currentPage = basename($_SERVER['PHP_SELF'], '.php');
 
               <button class="btn navbar-toggler-humburger-icon navbar-vertical-toggle" data-bs-toggle="tooltip" data-bs-placement="left" title="Toggle Navigation"><span class="navbar-toggle-icon"><span class="toggle-line"></span></span></button>
 
-            </div><a class="navbar-brand" href="index.php">
+            </div><a class="navbar-brand" href="index">
               <div class="d-flex align-items-center py-3"><img class="me-2" src="assets/img/icons/spot-illustrations/falcon.png" alt="" width="40" /><span class="font-sans-serif text-primary">myCar</span>
               </div>
             </a>
@@ -128,19 +128,19 @@ $currentPage = basename($_SERVER['PHP_SELF'], '.php');
             <div class="navbar-vertical-content scrollbar">
               <ul class="navbar-nav flex-column mb-3" id="navbarVerticalNav">
                 <li class="nav-item">
-                  <!-- parent pages--><a class="nav-link <?php echo $currentPage === 'index' ? 'active' : ''; ?>" href="index.php" role="button">
+                  <!-- parent pages--><a class="nav-link <?php echo $currentPage === 'index' ? 'active' : ''; ?>" href="index" role="button">
                     <div class="d-flex align-items-center"><span class="nav-link-icon"><span class="fas fa-chart-pie"></span></span><span class="nav-link-text ps-1">Dashboard</span>
                     </div>
                   </a>
-                  <!-- parent pages--><a class="nav-link <?php echo $currentPage === 'vehicles' ? 'active' : ''; ?>" href="vehicles.php" role="button">
+                  <!-- parent pages--><a class="nav-link <?php echo $currentPage === 'vehicles' ? 'active' : ''; ?>" href="vehicles" role="button">
                     <div class="d-flex align-items-center"><span class="nav-link-icon"><span class="fas fa-car"></span></span><span class="nav-link-text ps-1">My Vehicles</span>
                     </div>
                   </a>
-                  <!-- parent pages--><a class="nav-link <?php echo $currentPage === 'add-service' ? 'active' : ''; ?>" href="add-service.php" role="button">
+                  <!-- parent pages--><a class="nav-link <?php echo $currentPage === 'add-service' ? 'active' : ''; ?>" href="add-service" role="button">
                     <div class="d-flex align-items-center"><span class="nav-link-icon"><span class="fas fa-wrench"></span></span><span class="nav-link-text ps-1">Add Service</span>
                     </div>
                   </a>
-                  <!-- parent pages--><a class="nav-link <?php echo $currentPage === 'service-history' ? 'active' : ''; ?>" href="service-history.php" role="button">
+                  <!-- parent pages--><a class="nav-link <?php echo $currentPage === 'service-history' ? 'active' : ''; ?>" href="service-history" role="button">
                     <div class="d-flex align-items-center"><span class="nav-link-icon"><span class="fas fa-history"></span></span><span class="nav-link-text ps-1">Service History</span>
                     </div>
                   </a>
@@ -154,15 +154,15 @@ $currentPage = basename($_SERVER['PHP_SELF'], '.php');
                       <hr class="mb-0 navbar-vertical-divider" />
                     </div>
                   </div>
-                  <!-- parent pages--><a class="nav-link <?php echo $currentPage === 'update-mileage' ? 'active' : ''; ?>" href="update-mileage.php" role="button">
+                  <!-- parent pages--><a class="nav-link <?php echo $currentPage === 'update-mileage' ? 'active' : ''; ?>" href="update-mileage" role="button">
                     <div class="d-flex align-items-center"><span class="nav-link-icon"><span class="fas fa-tachometer-alt"></span></span><span class="nav-link-text ps-1">Update Mileage</span>
                     </div>
                   </a>
-                  <!-- parent pages--><a class="nav-link <?php echo $currentPage === 'fuel-log' ? 'active' : ''; ?>" href="fuel-log.php" role="button">
+                  <!-- parent pages--><a class="nav-link <?php echo $currentPage === 'fuel-log' ? 'active' : ''; ?>" href="fuel-log" role="button">
                     <div class="d-flex align-items-center"><span class="nav-link-icon"><span class="fas fa-gas-pump"></span></span><span class="nav-link-text ps-1">Fuel Log</span>
                     </div>
                   </a>
-                  <!-- parent pages--><a class="nav-link <?php echo $currentPage === 'expenses' ? 'active' : ''; ?>" href="expenses.php" role="button">
+                  <!-- parent pages--><a class="nav-link <?php echo $currentPage === 'expenses' ? 'active' : ''; ?>" href="expenses" role="button">
                     <div class="d-flex align-items-center"><span class="nav-link-icon"><span class="fas fa-receipt"></span></span><span class="nav-link-text ps-1">Expenses</span>
                     </div>
                   </a>
@@ -177,14 +177,14 @@ $currentPage = basename($_SERVER['PHP_SELF'], '.php');
                       <hr class="mb-0 navbar-vertical-divider" />
                     </div>
                   </div>
-                  <!-- parent pages--><a class="nav-link <?php echo $currentPage === 'service-reminders' ? 'active' : ''; ?>" href="service-reminders.php" role="button">
+                  <!-- parent pages--><a class="nav-link <?php echo $currentPage === 'service-reminders' ? 'active' : ''; ?>" href="service-reminders" role="button">
                     <div class="d-flex align-items-center"><span class="nav-link-icon"><span class="fas fa-bell"></span></span><span class="nav-link-text ps-1">Service Reminders</span>
                         <?php if ($alertsCount > 0): ?>
                             <span class="badge rounded-pill ms-2 badge-subtle-danger"><?php echo $alertsCount; ?></span>
                         <?php endif; ?>
                     </div>
                   </a>
-                  <!-- parent pages--><a class="nav-link <?php echo $currentPage === 'maintenance-schedule' ? 'active' : ''; ?>" href="maintenance-schedule.php" role="button">
+                  <!-- parent pages--><a class="nav-link <?php echo $currentPage === 'maintenance-schedule' ? 'active' : ''; ?>" href="maintenance-schedule" role="button">
                     <div class="d-flex align-items-center"><span class="nav-link-icon"><span class="fas fa-calendar-alt"></span></span><span class="nav-link-text ps-1">Maintenance Schedule</span>
                     </div>
                   </a>
@@ -199,11 +199,11 @@ $currentPage = basename($_SERVER['PHP_SELF'], '.php');
                       <hr class="mb-0 navbar-vertical-divider" />
                     </div>
                   </div>
-                  <!-- parent pages--><a class="nav-link <?php echo $currentPage === 'vehicles' ? 'reports' : ''; ?>" href="reports.php" role="button">
+                  <!-- parent pages--><a class="nav-link <?php echo $currentPage === 'vehicles' ? 'reports' : ''; ?>" href="reports" role="button">
                     <div class="d-flex align-items-center"><span class="nav-link-icon"><span class="fas fa-chart-bar"></span></span><span class="nav-link-text ps-1">Reports</span>
                     </div>
                   </a>
-                  <!-- parent pages--><a class="nav-link <?php echo $currentPage === 'email-history' ? 'active' : ''; ?>" href="email-history.php" role="button">
+                  <!-- parent pages--><a class="nav-link <?php echo $currentPage === 'email-history' ? 'active' : ''; ?>" href="email-history" role="button">
                     <div class="d-flex align-items-center"><span class="nav-link-icon"><span class="fas fa-envelope"></span></span><span class="nav-link-text ps-1">Email History</span>
                     </div>
                   </a>
@@ -220,7 +220,7 @@ $currentPage = basename($_SERVER['PHP_SELF'], '.php');
                           </div>
                       </div>
                     <?php foreach (array_slice($sidebarVehicles, 0, 5) as $vehicle): ?>
-                      <!-- parent pages--><a href="vehicle-details.php?id=<?php echo $vehicle['id']; ?>" class="nav-link" role="button">
+                      <!-- parent pages--><a href="vehicle-details?id=<?php echo $vehicle['id']; ?>" class="nav-link" role="button">
                           <div class="d-flex align-items-center"><span class="nav-link-icon"><span class="fas fa-car-side"></span></span>
                               <span class="nav-link-text ps-1"><?php echo sanitize($vehicle['make'] . ' ' . $vehicle['model']); ?></span>
                           </div>
@@ -236,7 +236,7 @@ $currentPage = basename($_SERVER['PHP_SELF'], '.php');
                               <hr class="mb-0 navbar-vertical-divider" />
                           </div>
                       </div>
-                      <!-- parent pages--><a class="nav-link <?php echo $currentPage === 'settings' ? 'reports' : ''; ?>" href="settings.php" role="button">
+                      <!-- parent pages--><a class="nav-link <?php echo $currentPage === 'settings' ? 'reports' : ''; ?>" href="settings" role="button">
                           <div class="d-flex align-items-center"><span class="nav-link-icon"><span class="fas fa-cog"></span></span><span class="nav-link-text ps-1">Settings</span>
                           </div>
                       </a>
@@ -250,7 +250,7 @@ $currentPage = basename($_SERVER['PHP_SELF'], '.php');
           <nav class="navbar navbar-light navbar-glass navbar-top navbar-expand">
 
             <button class="btn navbar-toggler-humburger-icon navbar-toggler me-1 me-sm-3" type="button" data-bs-toggle="collapse" data-bs-target="#navbarVerticalCollapse" aria-controls="navbarVerticalCollapse" aria-expanded="false" aria-label="Toggle Navigation"><span class="navbar-toggle-icon"><span class="toggle-line"></span></span></button>
-            <a class="navbar-brand me-1 me-sm-3" href="index.php">
+            <a class="navbar-brand me-1 me-sm-3" href="index">
               <div class="d-flex align-items-center"><img class="me-2" src="assets/img/icons/spot-illustrations/falcon.png" alt="" width="40" /><span class="font-sans-serif text-primary">myCar</span>
               </div>
             </a>
@@ -375,8 +375,8 @@ $currentPage = basename($_SERVER['PHP_SELF'], '.php');
                     <a class="dropdown-item" href="#!">Feedback</a>
 
                     <div class="dropdown-divider"></div>
-                    <a class="dropdown-item" href="settings.php">Settings</a>
-                    <a class="dropdown-item" href="auth/logout.php">Logout</a>
+                    <a class="dropdown-item" href="settings">Settings</a>
+                    <a class="dropdown-item" href="auth/logout">Logout</a>
                   </div>
                 </div>
               </li>
