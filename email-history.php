@@ -166,7 +166,7 @@ $emailTypes = [
 
         <!-- Email List -->
         <div class="card">
-            <div class="card-body">
+            <div class="card-body p-0">
                 <?php if (empty($emails)): ?>
                     <div class="text-center py-5">
                         <i class="fas fa-envelope fa-4x text-muted mb-3"></i>
@@ -175,171 +175,70 @@ $emailTypes = [
                     </div>
                 <?php else: ?>
                     <div class="table-responsive">
-                        <table class="table table-hover align-middle mb-0">
+                        <table class="table table-hover table-sm align-middle mb-0">
                             <thead class="table-light">
                             <tr>
-                                <th>Date</th>
+                                <th class="ps-3">Date</th>
                                 <th>Type</th>
                                 <th>Vehicle</th>
                                 <th>Subject</th>
                                 <th>Recipient</th>
                                 <th>Status</th>
-                                <th class="text-end">Actions</th>
+                                <th class="pe-3"></th>
                             </tr>
                             </thead>
                             <tbody>
                             <?php foreach ($emails as $email):
                                 $type = $emailTypes[$email['email_type']] ?? ['label' => $email['email_type'], 'icon' => 'fa-envelope', 'color' => 'primary'];
+                                $vehicle = $email['make'] ? sanitize($email['make'] . ' ' . $email['model'] . ' (' . $email['year'] . ')') : '';
+                                $sentDate = $email['sent_at'] ?? $email['created_at'];
                                 ?>
-                                <tr>
-                                    <td>
-                                        <div><?php echo date('M d, Y', strtotime($email['created_at'])); ?></div>
-                                        <small class="text-muted"><?php echo date('H:i', strtotime($email['created_at'])); ?></small>
+                                <tr class="view-email-row" role="button"
+                                    data-type-label="<?php echo htmlspecialchars($type['label']); ?>"
+                                    data-type-color="<?php echo $type['color']; ?>"
+                                    data-type-icon="<?php echo $type['icon']; ?>"
+                                    data-status="<?php echo $email['status']; ?>"
+                                    data-recipient="<?php echo htmlspecialchars($email['recipient_email']); ?>"
+                                    data-date="<?php echo date('F d, Y \a\t H:i', strtotime($sentDate)); ?>"
+                                    data-vehicle="<?php echo $vehicle; ?>"
+                                    data-subject="<?php echo htmlspecialchars($email['subject']); ?>"
+                                    data-body="<?php echo htmlspecialchars($email['body'] ?? ''); ?>">
+                                    <td class="ps-3 text-nowrap">
+                                        <div class="small"><?php echo date('M d, Y', strtotime($email['created_at'])); ?></div>
+                                        <div class="text-muted" style="font-size:0.75rem"><?php echo date('H:i', strtotime($email['created_at'])); ?></div>
                                     </td>
                                     <td>
-                                    <span class="badge bg-<?php echo $type['color']; ?>">
-                                        <i class="fas <?php echo $type['icon']; ?>"></i> <?php echo $type['label']; ?>
-                                    </span>
+                                        <span class="badge bg-<?php echo $type['color']; ?>">
+                                            <i class="fas <?php echo $type['icon']; ?>"></i> <?php echo $type['label']; ?>
+                                        </span>
                                     </td>
-                                    <td>
+                                    <td class="small">
                                         <?php if ($email['make']): ?>
-                                            <div><?php echo sanitize($email['make'] . ' ' . $email['model']); ?></div>
-                                            <small class="text-muted"><?php echo $email['year']; ?></small>
+                                            <?php echo sanitize($email['make'] . ' ' . $email['model']); ?>
+                                            <span class="text-muted"><?php echo $email['year']; ?></span>
                                         <?php else: ?>
-                                            <span class="text-muted">-</span>
+                                            <span class="text-muted">—</span>
                                         <?php endif; ?>
                                     </td>
-                                    <td>
-                                    <span class="d-inline-block text-truncate" max-wstyle="idth: 250px;" title="<?php echo sanitize($email['subject']); ?>">
-                                        <?php echo sanitize($email['subject']); ?>
-                                    </span>
+                                    <td style="max-width:220px">
+                                        <span class="d-block text-truncate small" title="<?php echo htmlspecialchars($email['subject']); ?>">
+                                            <?php echo sanitize($email['subject']); ?>
+                                        </span>
                                     </td>
-                                    <td>
-                                        <small class="text-muted"><?php echo sanitize($email['recipient_email']); ?></small>
-                                    </td>
+                                    <td class="small text-muted text-nowrap"><?php echo sanitize($email['recipient_email']); ?></td>
                                     <td>
                                         <?php if ($email['status'] === 'sent'): ?>
-                                            <div>
-                                            <span class="badge bg-success">
-                                                <i class="fas fa-check"></i> Sent
-                                            </span>
-                                            </div>
-                                            <?php if ($email['sent_at']): ?>
-                                                <small class="text-muted d-block mt-1">
-                                                    <?php echo date('M d, H:i', strtotime($email['sent_at'])); ?>
-                                                </small>
-                                            <?php endif; ?>
+                                            <span class="badge bg-success"><i class="fas fa-check"></i> Sent</span>
                                         <?php elseif ($email['status'] === 'failed'): ?>
-                                            <span class="badge bg-danger">
-                                            <i class="fas fa-times"></i> Failed
-                                        </span>
+                                            <span class="badge bg-danger"><i class="fas fa-times"></i> Failed</span>
                                         <?php else: ?>
-                                            <span class="badge bg-warning">
-                                            <i class="fas fa-clock"></i> Pending
-                                        </span>
+                                            <span class="badge bg-warning"><i class="fas fa-clock"></i> Pending</span>
                                         <?php endif; ?>
                                     </td>
-                                    <td >
-                                        <button class="btn btn-sm btn-outline-primary"
-                                                data-bs-toggle="modal"
-                                                data-bs-target="#emailDetailModal<?php echo $email['id']; ?>"
-                                                title="View Details">
+                                    <td class="pe-3 text-end">
+                                        <button class="btn btn-sm btn-outline-primary" title="View">
                                             <i class="fas fa-eye"></i>
                                         </button>
-
-                                        <!-- Email Detail Modal -->
-                                        <div class="modal fade" id="emailDetailModal<?php echo $email['id']; ?>" tabindex="-1" aria-labelledby="emailDetailModalLabel<?php echo $email['id']; ?>" aria-hidden="true">
-                                            <div class="modal-dialog modal-lg">
-                                                <div class="modal-content">
-                                                    <div class="modal-header">
-                                                        <h5 class="modal-title" id="emailDetailModalLabel<?php echo $email['id']; ?>">
-                                                            <i class="fas fa-envelope me-2"></i>Email Details
-                                                        </h5>
-                                                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                                                    </div>
-                                                    <div class="modal-body">
-                                                        <!-- Email Type Badge -->
-                                                        <div class="mb-3">
-                                                        <span class="badge bg-<?php echo $type['color']; ?> fs-6">
-                                                            <i class="fas <?php echo $type['icon']; ?>"></i> <?php echo $type['label']; ?>
-                                                        </span>
-                                                            <?php if ($email['status'] === 'sent'): ?>
-                                                                <span class="badge bg-success fs-6 ms-2">
-                                                                <i class="fas fa-check"></i> Sent
-                                                            </span>
-                                                            <?php elseif ($email['status'] === 'failed'): ?>
-                                                                <span class="badge bg-danger fs-6 ms-2">
-                                                                <i class="fas fa-times"></i> Failed
-                                                            </span>
-                                                            <?php else: ?>
-                                                                <span class="badge bg-warning fs-6 ms-2">
-                                                                <i class="fas fa-clock"></i> Pending
-                                                            </span>
-                                                            <?php endif; ?>
-                                                        </div>
-
-                                                        <!-- Email Info -->
-                                                        <div class="row mb-3">
-                                                            <div class="col-md-6">
-                                                                <label class="form-label fw-bold text-muted">Recipient</label>
-                                                                <p class="mb-0"><?php echo sanitize($email['recipient_email']); ?></p>
-                                                            </div>
-                                                            <div class="col-md-6">
-                                                                <label class="form-label fw-bold text-muted">Date Sent</label>
-                                                                <p class="mb-0">
-                                                                    <?php
-                                                                    if ($email['sent_at']) {
-                                                                        echo date('F d, Y \a\t H:i', strtotime($email['sent_at']));
-                                                                    } else {
-                                                                        echo date('F d, Y \a\t H:i', strtotime($email['created_at']));
-                                                                    }
-                                                                    ?>
-                                                                </p>
-                                                            </div>
-                                                        </div>
-
-                                                        <?php if ($email['make']): ?>
-                                                            <div class="mb-3">
-                                                                <label class="form-label fw-bold text-muted">Vehicle</label>
-                                                                <p class="mb-0">
-                                                                    <?php echo sanitize($email['make'] . ' ' . $email['model'] . ' (' . $email['year'] . ')'); ?>
-                                                                </p>
-                                                            </div>
-                                                        <?php endif; ?>
-
-                                                        <div class="mb-3">
-                                                            <label class="form-label fw-bold text-muted">Subject</label>
-                                                            <p class="mb-0"><?php echo sanitize($email['subject']); ?></p>
-                                                        </div>
-
-                                                        <div class="mb-3">
-                                                            <label class="form-label fw-bold text-muted">Content Preview</label>
-                                                            <div class="bg-light border rounded p-3" style="max-height: 400px; overflow-y: auto;">
-                                                                <?php
-                                                                // Strip HTML for preview, show first 1000 chars
-                                                                $preview = strip_tags($email['body'] ?? 'No content available.');
-                                                                echo nl2br(sanitize($preview));
-                                                                ?>
-                                                            </div>
-                                                        </div>
-
-                                                        <?php if ($email['status'] === 'failed' && !empty($email['error_message'])): ?>
-                                                            <div class="alert alert-danger mb-0">
-                                                                <h6 class="alert-heading">
-                                                                    <i class="fas fa-exclamation-triangle"></i> Error Message
-                                                                </h6>
-                                                                <p class="mb-0"><?php echo sanitize($email['error_message']); ?></p>
-                                                            </div>
-                                                        <?php endif; ?>
-                                                    </div>
-                                                    <div class="modal-footer">
-                                                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
-                                                            <i class="fas fa-times"></i> Close
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
                                     </td>
                                 </tr>
                             <?php endforeach; ?>
@@ -347,9 +246,8 @@ $emailTypes = [
                         </table>
                     </div>
 
-                    <!-- Pagination Info -->
                     <?php if (count($emails) >= 100): ?>
-                        <div class="alert alert-info mt-3 mb-0">
+                        <div class="alert alert-info m-3 mb-2">
                             <i class="fas fa-info-circle"></i> Showing the most recent 100 emails. Use filters to narrow your search.
                         </div>
                     <?php endif; ?>
@@ -357,5 +255,80 @@ $emailTypes = [
             </div>
         </div>
     </div>
+
+<!-- Shared Email Detail Modal -->
+<div class="modal fade" id="emailDetailModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="fas fa-envelope me-2"></i>Email Details</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="d-flex gap-2 mb-3">
+                    <span id="modalTypeBadge" class="badge fs-6"></span>
+                    <span id="modalStatusBadge" class="badge fs-6"></span>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <p class="text-muted small mb-1 fw-bold">Recipient</p>
+                        <p id="modalRecipient" class="mb-0"></p>
+                    </div>
+                    <div class="col-md-6">
+                        <p class="text-muted small mb-1 fw-bold">Date Sent</p>
+                        <p id="modalDate" class="mb-0"></p>
+                    </div>
+                </div>
+                <div id="modalVehicleRow" class="mb-3 d-none">
+                    <p class="text-muted small mb-1 fw-bold">Vehicle</p>
+                    <p id="modalVehicle" class="mb-0"></p>
+                </div>
+                <div class="mb-3">
+                    <p class="text-muted small mb-1 fw-bold">Subject</p>
+                    <p id="modalSubject" class="mb-0"></p>
+                </div>
+                <div>
+                    <p class="text-muted small mb-1 fw-bold">Email Body</p>
+                    <iframe id="modalBodyFrame" srcdoc="" style="width:100%;height:420px;border:1px solid #dee2e6;border-radius:4px;" sandbox="allow-same-origin"></iframe>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.querySelectorAll('.view-email-row').forEach(row => {
+    row.addEventListener('click', function () {
+        const d = this.dataset;
+
+        document.getElementById('modalTypeBadge').className = `badge fs-6 bg-${d.typeColor}`;
+        document.getElementById('modalTypeBadge').innerHTML = `<i class="fas ${d.typeIcon}"></i> ${d.typeLabel}`;
+
+        const statusMap = { sent: ['bg-success','fa-check','Sent'], failed: ['bg-danger','fa-times','Failed'], pending: ['bg-warning','fa-clock','Pending'] };
+        const [sc, si, sl] = statusMap[d.status] ?? ['bg-secondary','fa-question', d.status];
+        document.getElementById('modalStatusBadge').className = `badge fs-6 ${sc}`;
+        document.getElementById('modalStatusBadge').innerHTML = `<i class="fas ${si}"></i> ${sl}`;
+
+        document.getElementById('modalRecipient').textContent = d.recipient;
+        document.getElementById('modalDate').textContent = d.date;
+        document.getElementById('modalSubject').textContent = d.subject;
+
+        const vehicleRow = document.getElementById('modalVehicleRow');
+        if (d.vehicle) {
+            document.getElementById('modalVehicle').textContent = d.vehicle;
+            vehicleRow.classList.remove('d-none');
+        } else {
+            vehicleRow.classList.add('d-none');
+        }
+
+        document.getElementById('modalBodyFrame').srcdoc = d.body || '<p style="color:#999;padding:1rem">No content available.</p>';
+
+        new bootstrap.Modal(document.getElementById('emailDetailModal')).show();
+    });
+});
+</script>
 
 <?php require_once 'includes/footer.php'; ?>
