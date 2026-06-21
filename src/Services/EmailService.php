@@ -504,4 +504,39 @@ class EmailService
 
         return $sent;
     }
+
+    /**
+     * Send test email to verify email settings
+     */
+    public function sendTestEmail(string $email, string $firstName): bool
+    {
+        $content = sprintf('
+            <h2 style="margin: 0 0 20px; color: #ffffff; font-size: 20px;">Test Email - iVehicle</h2>
+            <p style="margin: 0 0 20px; line-height: 1.6;">Hi %s,</p>
+            <p style="margin: 0 0 20px; line-height: 1.6;">This is a test email to verify that your email settings are configured correctly.</p>
+            
+            <div style="background: rgba(0,0,0,0.3); border-radius: 12px; padding: 20px; margin: 20px 0; text-align: center;">
+                <p style="margin: 0; color: #28a745; font-size: 18px;"><strong>✓ Email settings are working!</strong></p>
+            </div>
+            
+            <p style="margin: 20px 0; line-height: 1.6;">If you received this email, your SMTP configuration is correct and iVehicle can send emails successfully.</p>
+            
+            <p style="margin: 20px 0; line-height: 1.6; color: #86868b; font-size: 14px;">
+                Sent at: %s<br>
+                Recipient: %s
+            </p>
+        ',
+            htmlspecialchars($firstName),
+            date('F d, Y \a\t g:i A'),
+            htmlspecialchars($email)
+        );
+
+        $subject = "Test Email - iVehicle Configuration";
+        $html = $this->getEmailTemplate($content, $subject);
+
+        $sent = $this->send($email, $subject, $html);
+        $this->logEmail(0, 'test_email', $email, $subject, $html, $sent ? 'sent' : 'failed');
+
+        return $sent;
+    }
 }
