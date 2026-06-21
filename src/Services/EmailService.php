@@ -2,6 +2,14 @@
 
 namespace App\Services;
 
+// Ensure PHPMailer is loaded regardless of autoloader state
+if (!class_exists('PHPMailer\PHPMailer\PHPMailer')) {
+    $phpmailerSrc = dirname(__DIR__, 2) . '/vendor/phpmailer/phpmailer/src/';
+    require_once $phpmailerSrc . 'Exception.php';
+    require_once $phpmailerSrc . 'PHPMailer.php';
+    require_once $phpmailerSrc . 'SMTP.php';
+}
+
 use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\SMTP;
 use PHPMailer\PHPMailer\Exception;
