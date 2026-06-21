@@ -124,9 +124,7 @@ class EmailService
                             <!-- Header -->
                             <tr>
                                 <td style="padding: 30px 40px; text-align: center; border-bottom: 1px solid rgba(255,255,255,0.1);">
-                                    <h1 style="margin: 0; color: #ffffff; font-size: 24px; font-weight: 600;">
-                                        🚗 iVehicle
-                                    </h1>
+                                    <img src="%s/assets/img/logo.png" alt="myCar" style="height: 48px; width: auto; display: block; margin: 0 auto;">
                                 </td>
                             </tr>
                             <!-- Content -->
@@ -139,7 +137,7 @@ class EmailService
                             <tr>
                                 <td style="padding: 20px 40px; text-align: center; background: rgba(0,0,0,0.3); border-top: 1px solid rgba(255,255,255,0.1);">
                                     <p style="margin: 0; color: #86868b; font-size: 12px;">
-                                        © %d iVehicle. All rights reserved.
+                                        © %d myCar. All rights reserved.
                                     </p>
                                     <p style="margin: 10px 0 0; color: #86868b; font-size: 12px;">
                                         <a href="%s" style="color: #0071e3; text-decoration: none;">Visit Dashboard</a>
@@ -153,6 +151,7 @@ class EmailService
         </body>
         </html>',
             htmlspecialchars($title),
+            APP_URL,
             $content,
             date('Y'),
             APP_URL
