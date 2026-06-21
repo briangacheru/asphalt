@@ -1,6 +1,7 @@
 <?php
 $pageTitle = 'Settings';
 require_once 'includes/header.php';
+use App\Services\EmailService;
 
 // Get current user settings
 $stmt = $pdo->prepare("SELECT * FROM users WHERE id = ?");
@@ -10,6 +11,22 @@ $user = $stmt->fetch();
 // Handle form submission
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
+
+    if ($action === 'send_test_email') {
+        try {
+            $emailService = new EmailService($pdo);
+            $sent = $emailService->sendTestEmail($user['email'], $user['first_name']);
+            
+            if ($sent) {
+                setFlashMessage('success', 'Test email sent successfully to ' . htmlspecialchars($user['email']) . '!');
+            } else {
+                setFlashMessage('danger', 'Failed to send test email. Please check your SMTP settings.');
+            }
+        } catch (Exception $e) {
+            setFlashMessage('danger', 'Error: ' . $e->getMessage());
+        }
+        redirect('settings');
+    }
 
     if ($action === 'update_email_settings') {
         $email_notifications_enabled = isset($_POST['email_notifications_enabled']) ? 1 : 0;
@@ -744,7 +761,8 @@ foreach ($emailStatsRaw as $stat) {
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <form method="POST" action="send-test-email" class="d-inline">
+                    <form method="POST" action="" class="d-inline">
+                        <input type="hidden" name="action" value="send_test_email">
                         <button type="submit" class="btn btn-primary">
                             <i class="fas fa-paper-plane"></i> Send Test Email
                         </button>
