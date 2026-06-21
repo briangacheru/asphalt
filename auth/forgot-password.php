@@ -19,38 +19,44 @@ $email = '';
 
 // Handle form submission
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $email = sanitize($_POST['email'] ?? '');
+    // Verify CSRF token
+    if (!verifyCSRFToken($_POST['csrf_token'] ?? null)) {
+        $errors[] = 'Invalid security token. Please try again.';
+    } else {
+        $email = sanitize($_POST['email'] ?? '');
 
-    if (empty($email)) {
-        $errors[] = 'Email is required';
-    } elseif (!isValidEmail($email)) {
-        $errors[] = 'Please enter a valid email address';
-    }
-
-    if (empty($errors)) {
-        // Find user
-        $stmt = $pdo->prepare("SELECT id, first_name, email FROM users WHERE email = ? AND is_active = 1");
-        $stmt->execute([$email]);
-        $user = $stmt->fetch();
-
-        if ($user) {
-            // Delete any existing reset tokens for this user
-            $pdo->prepare("DELETE FROM password_resets WHERE user_id = ?")->execute([$user['id']]);
-
-            // Generate new token
-            $token = generateToken();
-            $expires = date('Y-m-d H:i:s', time() + PASSWORD_RESET_EXPIRY);
-
-            $stmt = $pdo->prepare("INSERT INTO password_resets (user_id, token, expires_at) VALUES (?, ?, ?)");
-            $stmt->execute([$user['id'], $token, $expires]);
-
-            // Send reset email
-            $emailService = new \App\Services\EmailService($pdo);
-            $emailService->sendPasswordResetEmail($user['email'], $token, $user['first_name']);
+        if (empty($email)) {
+            $errors[] = 'Email is required';
+        } elseif (!isValidEmail($email)) {
+            $errors[] = 'Please enter a valid email address';
         }
 
-        // Always show success message to prevent email enumeration
-        $success = true;
+        if (empty($errors)) {
+            // Find user
+            $stmt = $pdo->prepare("SELECT id, first_name, email FROM users WHERE email = ? AND is_active = 1");
+            $stmt->execute([$email]);
+            $user = $stmt->fetch();
+
+            if ($user) {
+                // Delete any existing reset tokens for this user
+                $pdo->prepare("DELETE FROM password_resets WHERE user_id = ?")->execute([$user['id']]);
+
+                // Generate new token and hash it for storage
+                $token = generateToken();
+                $tokenHash = password_hash($token, PASSWORD_DEFAULT);
+                $expires = date('Y-m-d H:i:s', time() + PASSWORD_RESET_EXPIRY);
+
+                $stmt = $pdo->prepare("INSERT INTO password_resets (user_id, token, expires_at) VALUES (?, ?, ?)");
+                $stmt->execute([$user['id'], $tokenHash, $expires]);
+
+                // Send reset email with plain token (user needs the plain token)
+                $emailService = new \App\Services\EmailService($pdo);
+                $emailService->sendPasswordResetEmail($user['email'], $token, $user['first_name']);
+            }
+
+            // Always show success message to prevent email enumeration
+            $success = true;
+        }
     }
 }
 ?>
@@ -175,6 +181,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         <?php endif; ?>
 
                       <form class="mb-3 mt-4" method="POST" action="">
+                        <?php echo csrfField(); ?>
                         <input class="form-control" type="email" name="email" value="<?php echo $email; ?>" placeholder="you@example.com" required autofocus />
                         <div class="mb-3"></div>
                         <button class="btn btn-primary d-block w-100 mt-3" type="submit" name="submit">Send reset link</button>

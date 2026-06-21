@@ -19,7 +19,7 @@ if (file_exists(__DIR__ . '/../vendor/autoload.php')) {
 
 // Error Reporting (set to 0 in production)
 error_reporting(E_ALL);
-ini_set('display_errors', 1);
+ini_set('display_errors', 0); // Disabled for production - set to 1 for development only
 
 // ============ Legacy Function Aliases ============
 // These provide backward compatibility with old code
