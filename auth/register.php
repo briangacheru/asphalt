@@ -24,76 +24,81 @@ $formData = [
 
 // Handle registration form submission
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $formData = [
-        'first_name' => sanitize($_POST['first_name'] ?? ''),
-        'last_name' => sanitize($_POST['last_name'] ?? ''),
-        'email' => sanitize($_POST['email'] ?? ''),
-        'phone' => sanitize($_POST['phone'] ?? '')
-    ];
-    $password = $_POST['password'] ?? '';
-    $confirmPassword = $_POST['confirm_password'] ?? '';
-    
-    // Validation
-    if (empty($formData['first_name'])) {
-        $errors[] = 'First name is required';
-    }
-    
-    if (empty($formData['email'])) {
-        $errors[] = 'Email is required';
-    } elseif (!isValidEmail($formData['email'])) {
-        $errors[] = 'Please enter a valid email address';
+    // Verify CSRF token
+    if (!verifyCSRFToken($_POST['csrf_token'] ?? null)) {
+        $errors[] = 'Invalid security token. Please try again.';
     } else {
-        // Check if email exists
-        $stmt = $pdo->prepare("SELECT id FROM users WHERE email = ?");
-        $stmt->execute([$formData['email']]);
-        if ($stmt->fetch()) {
-            $errors[] = 'An account with this email already exists. <a href="login">Sign in instead?</a>';
+        $formData = [
+            'first_name' => sanitize($_POST['first_name'] ?? ''),
+            'last_name' => sanitize($_POST['last_name'] ?? ''),
+            'email' => sanitize($_POST['email'] ?? ''),
+            'phone' => sanitize($_POST['phone'] ?? '')
+        ];
+        $password = $_POST['password'] ?? '';
+        $confirmPassword = $_POST['confirm_password'] ?? '';
+        
+        // Validation
+        if (empty($formData['first_name'])) {
+            $errors[] = 'First name is required';
         }
-    }
-    
-    if (empty($password)) {
-        $errors[] = 'Password is required';
-    } elseif (strlen($password) < MIN_PASSWORD_LENGTH) {
-        $errors[] = 'Password must be at least ' . MIN_PASSWORD_LENGTH . ' characters';
-    }
-    
-    if ($password !== $confirmPassword) {
-        $errors[] = 'Passwords do not match';
-    }
-    
-    // Create account
-    if (empty($errors)) {
-        try {
-            $verificationToken = generateToken();
-            
-            $stmt = $pdo->prepare("
-                INSERT INTO users (email, password, first_name, last_name, phone, verification_token, is_verified)
-                VALUES (?, ?, ?, ?, ?, ?, 0)
-            ");
-            $stmt->execute([
-                $formData['email'],
-                hashPassword($password),
-                $formData['first_name'],
-                $formData['last_name'],
-                $formData['phone'],
-                $verificationToken
-            ]);
-            
-            // Send verification email
-            $emailService = new EmailService($pdo);
-            $emailSent = $emailService->sendWelcomeEmail($formData['email'], $verificationToken, $formData['first_name']);
-            
-            if ($emailSent) {
-                setFlashMessage('success', 'Account created! Please check your email to verify your account.');
-            } else {
-                setFlashMessage('success', 'Account created! Please contact support if you don\'t receive a verification email.');
+        
+        if (empty($formData['email'])) {
+            $errors[] = 'Email is required';
+        } elseif (!isValidEmail($formData['email'])) {
+            $errors[] = 'Please enter a valid email address';
+        } else {
+            // Check if email exists
+            $stmt = $pdo->prepare("SELECT id FROM users WHERE email = ?");
+            $stmt->execute([$formData['email']]);
+            if ($stmt->fetch()) {
+                $errors[] = 'An account with this email already exists. <a href="login">Sign in instead?</a>';
             }
-            
-            redirect('login');
-            
-        } catch (PDOException $e) {
-            $errors[] = 'An error occurred. Please try again.';
-            error_log("Registration error: " . $e->getMessage());
+        }
+        
+        if (empty($password)) {
+            $errors[] = 'Password is required';
+        } elseif (strlen($password) < MIN_PASSWORD_LENGTH) {
+            $errors[] = 'Password must be at least ' . MIN_PASSWORD_LENGTH . ' characters';
+        }
+        
+        if ($password !== $confirmPassword) {
+            $errors[] = 'Passwords do not match';
+        }
+        
+        // Create account
+        if (empty($errors)) {
+            try {
+                $verificationToken = generateToken();
+                
+                $stmt = $pdo->prepare("
+                    INSERT INTO users (email, password, first_name, last_name, phone, verification_token, is_verified)
+                    VALUES (?, ?, ?, ?, ?, ?, 0)
+                ");
+                $stmt->execute([
+                    $formData['email'],
+                    hashPassword($password),
+                    $formData['first_name'],
+                    $formData['last_name'],
+                    $formData['phone'],
+                    $verificationToken
+                ]);
+                
+                // Send verification email
+                $emailService = new EmailService($pdo);
+                $emailSent = $emailService->sendWelcomeEmail($formData['email'], $verificationToken, $formData['first_name']);
+                
+                if ($emailSent) {
+                    setFlashMessage('success', 'Account created! Please check your email to verify your account.');
+                } else {
+                    setFlashMessage('success', 'Account created! Please contact support if you don\'t receive a verification email.');
+                }
+                
+                redirect('login');
+                
+            } catch (PDOException $e) {
+                $errors[] = 'An error occurred. Please try again.';
+                error_log("Registration error: " . $e->getMessage());
+            }
         }
     }
 }
@@ -200,6 +205,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                       </div>
                     <?php endif; ?>
                     <form method="POST" action="">
+                      <?php echo csrfField(); ?>
                       <div class="mb-3">
                         <label class="form-label" for="split-name">First Name</label>
                         <input class="form-control" type="text" autocomplete="on" id="split-name" name="first_name" value="<?php echo $formData['first_name']; ?>" required/>
