@@ -14,14 +14,6 @@ if (file_exists(__DIR__ . '/../vendor/autoload.php')) {
     require_once __DIR__ . '/../vendor/autoload.php';
 }
 
-// Explicitly require PHPMailer in case autoloader doesn't register it
-$phpmailerSrc = __DIR__ . '/../vendor/phpmailer/phpmailer/src/';
-if (is_dir($phpmailerSrc) && !class_exists('PHPMailer\PHPMailer\PHPMailer', false)) {
-    require_once $phpmailerSrc . 'Exception.php';
-    require_once $phpmailerSrc . 'PHPMailer.php';
-    require_once $phpmailerSrc . 'SMTP.php';
-}
-
 // Initialize configuration (provides legacy define() constants)
 \App\Helpers\Config::init();
 
