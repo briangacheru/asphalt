@@ -213,8 +213,8 @@ $expenses = $pdo->query("
     FROM expenses e 
     JOIN vehicles v ON e.vehicle_id = v.id 
     JOIN expense_categories ec ON e.category_id = ec.id
-    $where 
-    ORDER BY e.expense_date DESC
+    $where
+    ORDER BY e.id DESC
     LIMIT 50
 ")->fetchAll();
 
@@ -353,7 +353,7 @@ if ($flash): ?>
                         </div>
                     <?php else: ?>
                         <div class="table-responsive">
-                            <table class="table table-hover mb-0 data-table fs-10" data-datatables="data-datatables">
+                            <table class="table table-hover mb-0 data-table fs-10" data-datatables='{"order": []}'>
                                 <thead class="bg-200">
                                 <tr>
                                     <th class="text-900 sort ps-3">Date</th>
@@ -369,7 +369,7 @@ if ($flash): ?>
                                     $isItemCat = strpos($catLower,'repair') !== false || strpos($catLower,'service') !== false || strpos($catLower,'maintenance') !== false;
                                     $itemLabel = !empty($e['item_type']) && isset($itemTypes[$e['item_type']]) ? $itemTypes[$e['item_type']] : null;
                                     ?>
-                                    <tr class="hover-actions-trigger btn-reveal-trigger hover-bg-100">
+                                    <tr class="hover-actions-trigger btn-reveal-trigger hover-bg-100 cursor-pointer" onclick="viewExpense(<?php echo htmlspecialchars(json_encode($e)); ?>)">
                                         <td class="ps-3 align-middle white-space-nowrap">
                                             <span class="fw-semibold"><?php echo formatDate($e['expense_date']); ?></span>
                                         </td>
@@ -392,18 +392,18 @@ if ($flash): ?>
                                         </td>
                                         <td class="align-middle white-space-nowrap text-end position-relative">
                                             <div class="hover-actions bg-100">
-                                                <button class="btn icon-item rounded-3 me-2 fs-11 icon-item-sm" title="View Expense" onclick="viewExpense(<?php echo htmlspecialchars(json_encode($e)); ?>)">
+                                                <button class="btn icon-item rounded-3 me-2 fs-11 icon-item-sm" title="View Expense" onclick="event.stopPropagation(); viewExpense(<?php echo htmlspecialchars(json_encode($e)); ?>)">
                                                     <span class="fas fa-eye"></span>
                                                 </button>
-                                                <button class="btn icon-item rounded-3 me-2 fs-11 icon-item-sm" title="Edit Expense" onclick="editExpense(<?php echo htmlspecialchars(json_encode($e)); ?>)">
+                                                <button class="btn icon-item rounded-3 me-2 fs-11 icon-item-sm" title="Edit Expense" onclick="event.stopPropagation(); editExpense(<?php echo htmlspecialchars(json_encode($e)); ?>)">
                                                     <span class="fas fa-edit"></span>
                                                 </button>
-                                                <button class="btn icon-item rounded-3 me-2 fs-11 icon-item-sm" title="Delete Expense" onclick="deleteExpense(<?php echo $e['id']; ?>, '<?php echo sanitize($e['category_name']); ?>')">
+                                                <button class="btn icon-item rounded-3 me-2 fs-11 icon-item-sm" title="Delete Expense" onclick="event.stopPropagation(); deleteExpense(<?php echo $e['id']; ?>, '<?php echo sanitize($e['category_name']); ?>')">
                                                     <span class="fas fa-trash"></span>
                                                 </button>
                                             </div>
                                             <div class="dropdown font-sans-serif btn-reveal-trigger">
-                                                <button class="btn btn-link text-600 btn-sm dropdown-toggle dropdown-caret-none btn-reveal-sm transition-none" type="button"  data-boundary="viewport" aria-haspopup="true" aria-expanded="false"><span class="fas fa-ellipsis-h fs-11"></span></button>
+                                                <button class="btn btn-link text-600 btn-sm dropdown-toggle dropdown-caret-none btn-reveal-sm transition-none" type="button" onclick="event.stopPropagation()" data-boundary="viewport" aria-haspopup="true" aria-expanded="false"><span class="fas fa-ellipsis-h fs-11"></span></button>
                                             </div>
                                         </td>
                                     </tr>

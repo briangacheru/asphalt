@@ -40,6 +40,43 @@ $stats = [
 // Last service info
 $lastService = $services[0] ?? null;
 $pageTitle = $vehicle['make'] . ' ' . $vehicle['model'];
+
+// Get maintenance schedule for this vehicle
+$stmt = $pdo->prepare("SELECT * FROM maintenance_schedule WHERE vehicle_id = ? ORDER BY id DESC");
+$stmt->execute([$vehicleId]);
+$maintenanceItems = $stmt->fetchAll();
+
+foreach ($maintenanceItems as &$item) {
+    $kmOverdue = $item['next_due_mileage'] ? $vehicle['current_mileage'] - $item['next_due_mileage'] : null;
+    $dateOverdue = $item['next_due_date'] ? (strtotime($item['next_due_date']) < time()) : false;
+
+    if (($kmOverdue !== null && $kmOverdue > 0) || $dateOverdue) {
+        $item['status'] = 'overdue';
+        $item['remaining'] = $kmOverdue;
+    } elseif ($kmOverdue !== null && $kmOverdue > -2000) {
+        $item['status'] = 'due_soon';
+        $item['remaining'] = abs($kmOverdue);
+    } elseif ($kmOverdue !== null && $kmOverdue > -5000) {
+        $item['status'] = 'upcoming';
+        $item['remaining'] = abs($kmOverdue);
+    } else {
+        $item['status'] = 'ok';
+        $item['remaining'] = $kmOverdue !== null ? abs($kmOverdue) : null;
+    }
+}
+unset($item);
+
+$maintenanceOverdueCount = count(array_filter($maintenanceItems, fn($i) => $i['status'] === 'overdue'));
+$maintenanceDueSoonCount = count(array_filter($maintenanceItems, fn($i) => $i['status'] === 'due_soon'));
+
+// Extra info for stat cards
+$daysSinceLastService = $lastService ? round((time() - strtotime($lastService['service_date'])) / 86400) : null;
+$avgKmPerMonth = null;
+if ($vehicle['purchase_date']) {
+    $monthsOwned = max(1, (time() - strtotime($vehicle['purchase_date'])) / (86400 * 30));
+    $avgKmPerMonth = $stats['total_km_driven'] / $monthsOwned;
+}
+$avgCostPerService = $stats['total_services'] > 0 ? $stats['total_spent'] / $stats['total_services'] : 0;
 ?>
 
 <div class="card mb-3">
@@ -160,65 +197,113 @@ if ($flash): ?>
     <div class="col-lg-8 col-xl-8">
         <div class="row g-3">
             <div class="col-md-6">
-                <div class="card h-100">
-                    <div class="card-body">
-                        <div class="row flex-between-center">
-                            <div class="col d-md-flex d-lg-block flex-between-center">
-                                <h6 class="mb-md-0 mb-lg-2">Current Mileage (km)</h6>
-                                    <i class="fas fa-tachometer-alt fs-4"></i>
-                            </div>
-                            <div class="col-auto">
-                                <h4 class="fs-6 fw-normal text-primary"><?php echo formatNumber($vehicle['current_mileage']); ?></h4>
+                <div class="card h-100 border-0 shadow-sm hover-lift">
+                    <div class="card-body p-3">
+                        <div class="d-flex align-items-center justify-content-between mb-2">
+                            <div class="icon-box bg-primary bg-opacity-10 rounded-3 p-2">
+                                <i class="fas fa-tachometer-alt text-primary"></i>
                             </div>
                         </div>
+                        <h6 class="text-muted mb-1 fw-normal fs-10">Current Mileage</h6>
+                        <h4 class="fs-6 fw-bold mb-1"><?php echo formatNumber($vehicle['current_mileage']); ?> <small class="fs-11 text-muted">km</small></h4>
+                        <p class="fs-11 text-muted mb-0">
+                            <?php if (!empty($vehicle['updated_at'])): ?>
+                                Updated <?php echo date('M d, Y', strtotime($vehicle['updated_at'])); ?>
+                            <?php else: ?>
+                                &nbsp;
+                            <?php endif; ?>
+                        </p>
                     </div>
                 </div>
             </div>
             <div class="col-md-6">
-                <div class="card h-100">
-                    <div class="card-body">
-                        <div class="row flex-between-center">
-                            <div class="col d-md-flex d-lg-block flex-between-center">
-                                <h6 class="mb-md-0 mb-lg-2">Total KM Driven</h6>
-                                <i class="fas fa-road fs-4"></i>
-                            </div>
-                            <div class="col-auto">
-                                <h4 class="fs-6 fw-normal text-primary"><?php echo formatNumber($stats['total_km_driven']); ?></h4>
+                <div class="card h-100 border-0 shadow-sm hover-lift">
+                    <div class="card-body p-3">
+                        <div class="d-flex align-items-center justify-content-between mb-2">
+                            <div class="icon-box bg-info bg-opacity-10 rounded-3 p-2">
+                                <i class="fas fa-road text-info"></i>
                             </div>
                         </div>
+                        <h6 class="text-muted mb-1 fw-normal fs-10">Total KM Driven</h6>
+                        <h4 class="fs-6 fw-bold mb-1"><?php echo formatNumber($stats['total_km_driven']); ?> <small class="fs-11 text-muted">km</small></h4>
+                        <p class="fs-11 text-muted mb-0">
+                            <?php if ($avgKmPerMonth !== null): ?>
+                                &asymp; <?php echo formatNumber(round($avgKmPerMonth)); ?> km/month
+                            <?php else: ?>
+                                &nbsp;
+                            <?php endif; ?>
+                        </p>
                     </div>
                 </div>
             </div>
             <div class="col-md-6">
-                <div class="card h-100">
-                    <div class="card-body">
-                        <div class="row flex-between-center">
-                            <div class="col d-md-flex d-lg-block flex-between-center">
-                                <h6 class="mb-md-0 mb-lg-2">Total Services</h6>
-                                <i class="fas fa-wrench fs-4"></i>
-                            </div>
-                            <div class="col-auto">
-                                <h4 class="fs-6 fw-normal text-primary"><?php echo $stats['total_services']; ?></h4>
+                <div class="card h-100 border-0 shadow-sm hover-lift">
+                    <div class="card-body p-3">
+                        <div class="d-flex align-items-center justify-content-between mb-2">
+                            <div class="icon-box bg-success bg-opacity-10 rounded-3 p-2">
+                                <i class="fas fa-wrench text-success"></i>
                             </div>
                         </div>
+                        <h6 class="text-muted mb-1 fw-normal fs-10">Total Services</h6>
+                        <h4 class="fs-6 fw-bold mb-1"><?php echo $stats['total_services']; ?></h4>
+                        <p class="fs-11 text-muted mb-0">
+                            <?php if ($daysSinceLastService !== null): ?>
+                                Last service <?php echo $daysSinceLastService; ?> day<?php echo $daysSinceLastService == 1 ? '' : 's'; ?> ago
+                            <?php else: ?>
+                                No services yet
+                            <?php endif; ?>
+                        </p>
                     </div>
                 </div>
             </div>
             <div class="col-md-6">
-                <div class="card h-100">
-                    <div class="card-body">
-                        <div class="row flex-between-center">
-                            <div class="col d-md-flex d-lg-block flex-between-center">
-                                <h6 class="mb-md-0 mb-lg-2">Total Spent</h6>
-                                <i class="fas fa-money-bill-wave fs-4"></i>
-                            </div>
-                            <div class="col-auto">
-                                <h4 class="fs-6 fw-normal text-primary">Ksh. <?php echo formatNumber($stats['total_spent']); ?></h4>
+                <div class="card h-100 border-0 shadow-sm hover-lift">
+                    <div class="card-body p-3">
+                        <div class="d-flex align-items-center justify-content-between mb-2">
+                            <div class="icon-box bg-warning bg-opacity-10 rounded-3 p-2">
+                                <i class="fas fa-money-bill-wave text-warning"></i>
                             </div>
                         </div>
+                        <h6 class="text-muted mb-1 fw-normal fs-10">Total Spent</h6>
+                        <h4 class="fs-6 fw-bold mb-1">Ksh. <?php echo formatNumber($stats['total_spent']); ?></h4>
+                        <p class="fs-11 text-muted mb-0">
+                            <?php if ($stats['total_services'] > 0): ?>
+                                Ksh. <?php echo formatNumber(round($avgCostPerService)); ?> avg/service
+                            <?php else: ?>
+                                &nbsp;
+                            <?php endif; ?>
+                        </p>
                     </div>
                 </div>
             </div>
+            <?php if ($maintenanceOverdueCount + $maintenanceDueSoonCount > 0): ?>
+                <div class="col-12">
+                    <a href="#maintenance-schedule-section" class="text-decoration-none">
+                        <div class="card h-100 border-0 shadow-sm hover-lift <?php echo $maintenanceOverdueCount > 0 ? 'border-start border-danger border-4' : 'border-start border-warning border-4'; ?>">
+                            <div class="card-body p-3 d-flex align-items-center justify-content-between">
+                                <div class="d-flex align-items-center">
+                                    <div class="icon-box <?php echo $maintenanceOverdueCount > 0 ? 'bg-danger' : 'bg-warning'; ?> bg-opacity-10 rounded-3 p-2 me-3">
+                                        <i class="fas fa-exclamation-triangle <?php echo $maintenanceOverdueCount > 0 ? 'text-danger' : 'text-warning'; ?>"></i>
+                                    </div>
+                                    <div>
+                                        <h6 class="text-muted mb-1 fw-normal fs-10">Maintenance Alerts</h6>
+                                        <p class="fs-11 mb-0 text-800">
+                                            <?php if ($maintenanceOverdueCount > 0): ?>
+                                                <strong class="text-danger"><?php echo $maintenanceOverdueCount; ?> overdue</strong>
+                                            <?php endif; ?>
+                                            <?php if ($maintenanceOverdueCount > 0 && $maintenanceDueSoonCount > 0): ?> &bull; <?php endif; ?>
+                                            <?php if ($maintenanceDueSoonCount > 0): ?>
+                                                <strong class="text-warning"><?php echo $maintenanceDueSoonCount; ?> due soon</strong>
+                                            <?php endif; ?>
+                                        </p>
+                                    </div>
+                                </div>
+                                <i class="fas fa-chevron-down text-muted"></i>
+                            </div>
+                        </div>
+                    </a>
+                </div>
+            <?php endif; ?>
         </div>
 
         <!-- Service Status -->
@@ -308,6 +393,102 @@ if ($flash): ?>
                 </div>
             </div>
         <?php endif; ?>
+
+        <!-- Maintenance Schedule -->
+        <div class="card mt-3" id="maintenance-schedule-section">
+            <div class="card-header bg-body-tertiary">
+                <div class="row align-items-center">
+                    <div class="col">
+                        <h6 class="mb-0"><i class="fas fa-calendar-check"></i> Maintenance Schedule
+                            <?php if ($maintenanceOverdueCount > 0): ?>
+                                <span class="badge badge-subtle-danger rounded-pill ms-2"><?php echo $maintenanceOverdueCount; ?> overdue</span>
+                            <?php elseif ($maintenanceDueSoonCount > 0): ?>
+                                <span class="badge badge-subtle-warning rounded-pill ms-2"><?php echo $maintenanceDueSoonCount; ?> due soon</span>
+                            <?php endif; ?>
+                        </h6>
+                    </div>
+                    <div class="col-auto text-center pe-x1">
+                        <a href="maintenance-schedule?vehicle_id=<?php echo $vehicleId; ?>" class="btn btn-sm btn-outline-primary"><i class="fas fa-cog"></i> Manage</a>
+                    </div>
+                </div>
+            </div>
+            <div class="card-body p-0">
+                <?php if (empty($maintenanceItems)): ?>
+                    <div class="empty-state text-center py-4">
+                        <i class="fas fa-calendar-alt empty-state-icon fs-3 text-300 mb-3"></i>
+                        <h6 class="fs-9 mb-1">No maintenance items scheduled!</h6>
+                        <p class="fs-10 mb-3">Track intervals like oil changes, filters, and brake pads.</p>
+                        <a href="maintenance-schedule?vehicle_id=<?php echo $vehicleId; ?>" class="btn btn-primary btn-sm">
+                            <i class="fas fa-plus"></i> Add Maintenance Item
+                        </a>
+                    </div>
+                <?php else: ?>
+                    <div class="table-responsive">
+                        <table class="table table-responsive-sm mb-0 fs-10">
+                            <thead class="bg-200">
+                            <tr>
+                                <th class="text-900">Item</th>
+                                <th class="text-900">Last Done</th>
+                                <th class="text-900">Next Due</th>
+                                <th class="text-900">Status</th>
+                            </tr>
+                            </thead>
+                            <tbody>
+                            <?php foreach ($maintenanceItems as $item): ?>
+                                <tr>
+                                    <td>
+                                        <strong><?php echo sanitize($item['item_type']); ?></strong><br>
+                                        <small class="text-muted">
+                                            <?php
+                                            $interval = [];
+                                            if ($item['interval_km']) $interval[] = number_format($item['interval_km']) . ' km';
+                                            if ($item['interval_months']) $interval[] = $item['interval_months'] . ' months';
+                                            echo implode(' / ', $interval) ?: '-';
+                                            ?>
+                                        </small>
+                                    </td>
+                                    <td>
+                                        <?php if ($item['last_replaced_date']): ?>
+                                            <?php echo date('M d, Y', strtotime($item['last_replaced_date'])); ?><br>
+                                        <?php endif; ?>
+                                        <?php if ($item['last_replaced_mileage']): ?>
+                                            <small class="text-muted"><?php echo number_format($item['last_replaced_mileage']); ?> km</small>
+                                        <?php endif; ?>
+                                        <?php if (!$item['last_replaced_date'] && !$item['last_replaced_mileage']): ?>
+                                            <span class="text-muted">Not recorded</span>
+                                        <?php endif; ?>
+                                    </td>
+                                    <td>
+                                        <?php if ($item['next_due_date']): ?>
+                                            <?php echo date('M d, Y', strtotime($item['next_due_date'])); ?><br>
+                                        <?php endif; ?>
+                                        <?php if ($item['next_due_mileage']): ?>
+                                            <small class="text-muted"><?php echo number_format($item['next_due_mileage']); ?> km</small>
+                                        <?php endif; ?>
+                                        <?php if (!$item['next_due_date'] && !$item['next_due_mileage']): ?>
+                                            <span class="text-muted">Not set</span>
+                                        <?php endif; ?>
+                                    </td>
+                                    <td>
+                                        <?php if ($item['status'] === 'overdue'): ?>
+                                            <span class="badge bg-danger"><i class="fas fa-exclamation-circle"></i> Overdue<?php echo $item['remaining'] > 0 ? ' (' . number_format($item['remaining']) . ' km)' : ''; ?></span>
+                                        <?php elseif ($item['status'] === 'due_soon'): ?>
+                                            <span class="badge bg-warning"><i class="fas fa-exclamation-triangle"></i> Due Soon<?php echo $item['remaining'] ? ' (' . number_format($item['remaining']) . ' km left)' : ''; ?></span>
+                                        <?php elseif ($item['status'] === 'upcoming'): ?>
+                                            <span class="badge bg-info"><i class="fas fa-clock"></i> Upcoming<?php echo $item['remaining'] ? ' (' . number_format($item['remaining']) . ' km left)' : ''; ?></span>
+                                        <?php else: ?>
+                                            <span class="badge bg-success"><i class="fas fa-check-circle"></i> OK<?php echo $item['remaining'] ? ' (' . number_format($item['remaining']) . ' km left)' : ''; ?></span>
+                                        <?php endif; ?>
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                <?php endif; ?>
+            </div>
+        </div>
+
         <!-- Recent Services -->
         <div class="card mt-3">
             <div class="card-header bg-body-tertiary">

@@ -17,7 +17,7 @@ $stmt = $pdo->prepare("
     SELECT sr.*, v.make, v.model, v.year, v.license_plate,
            (SELECT COUNT(*) FROM service_items WHERE service_record_id = sr.id) as item_count
     FROM service_records sr JOIN vehicles v ON sr.vehicle_id = v.id $whereClause
-    ORDER BY sr.service_date DESC
+    ORDER BY sr.id DESC
 ");
 $stmt->execute($params);
 $services = $stmt->fetchAll();
@@ -139,7 +139,7 @@ if ($flash): ?>
             </div>
         <?php else: ?>
             <div class="table-responsive">
-                <table class="table mb-0 data-table fs-10" data-datatables="data-datatables">
+                <table class="table mb-0 data-table fs-10" data-datatables='{"order": []}'>
                     <thead class="bg-200">
                     <tr>
                         <th class="text-900 sort">Date</th>

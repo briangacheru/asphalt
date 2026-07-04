@@ -13,12 +13,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     $liters = (float)($_POST['liters'] ?? 0);
     $price_per_liter = (float)($_POST['price_per_liter'] ?? 0);
     $total_cost = $liters * $price_per_liter;
-    $fuel_type = sanitize($_POST['fuel_type'] ?? '');
     $station_name = sanitize($_POST['station_name'] ?? '');
-    $full_tank = isset($_POST['full_tank']) ? 1 : 0;
+    $full_tank = 1;
 
     if ($vehicle_id && $mileage && $liters && $price_per_liter) {
         try {
+            // Fuel type comes from the vehicle's own profile, not re-entered here
+            $vStmt = $pdo->prepare("SELECT fuel_type FROM vehicles WHERE id = ?");
+            $vStmt->execute([$vehicle_id]);
+            $fuel_type = $vStmt->fetchColumn() ?: '';
+
             $stmt = $pdo->prepare("INSERT INTO fuel_log (vehicle_id, fill_date, mileage, liters, price_per_liter, total_cost, fuel_type, station_name, full_tank) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
             $stmt->execute([$vehicle_id, $fill_date, $mileage, $liters, $price_per_liter, $total_cost, $fuel_type, $station_name, $full_tank]);
 
@@ -42,12 +46,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     $liters = (float)($_POST['liters'] ?? 0);
     $price_per_liter = (float)($_POST['price_per_liter'] ?? 0);
     $total_cost = $liters * $price_per_liter;
-    $fuel_type = sanitize($_POST['fuel_type'] ?? '');
     $station_name = sanitize($_POST['station_name'] ?? '');
-    $full_tank = isset($_POST['full_tank']) ? 1 : 0;
+    $full_tank = isset($_POST['full_tank']) ? (int)$_POST['full_tank'] : 1;
 
     if ($fuel_id && $vehicle_id && $mileage && $liters && $price_per_liter) {
         try {
+            // Fuel type comes from the vehicle's own profile, not re-entered here
+            $vStmt = $pdo->prepare("SELECT fuel_type FROM vehicles WHERE id = ?");
+            $vStmt->execute([$vehicle_id]);
+            $fuel_type = $vStmt->fetchColumn() ?: '';
+
             $stmt = $pdo->prepare("UPDATE fuel_log SET vehicle_id = ?, fill_date = ?, mileage = ?, liters = ?, price_per_liter = ?, total_cost = ?, fuel_type = ?, station_name = ?, full_tank = ? WHERE id = ?");
             $stmt->execute([$vehicle_id, $fill_date, $mileage, $liters, $price_per_liter, $total_cost, $fuel_type, $station_name, $full_tank, $fuel_id]);
 
@@ -84,21 +92,64 @@ $logs = $pdo->query("
     SELECT fl.*, v.make, v.model, v.year 
     FROM fuel_log fl 
     JOIN vehicles v ON fl.vehicle_id = v.id 
-    $where 
-    ORDER BY fl.fill_date DESC, fl.id DESC
+    $where
+    ORDER BY fl.id DESC
     LIMIT 100
 ")->fetchAll();
 
-// Calculate stats
-$stats = $pdo->query("
-    SELECT 
-        COUNT(*) as fill_count,
-        COALESCE(SUM(total_cost), 0) as total_spent,
-        COALESCE(SUM(liters), 0) as total_liters,
-        COALESCE(AVG(price_per_liter), 0) as avg_price
+// Calculate this month vs last month stats
+$monthWhere = $vehicleFilter ? "WHERE vehicle_id = $vehicleFilter" : "";
+$monthStats = $pdo->query("
+    SELECT
+        COALESCE(SUM(CASE WHEN DATE_FORMAT(fill_date, '%Y-%m') = DATE_FORMAT(CURDATE(), '%Y-%m') THEN 1 ELSE 0 END), 0) as this_count,
+        COALESCE(SUM(CASE WHEN DATE_FORMAT(fill_date, '%Y-%m') = DATE_FORMAT(CURDATE() - INTERVAL 1 MONTH, '%Y-%m') THEN 1 ELSE 0 END), 0) as last_count,
+        COALESCE(SUM(CASE WHEN DATE_FORMAT(fill_date, '%Y-%m') = DATE_FORMAT(CURDATE(), '%Y-%m') THEN liters ELSE 0 END), 0) as this_liters,
+        COALESCE(SUM(CASE WHEN DATE_FORMAT(fill_date, '%Y-%m') = DATE_FORMAT(CURDATE() - INTERVAL 1 MONTH, '%Y-%m') THEN liters ELSE 0 END), 0) as last_liters,
+        COALESCE(SUM(CASE WHEN DATE_FORMAT(fill_date, '%Y-%m') = DATE_FORMAT(CURDATE(), '%Y-%m') THEN total_cost ELSE 0 END), 0) as this_spent,
+        COALESCE(SUM(CASE WHEN DATE_FORMAT(fill_date, '%Y-%m') = DATE_FORMAT(CURDATE() - INTERVAL 1 MONTH, '%Y-%m') THEN total_cost ELSE 0 END), 0) as last_spent,
+        COALESCE(AVG(CASE WHEN DATE_FORMAT(fill_date, '%Y-%m') = DATE_FORMAT(CURDATE(), '%Y-%m') THEN price_per_liter END), 0) as this_avg_price,
+        COALESCE(AVG(CASE WHEN DATE_FORMAT(fill_date, '%Y-%m') = DATE_FORMAT(CURDATE() - INTERVAL 1 MONTH, '%Y-%m') THEN price_per_liter END), 0) as last_avg_price
     FROM fuel_log
-    " . ($vehicleFilter ? "WHERE vehicle_id = $vehicleFilter" : "")
-)->fetch();
+    $monthWhere
+")->fetch();
+
+$thisMonthLabel = date('F Y');
+$lastMonthLabel = date('F Y', strtotime('first day of last month'));
+
+// Returns ['dir' => up|down|flat|new, 'pct' => float|null]
+function monthTrend($current, $previous) {
+    if ($previous == 0) {
+        return $current > 0 ? ['dir' => 'new', 'pct' => null] : ['dir' => 'flat', 'pct' => 0];
+    }
+    $pct = (($current - $previous) / $previous) * 100;
+    if (abs($pct) < 0.5) {
+        return ['dir' => 'flat', 'pct' => $pct];
+    }
+    return ['dir' => $pct > 0 ? 'up' : 'down', 'pct' => $pct];
+}
+
+// Renders the trend badge; $goodDir = 'down' means a decrease is a positive outcome (e.g. spend, price)
+function renderTrendBadge($trend, $goodDir = null) {
+    if ($trend['dir'] === 'new') {
+        return '<span class="badge badge-subtle-info rounded-pill"><i class="fas fa-star"></i> New</span>';
+    }
+    if ($trend['dir'] === 'flat') {
+        return '<span class="badge badge-subtle-secondary rounded-pill"><i class="fas fa-minus"></i> No change</span>';
+    }
+    $isGood = $goodDir ? ($trend['dir'] !== $goodDir ? false : true) : null;
+    if ($goodDir === null) {
+        $badgeClass = 'badge-subtle-secondary';
+    } else {
+        $badgeClass = $isGood ? 'badge-subtle-success' : 'badge-subtle-danger';
+    }
+    $icon = $trend['dir'] === 'up' ? 'fa-arrow-up' : 'fa-arrow-down';
+    return sprintf('<span class="badge %s rounded-pill"><i class="fas %s"></i> %s%%</span>', $badgeClass, $icon, number_format(abs($trend['pct']), 1));
+}
+
+$fillTrend = monthTrend($monthStats['this_count'], $monthStats['last_count']);
+$literTrend = monthTrend($monthStats['this_liters'], $monthStats['last_liters']);
+$spentTrend = monthTrend($monthStats['this_spent'], $monthStats['last_spent']);
+$priceTrend = monthTrend($monthStats['this_avg_price'], $monthStats['last_avg_price']);
 ?>
 
 <?php
@@ -154,63 +205,63 @@ if ($flash): ?>
     </div>
 
     <div class="row g-3 mb-3">
-        <div class="col-sm-6 col-md-6 col-lg-3 col-xxl-3">
-            <div class="card h-100">
-                <div class="card-body">
-                    <div class="row flex-between-center">
-                        <div class="col d-md-flex d-lg-block flex-between-center">
-                            <h6 class="mb-md-0 mb-lg-2">Fill-ups</h6>
-                            <i class="fas fa-gas-pump fs-4"></i>
+        <div class="col-sm-6 col-lg-3">
+            <div class="card h-100 border-0 shadow-sm hover-lift" data-bs-toggle="tooltip" title="<?php echo $lastMonthLabel; ?>: <?php echo (int)$monthStats['last_count']; ?> fill-up(s)">
+                <div class="card-body p-3">
+                    <div class="d-flex align-items-center justify-content-between mb-2">
+                        <div class="icon-box bg-warning bg-opacity-10 rounded-3 p-2">
+                            <i class="fas fa-gas-pump text-warning"></i>
                         </div>
-                        <div class="col-auto">
-                            <h4 class="fs-6 fw-normal text-warning"><?php echo $stats['fill_count']; ?></h4>
-                        </div>
+                        <?php echo renderTrendBadge($fillTrend); ?>
                     </div>
+                    <h6 class="text-muted mb-1 fw-normal fs-10">Fill-ups &bull; <?php echo $thisMonthLabel; ?></h6>
+                    <h4 class="fs-6 fw-bold mb-1"><?php echo (int)$monthStats['this_count']; ?></h4>
+                    <p class="fs-11 text-muted mb-0">vs <?php echo $lastMonthLabel; ?>: <?php echo (int)$monthStats['last_count']; ?></p>
                 </div>
             </div>
         </div>
-        <div class="col-sm-6 col-md-6 col-lg-3 col-xxl-3">
-            <div class="card h-100">
-                <div class="card-body">
-                    <div class="row flex-between-center">
-                        <div class="col d-md-flex d-lg-block flex-between-center">
-                            <h6 class="mb-md-0 mb-lg-2">Total Fuel</h6>
-                            <i class="fas fa-tint fs-4"></i>
+        <div class="col-sm-6 col-lg-3">
+            <div class="card h-100 border-0 shadow-sm hover-lift" data-bs-toggle="tooltip" title="<?php echo $lastMonthLabel; ?>: <?php echo number_format($monthStats['last_liters'], 1); ?>L">
+                <div class="card-body p-3">
+                    <div class="d-flex align-items-center justify-content-between mb-2">
+                        <div class="icon-box bg-info bg-opacity-10 rounded-3 p-2">
+                            <i class="fas fa-tint text-info"></i>
                         </div>
-                        <div class="col-auto">
-                            <h4 class="fs-6 fw-normal text-warning"><?php echo number_format($stats['total_liters'], 1); ?>L</h4>
-                        </div>
+                        <?php echo renderTrendBadge($literTrend); ?>
                     </div>
+                    <h6 class="text-muted mb-1 fw-normal fs-10">Total Fuel &bull; <?php echo $thisMonthLabel; ?></h6>
+                    <h4 class="fs-6 fw-bold mb-1"><?php echo number_format($monthStats['this_liters'], 1); ?>L</h4>
+                    <p class="fs-11 text-muted mb-0">vs <?php echo $lastMonthLabel; ?>: <?php echo number_format($monthStats['last_liters'], 1); ?>L</p>
                 </div>
             </div>
         </div>
-        <div class="col-sm-6 col-md-6 col-lg-3 col-xxl-3">
-            <div class="card h-100">
-                <div class="card-body">
-                    <div class="row flex-between-center">
-                        <div class="col d-md-flex d-lg-block flex-between-center">
-                            <h6 class="mb-md-0 mb-lg-2">Total Spent</h6>
-                            <i class="fas fa-money-bill-wave fs-4"></i>
+        <div class="col-sm-6 col-lg-3">
+            <div class="card h-100 border-0 shadow-sm hover-lift" data-bs-toggle="tooltip" title="<?php echo $lastMonthLabel; ?>: Ksh. <?php echo number_format($monthStats['last_spent'], 2); ?>">
+                <div class="card-body p-3">
+                    <div class="d-flex align-items-center justify-content-between mb-2">
+                        <div class="icon-box bg-success bg-opacity-10 rounded-3 p-2">
+                            <i class="fas fa-money-bill-wave text-success"></i>
                         </div>
-                        <div class="col-auto">
-                            <h4 class="fs-6 fw-normal text-warning">Ksh. <?php echo number_format($stats['total_spent'], 2); ?></h4>
-                        </div>
+                        <?php echo renderTrendBadge($spentTrend, 'down'); ?>
                     </div>
+                    <h6 class="text-muted mb-1 fw-normal fs-10">Total Spent &bull; <?php echo $thisMonthLabel; ?></h6>
+                    <h4 class="fs-6 fw-bold mb-1">Ksh. <?php echo number_format($monthStats['this_spent'], 2); ?></h4>
+                    <p class="fs-11 text-muted mb-0">vs <?php echo $lastMonthLabel; ?>: Ksh. <?php echo number_format($monthStats['last_spent'], 2); ?></p>
                 </div>
             </div>
         </div>
-        <div class="col-sm-6 col-md-6 col-lg-3 col-xxl-3">
-            <div class="card h-100">
-                <div class="card-body">
-                    <div class="row flex-between-center">
-                        <div class="col d-md-flex d-lg-block flex-between-center">
-                            <h6 class="mb-md-0 mb-lg-2">Avg Price/L</h6>
-                            <i class="fas fa-tag fs-4"></i>
+        <div class="col-sm-6 col-lg-3">
+            <div class="card h-100 border-0 shadow-sm hover-lift" data-bs-toggle="tooltip" title="<?php echo $lastMonthLabel; ?>: Ksh. <?php echo number_format($monthStats['last_avg_price'], 2); ?>">
+                <div class="card-body p-3">
+                    <div class="d-flex align-items-center justify-content-between mb-2">
+                        <div class="icon-box bg-primary bg-opacity-10 rounded-3 p-2">
+                            <i class="fas fa-tag text-primary"></i>
                         </div>
-                        <div class="col-auto">
-                            <h4 class="fs-6 fw-normal text-warning">Ksh. <?php echo number_format($stats['avg_price'], 2); ?></h4>
-                        </div>
+                        <?php echo renderTrendBadge($priceTrend, 'down'); ?>
                     </div>
+                    <h6 class="text-muted mb-1 fw-normal fs-10">Avg Price/L &bull; <?php echo $thisMonthLabel; ?></h6>
+                    <h4 class="fs-6 fw-bold mb-1">Ksh. <?php echo number_format($monthStats['this_avg_price'], 2); ?></h4>
+                    <p class="fs-11 text-muted mb-0">vs <?php echo $lastMonthLabel; ?>: Ksh. <?php echo number_format($monthStats['last_avg_price'], 2); ?></p>
                 </div>
             </div>
         </div>
@@ -230,7 +281,7 @@ if ($flash): ?>
                     </div>
                 <?php else: ?>
                     <div class="table-responsive">
-                        <table class="table table-responsive-sm mb-0 data-table fs-10" data-datatables="data-datatables">
+                        <table class="table table-responsive-sm mb-0 data-table fs-10" data-datatables='{"order": []}'>
                             <thead class="bg-200">
                             <tr>
                                 <th class="text-900 sort">Date</th>
@@ -245,7 +296,7 @@ if ($flash): ?>
                             </thead>
                             <tbody>
                             <?php foreach ($logs as $l): ?>
-                                <tr class="hover-actions-trigger btn-reveal-trigger hover-bg-100">
+                                <tr class="hover-actions-trigger btn-reveal-trigger hover-bg-100 cursor-pointer" onclick="editFuel(<?php echo htmlspecialchars(json_encode($l)); ?>)">
                                     <td><?php echo formatDate($l['fill_date']); ?></td>
                                     <td><?php echo sanitize($l['make'] . ' ' . $l['model']); ?></td>
                                     <td><?php echo formatNumber($l['mileage']); ?> km</td>
@@ -255,15 +306,15 @@ if ($flash): ?>
                                     <td><?php echo $l['station_name'] ? sanitize($l['station_name']) : '-'; ?></td>
                                     <td class="align-middle white-space-nowrap text-end position-relative">
                                         <div class="hover-actions bg-100">
-                                            <button class="btn icon-item rounded-3 me-2 fs-11 icon-item-sm" onclick="editFuel(<?php echo htmlspecialchars(json_encode($l)); ?>)">
+                                            <button class="btn icon-item rounded-3 me-2 fs-11 icon-item-sm" onclick="event.stopPropagation(); editFuel(<?php echo htmlspecialchars(json_encode($l)); ?>)">
                                                 <span class="fas fa-edit"></span>
                                             </button>
-                                            <button class="btn icon-item rounded-3 me-2 fs-11 icon-item-sm" onclick="deleteFuel(<?php echo $l['id']; ?>, '<?php echo sanitize($l['make'] . ' ' . $l['model']); ?>', '<?php echo formatDate($l['fill_date']); ?>')">
+                                            <button class="btn icon-item rounded-3 me-2 fs-11 icon-item-sm" onclick="event.stopPropagation(); deleteFuel(<?php echo $l['id']; ?>, '<?php echo sanitize($l['make'] . ' ' . $l['model']); ?>', '<?php echo formatDate($l['fill_date']); ?>')">
                                                 <span class="fas fa-trash"></span>
                                             </button>
                                         </div>
                                         <div class="dropdown font-sans-serif btn-reveal-trigger">
-                                            <button class="btn btn-link text-600 btn-sm dropdown-toggle dropdown-caret-none btn-reveal-sm transition-none" type="button" id="crm-recent-leads-0" data-bs-toggle="dropdown" data-boundary="viewport" aria-haspopup="true" aria-expanded="false"><span class="fas fa-ellipsis-h fs-11"></span></button>
+                                            <button class="btn btn-link text-600 btn-sm dropdown-toggle dropdown-caret-none btn-reveal-sm transition-none" type="button" id="crm-recent-leads-0" onclick="event.stopPropagation()" data-bs-toggle="dropdown" data-boundary="viewport" aria-haspopup="true" aria-expanded="false"><span class="fas fa-ellipsis-h fs-11"></span></button>
                                         </div>
                                     </td>
                                 </tr>
@@ -307,30 +358,24 @@ if ($flash): ?>
                             </div>
                         </div>
                         <div class="row">
-                            <div class="col-md-6 mb-3">
-                                <label class="form-label">Liters <span class="text-danger">*</span></label>
-                                <input type="number" name="liters" step="0.01" class="form-control" required>
-                            </div>
-                            <div class="col-md-6 mb-3">
+                            <div class="col-md-4 mb-3">
                                 <label class="form-label">Price per Liter <span class="text-danger">*</span></label>
-                                <input type="number" name="price_per_liter" step="0.01" class="form-control" required>
+                                <input type="number" name="price_per_liter" id="add_price_per_liter" step="0.01" class="form-control" required>
+                            </div>
+                            <div class="col-md-4 mb-3">
+                                <label class="form-label">Liters <span class="text-danger">*</span></label>
+                                <input type="number" name="liters" id="add_liters" step="0.01" class="form-control" required>
+                                <div class="form-text">Enter this or the total amount</div>
+                            </div>
+                            <div class="col-md-4 mb-3">
+                                <label class="form-label">Total Amount (Ksh)</label>
+                                <input type="number" id="add_total_amount" step="0.01" class="form-control">
+                                <div class="form-text">Auto-fills liters</div>
                             </div>
                         </div>
-                        <div class="row">
-                            <div class="col-md-6 mb-3">
-                                <label class="form-label">Fuel Type</label>
-                                <input type="text" name="fuel_type" class="form-control" placeholder="e.g., 95, Diesel">
-                            </div>
-                            <div class="col-md-6 mb-3">
-                                <label class="form-label">Station</label>
-                                <input type="text" name="station_name" class="form-control" placeholder="Station name">
-                            </div>
-                        </div>
-                        <div class="form-check">
-                            <input class="form-check-input" type="checkbox" name="full_tank" id="fullTankCheck" checked>
-                            <label class="form-check-label" for="fullTankCheck">
-                                Full tank
-                            </label>
+                        <div class="mb-3">
+                            <label class="form-label">Station</label>
+                            <input type="text" name="station_name" class="form-control" placeholder="Station name">
                         </div>
                     </div>
                     <div class="modal-footer">
@@ -374,31 +419,26 @@ if ($flash): ?>
                             </div>
                         </div>
                         <div class="row">
-                            <div class="col-md-6 mb-3">
-                                <label class="form-label">Liters <span class="text-danger">*</span></label>
-                                <input type="number" name="liters" id="edit_liters" step="0.01" class="form-control" required>
-                            </div>
-                            <div class="col-md-6 mb-3">
+                            <div class="col-md-4 mb-3">
                                 <label class="form-label">Price per Liter <span class="text-danger">*</span></label>
                                 <input type="number" name="price_per_liter" id="edit_price_per_liter" step="0.01" class="form-control" required>
                             </div>
-                        </div>
-                        <div class="row">
-                            <div class="col-md-6 mb-3">
-                                <label class="form-label">Fuel Type</label>
-                                <input type="text" name="fuel_type" id="edit_fuel_type" class="form-control" placeholder="e.g., 95, Diesel">
+                            <div class="col-md-4 mb-3">
+                                <label class="form-label">Liters <span class="text-danger">*</span></label>
+                                <input type="number" name="liters" id="edit_liters" step="0.01" class="form-control" required>
+                                <div class="form-text">Enter this or the total amount</div>
                             </div>
-                            <div class="col-md-6 mb-3">
-                                <label class="form-label">Station</label>
-                                <input type="text" name="station_name" id="edit_station_name" class="form-control" placeholder="Station name">
+                            <div class="col-md-4 mb-3">
+                                <label class="form-label">Total Amount (Ksh)</label>
+                                <input type="number" id="edit_total_amount" step="0.01" class="form-control">
+                                <div class="form-text">Auto-fills liters</div>
                             </div>
                         </div>
-                        <div class="form-check">
-                            <input class="form-check-input" type="checkbox" name="full_tank" id="edit_full_tank">
-                            <label class="form-check-label" for="edit_full_tank">
-                                Full tank
-                            </label>
+                        <div class="mb-3">
+                            <label class="form-label">Station</label>
+                            <input type="text" name="station_name" id="edit_station_name" class="form-control" placeholder="Station name">
                         </div>
+                        <input type="hidden" name="full_tank" id="edit_full_tank">
                     </div>
                     <div class="modal-footer">
                         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
@@ -503,19 +543,59 @@ if ($flash): ?>
                     }
                 });
             }
+
+            // Wire up price/liters/total-amount auto-calc for both modals
+            wireFuelCalc(
+                document.getElementById('add_price_per_liter'),
+                document.getElementById('add_liters'),
+                document.getElementById('add_total_amount')
+            );
+            wireFuelCalc(
+                document.getElementById('edit_price_per_liter'),
+                document.getElementById('edit_liters'),
+                document.getElementById('edit_total_amount')
+            );
         });
+
+        // Keeps Liters and Total Amount in sync using Price per Liter, so the
+        // user only needs to type in whichever one they know
+        function wireFuelCalc(priceEl, litersEl, amountEl) {
+            function fromLiters() {
+                const price = parseFloat(priceEl.value);
+                const liters = parseFloat(litersEl.value);
+                if (price > 0 && liters > 0) {
+                    amountEl.value = (price * liters).toFixed(2);
+                }
+            }
+            function fromAmount() {
+                const price = parseFloat(priceEl.value);
+                const amount = parseFloat(amountEl.value);
+                if (price > 0 && amount > 0) {
+                    litersEl.value = (amount / price).toFixed(2);
+                }
+            }
+            litersEl.addEventListener('input', fromLiters);
+            amountEl.addEventListener('input', fromAmount);
+            priceEl.addEventListener('input', function() {
+                if (litersEl.value) {
+                    fromLiters();
+                } else if (amountEl.value) {
+                    fromAmount();
+                }
+            });
+        }
 
         // Edit Fuel Function
         function editFuel(fuel) {
             document.getElementById('edit_fuel_id').value = fuel.id;
             document.getElementById('edit_vehicle_id').value = fuel.vehicle_id;
             document.getElementById('edit_fill_date').value = fuel.fill_date;
-            document.getElementById('edit_mileage').value = fuel.mileage;
             document.getElementById('edit_liters').value = fuel.liters;
             document.getElementById('edit_price_per_liter').value = fuel.price_per_liter;
-            document.getElementById('edit_fuel_type').value = fuel.fuel_type || '';
+            document.getElementById('edit_total_amount').value = fuel.total_cost;
+            document.getElementById('edit_mileage').value = fuel.mileage;
             document.getElementById('edit_station_name').value = fuel.station_name || '';
-            document.getElementById('edit_full_tank').checked = fuel.full_tank == 1;
+            document.getElementById('edit_full_tank').value = fuel.full_tank;
 
             const editModal = new bootstrap.Modal(document.getElementById('edit-fuel-modal'));
             editModal.show();

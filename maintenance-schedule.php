@@ -116,9 +116,7 @@ $schedules = $pdo->query("
     FROM maintenance_schedule ms
     JOIN vehicles v ON ms.vehicle_id = v.id
     $where
-    ORDER BY 
-        CASE ms.priority WHEN 'critical' THEN 1 WHEN 'high' THEN 2 WHEN 'medium' THEN 3 ELSE 4 END,
-        ms.next_due_mileage ASC
+    ORDER BY ms.id DESC
 ")->fetchAll();
 
 // Categorize by status
@@ -283,7 +281,7 @@ function renderScheduleSection($items, $title, $badgeColor, $icon) {
         </div>
         <div class="card-body p-0">
             <div class="table-responsive">
-                <table class="table table-responsive-sm mb-0 data-table fs-10" data-datatables="data-datatables">
+                <table class="table table-responsive-sm mb-0 data-table fs-10" data-datatables='{"order": []}'>
                     <thead class="bg-200">
                     <tr >
                         <th>Vehicle</th>
@@ -297,7 +295,8 @@ function renderScheduleSection($items, $title, $badgeColor, $icon) {
                     </thead>
                     <tbody>
                     <?php foreach ($items as $s): ?>
-                        <tr class="hover-actions-trigger btn-reveal-trigger hover-bg-100">
+                        <tr class="hover-actions-trigger btn-reveal-trigger hover-bg-100 cursor-pointer"
+                            data-bs-toggle="modal" data-bs-target="#editScheduleModal<?php echo $s['id']; ?>">
                             <td>
                                 <strong><?php echo sanitize($s['make'] . ' ' . $s['model']); ?></strong><br>
                                 <small class="text-muted"><?php echo number_format($s['current_mileage']); ?> km</small>
@@ -380,7 +379,7 @@ function renderScheduleSection($items, $title, $badgeColor, $icon) {
                                     </button>
                                 </div>
                                 <div class="dropdown font-sans-serif btn-reveal-trigger">
-                                    <button class="btn btn-link text-600 btn-sm dropdown-toggle dropdown-caret-none btn-reveal-sm transition-none" type="button" id="crm-recent-leads-0" data-bs-toggle="dropdown" data-boundary="viewport" aria-haspopup="true" aria-expanded="false"><span class="fas fa-ellipsis-h fs-11"></span></button>
+                                    <button class="btn btn-link text-600 btn-sm dropdown-toggle dropdown-caret-none btn-reveal-sm transition-none" type="button" id="crm-recent-leads-0" onclick="event.stopPropagation()" data-bs-toggle="dropdown" data-boundary="viewport" aria-haspopup="true" aria-expanded="false"><span class="fas fa-ellipsis-h fs-11"></span></button>
                                 </div>
 
                                 <!-- Mark Done Modal -->

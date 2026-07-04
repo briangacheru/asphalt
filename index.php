@@ -109,8 +109,8 @@ $vehicles = $stmt->fetchAll();
             <div class="col-md-auto mt-4 mt-md-0">
                 <a class="btn btn-outline-success btn-sm me-2" href="add-vehicle" role="button">
                     <i class="fas fa-plus"></i> Add Vehicle</a>
-                <a class="btn btn-outline-primary btn-sm" href="add-service"  role="button">
-                    <i class="fas fa-wrench"></i> Record Service </a>
+                <a class="btn btn-outline-primary btn-sm" href="fuel-log"  role="button">
+                    <i class="fas fa-gas-pump"></i> Fuel Log </a>
             </div>
         </div>
     </div>
@@ -192,7 +192,7 @@ $vehicles = $stmt->fetchAll();
                     </div>
                 <?php else: ?>
                     <div>
-                        <table class="table table-responsive-sm mb-0 data-table fs-10" data-datatables="data-datatables">
+                        <table class="table table-responsive-sm mb-0 data-table fs-10" data-datatables='{"order": []}'>
                             <thead class="bg-200">
                             <tr>
                                 <th class="text-900 sort">Vehicle</th>
