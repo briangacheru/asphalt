@@ -513,6 +513,88 @@ class EmailService
     }
 
     /**
+     * Send maintenance schedule due alert email
+     * $items: array of maintenance_schedule rows, each with 'status' ('overdue'|'due_soon') and 'remaining_label' set
+     */
+    public function sendMaintenanceDueEmail(int $vehicleId, array $items): bool
+    {
+        $stmt = $this->pdo->prepare("
+            SELECT v.*, u.email, u.first_name
+            FROM vehicles v
+            JOIN users u ON v.user_id = u.id
+            WHERE v.id = ?
+        ");
+        $stmt->execute([$vehicleId]);
+        $data = $stmt->fetch();
+
+        if (!$data || empty($items)) {
+            return false;
+        }
+
+        $vehicleName = $data['make'] . ' ' . $data['model'] . ' (' . $data['year'] . ')';
+        $hasOverdue = false;
+
+        $rows = '';
+        foreach ($items as $item) {
+            if ($item['status'] === 'overdue') {
+                $hasOverdue = true;
+                $statusHtml = '<span style="color:#ff3b30;font-weight:600;">Overdue</span>';
+            } else {
+                $statusHtml = '<span style="color:#ff9500;font-weight:600;">Due Soon</span>';
+            }
+            $rows .= sprintf(
+                '<tr><td style="padding: 8px 0; color: #e5e5ea; border-bottom: 1px solid rgba(255,255,255,0.08);">%s</td><td style="padding: 8px 0; text-align: right; border-bottom: 1px solid rgba(255,255,255,0.08);">%s</td><td style="padding: 8px 0; text-align: right; border-bottom: 1px solid rgba(255,255,255,0.08);">%s</td></tr>',
+                htmlspecialchars($item['item_type']),
+                $statusHtml,
+                htmlspecialchars($item['remaining_label'])
+            );
+        }
+
+        $bannerHtml = $hasOverdue
+            ? '<div style="background: rgba(255,59,48,0.2); border: 1px solid rgba(255,59,48,0.3); border-radius: 12px; padding: 20px; margin: 20px 0; color: #ff3b30;"><strong>Action needed!</strong> Some maintenance items are overdue.</div>'
+            : '<div style="background: rgba(255,149,0,0.2); border: 1px solid rgba(255,149,0,0.3); border-radius: 12px; padding: 20px; margin: 20px 0; color: #ff9500;"><strong>Heads up!</strong> Some maintenance items are almost due.</div>';
+
+        $content = sprintf('
+            <h2 style="margin: 0 0 20px; color: #ffffff; font-size: 20px;">Maintenance Due Alert</h2>
+            <p style="margin: 0 0 20px; line-height: 1.6;">Hi %s,</p>
+            <p style="margin: 0 0 20px; line-height: 1.6;">The following maintenance item(s) for <strong>%s</strong> are almost due or overdue:</p>
+
+            %s
+
+            <div style="background: rgba(0,0,0,0.3); border-radius: 12px; padding: 20px; margin: 20px 0;">
+                <table style="width: 100%%; color: #e5e5ea; border-collapse: collapse;">
+                    <tr>
+                        <th style="padding: 8px 0; text-align: left; color: #86868b; border-bottom: 1px solid rgba(255,255,255,0.15);">Item</th>
+                        <th style="padding: 8px 0; text-align: right; color: #86868b; border-bottom: 1px solid rgba(255,255,255,0.15);">Status</th>
+                        <th style="padding: 8px 0; text-align: right; color: #86868b; border-bottom: 1px solid rgba(255,255,255,0.15);">Remaining</th>
+                    </tr>
+                    %s
+                </table>
+            </div>
+
+            <p style="margin: 30px 0; text-align: center;">
+                <a href="%s/maintenance-schedule?vehicle_id=%d" style="display: inline-block; padding: 14px 32px; background: #ffffff; color: #000000; text-decoration: none; border-radius: 8px; font-weight: 600;">View Maintenance Schedule</a>
+            </p>
+        ',
+            htmlspecialchars($data['first_name']),
+            htmlspecialchars($vehicleName),
+            $bannerHtml,
+            $rows,
+            APP_URL,
+            $vehicleId
+        );
+
+        $subjectPrefix = $hasOverdue ? 'OVERDUE: ' : 'Due Soon: ';
+        $subject = $subjectPrefix . "Maintenance Alert - $vehicleName";
+        $html = $this->getEmailTemplate($content, $subject);
+
+        $sent = $this->send($data['email'], $subject, $html);
+        $this->logEmail($vehicleId, 'maintenance_due', $data['email'], $subject, $html, $sent ? 'sent' : 'failed');
+
+        return $sent;
+    }
+
+    /**
      * Send test email to verify email settings
      */
     public function sendTestEmail(string $email, string $firstName): bool

@@ -25,7 +25,7 @@ if (!$service) {
 }
 
 // Get existing service items
-$stmt = $pdo->prepare("SELECT * FROM service_items WHERE service_record_id = ? ORDER BY item_type");
+$stmt = $pdo->prepare("SELECT * FROM service_items WHERE service_record_id = ? ORDER BY id DESC");
 $stmt->execute([$serviceId]);
 $existingItems = $stmt->fetchAll();
 
@@ -142,7 +142,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 // Refresh existing items
-$stmt = $pdo->prepare("SELECT * FROM service_items WHERE service_record_id = ? ORDER BY item_type");
+$stmt = $pdo->prepare("SELECT * FROM service_items WHERE service_record_id = ? ORDER BY id DESC");
 $stmt->execute([$serviceId]);
 $existingItems = $stmt->fetchAll();
 
@@ -374,7 +374,7 @@ if ($flash): ?>
                         </div>
                     <?php else: ?>
                         <div class="table-responsive">
-                            <table class="table table-responsive-sm mb-0 data-table fs-10" data-datatables="data-datatables">
+                            <table class="table table-responsive-sm mb-0 data-table fs-10" data-datatables='{"order": []}'>
                                 <thead class="bg-200">
                                 <tr>
                                     <th class="text-900 sort">Item Type</th>
@@ -387,7 +387,8 @@ if ($flash): ?>
                                 </thead>
                                 <tbody>
                                 <?php foreach ($existingItems as $item): ?>
-                                    <tr class="hover-actions-trigger btn-reveal-trigger hover-bg-100">
+                                    <tr class="hover-actions-trigger btn-reveal-trigger hover-bg-100 cursor-pointer"
+                                        data-bs-toggle="modal" data-bs-target="#viewItemModal<?php echo $item['id']; ?>">
                                         <td>
                                             <div class="d-flex align-center gap-1">
                                                 <i class="<?php echo $itemTypes[$item['item_type']]['icon'] ?? 'fas fa-cog'; ?>"></i>
@@ -427,7 +428,7 @@ if ($flash): ?>
                                                 </button>
                                             </div>
                                             <div class="dropdown font-sans-serif btn-reveal-trigger">
-                                                <button class="btn btn-link text-600 btn-sm dropdown-toggle dropdown-caret-none btn-reveal-sm transition-none" type="button" id="crm-recent-leads-0" data-bs-toggle="dropdown" data-boundary="viewport" aria-haspopup="true" aria-expanded="false"><span class="fas fa-ellipsis-h fs-11"></span></button>
+                                                <button class="btn btn-link text-600 btn-sm dropdown-toggle dropdown-caret-none btn-reveal-sm transition-none" type="button" id="crm-recent-leads-0" onclick="event.stopPropagation()" data-bs-toggle="dropdown" data-boundary="viewport" aria-haspopup="true" aria-expanded="false"><span class="fas fa-ellipsis-h fs-11"></span></button>
                                             </div>
                                         </td>
                                     </tr>
