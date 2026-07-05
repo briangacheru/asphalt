@@ -199,13 +199,13 @@ $emailTypes = [
                                     data-type-icon="<?php echo $type['icon']; ?>"
                                     data-status="<?php echo $email['status']; ?>"
                                     data-recipient="<?php echo htmlspecialchars($email['recipient_email']); ?>"
-                                    data-date="<?php echo date('F d, Y \a\t H:i', strtotime($sentDate)); ?>"
+                                    data-date="<?php echo formatDateTimeForUser($sentDate, null, 'F d, Y \a\t H:i'); ?>"
                                     data-vehicle="<?php echo $vehicle; ?>"
                                     data-subject="<?php echo htmlspecialchars($email['subject']); ?>"
                                     data-body="<?php echo htmlspecialchars($email['body'] ?? ''); ?>">
                                     <td class="ps-3 text-nowrap">
-                                        <div class="small"><?php echo date('M d, Y', strtotime($email['created_at'])); ?></div>
-                                        <div class="text-muted" style="font-size:0.75rem"><?php echo date('H:i', strtotime($email['created_at'])); ?></div>
+                                        <div class="small"><?php echo formatDateTimeForUser($email['created_at'], null, 'M d, Y'); ?></div>
+                                        <div class="text-muted" style="font-size:0.75rem"><?php echo formatDateTimeForUser($email['created_at'], null, 'H:i'); ?></div>
                                     </td>
                                     <td>
                                         <span class="badge bg-<?php echo $type['color']; ?>">

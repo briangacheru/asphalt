@@ -135,7 +135,7 @@ if ($flash): ?>
                             <option value="">Choose a vehicle...</option>
                             <?php foreach ($vehicles as $v): ?>
                                 <option value="<?php echo $v['id']; ?>" data-current="<?php echo $v['current_mileage']; ?>" data-next="<?php echo $v['next_service'] ?? 0; ?>" <?php echo ($selectedVehicleId == $v['id']) ? 'selected' : ''; ?>>
-                                    <?php echo sanitize($v['make'] . ' ' . $v['model']); ?> (<?php echo $v['year']; ?>) - <?php echo formatNumber($v['current_mileage']); ?> km
+                                    <?php echo sanitize($v['make'] . ' ' . $v['model']); ?> (<?php echo $v['year']; ?>) - <?php echo formatDistance($v['current_mileage']); ?>
                                 </option>
                             <?php endforeach; ?>
                         </select>
@@ -215,7 +215,7 @@ if ($flash): ?>
                                         <div class="col">
                                             <h6 class="text-800 mb-1"><?php echo sanitize($log['make'] . ' ' . $log['model']); ?></h6>
                                             <p class="fs-10 text-600 mb-0">
-                                                <?php echo formatNumber($log['mileage']); ?> km
+                                                <?php echo formatDistance($log['mileage']); ?>
                                                 <span class="badge rounded-pill ms-2 badge-subtle-<?php
                                                 echo $log['source'] === 'service' ? 'success' :
                                                     ($log['source'] === 'fuel' ? 'warning' : 'info');

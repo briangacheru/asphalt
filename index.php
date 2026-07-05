@@ -146,7 +146,7 @@ $vehicles = $stmt->fetchAll();
             <!--/.bg-holder-->
             <div class="card-body position-relative">
                 <h6>Spent This Year</h6>
-                <div class="display-4 fs-5 mb-2 fw-normal font-sans-serif text-800" >Ksh. <?php echo formatNumber($stats['spent_this_year']); ?></div><a class="fw-semi-bold fs-10 text-nowrap stretched-link" href="service-history">See all</a>
+                <div class="display-4 fs-5 mb-2 fw-normal font-sans-serif text-800" ><?php echo formatCurrency($stats['spent_this_year']); ?></div><a class="fw-semi-bold fs-10 text-nowrap stretched-link" href="service-history">See all</a>
             </div>
         </div>
     </div>
@@ -207,14 +207,14 @@ $vehicles = $stmt->fetchAll();
                                     <td><strong><?php echo sanitize($v['make'] . ' ' . $v['model']); ?></strong>
                                         <br><small class="text-muted"><?php echo $v['year']; ?></small>
                                     </td>
-                                    <td><?php echo formatNumber($v['current_mileage']); ?> km</td>
-                                    <td><?php echo formatNumber($v['next_service_mileage']); ?> km</td>
+                                    <td><?php echo formatDistance($v['current_mileage']); ?></td>
+                                    <td><?php echo formatDistance($v['next_service_mileage']); ?></td>
                                     <td><?php
                                         $remaining = $v['km_remaining'];
                                         $badgeClass = $remaining <= 500 ? 'badge-subtle-danger' : ($remaining <= 1000 ? 'badge-subtle-warning' : 'badge-subtle-info');
                                         ?>
                                         <span class="badge rounded-pill ms-2 <?php echo $badgeClass; ?>">
-                                            <?php echo formatNumber($remaining); ?> km
+                                            <?php echo formatDistance($remaining); ?>
                                         </span>
                                     </td>
                                 </tr>
@@ -267,9 +267,9 @@ $vehicles = $stmt->fetchAll();
                                         <div class="col">
                                             <h6 class="text-800 mb-1"><?php echo sanitize($service['make'] . ' ' . $service['model']); ?></h6>
                                             <p class="fs-10 text-600 mb-0">
-                                                <?php echo formatNumber($service['mileage']); ?> km
+                                                <?php echo formatDistance($service['mileage']); ?>
                                                 <?php if ($service['service_cost'] > 0): ?>
-                                                    &bull; Ksh <?php echo number_format($service['service_cost'], 2); ?>
+                                                    &bull; <?php echo formatCurrency($service['service_cost']); ?>
                                                 <?php endif; ?>
                                             </p>
                                         </div>
@@ -362,9 +362,9 @@ $vehicles = $stmt->fetchAll();
                                             </small>
                                             <span class="badge <?php echo $badgeClass; ?> bg-opacity-75" style="font-size:.65rem;">
                                                 <?php if ($isOverdue): ?>
-                                                    <?php echo formatNumber(abs($kmRemaining)); ?> km overdue
+                                                    <?php echo formatDistance(abs($kmRemaining)); ?> overdue
                                                 <?php else: ?>
-                                                    <?php echo formatNumber($kmRemaining); ?> km left
+                                                    <?php echo formatDistance($kmRemaining); ?> left
                                                 <?php endif; ?>
                                             </span>
                                         </div>
@@ -392,7 +392,7 @@ $vehicles = $stmt->fetchAll();
                                             <div class="mb-2">
                                                 <h6 class="text-600 mb-1 fs-11">Next Service</h6>
                                                 <h6 class="fs-9 mb-0 <?php echo $textClass; ?> fw-bold">
-                                                    <?php echo formatNumber($vehicle['next_service']); ?> km
+                                                    <?php echo formatDistance($vehicle['next_service']); ?>
                                                     <i class="fas <?php echo $statusIcon; ?> ms-1"></i>
                                                 </h6>
                                             </div>
@@ -403,7 +403,7 @@ $vehicles = $stmt->fetchAll();
                                         <div class="row g-0">
                                             <div class="col-6 border-end <?php echo $dividerClass; ?> py-3 text-center">
                                                 <h6 class="text-600 mb-1 fs-11">Current Mileage</h6>
-                                                <h6 class="fs-9 mb-0"><?php echo formatNumber($vehicle['current_mileage']); ?> km</h6>
+                                                <h6 class="fs-9 mb-0"><?php echo formatDistance($vehicle['current_mileage']); ?></h6>
                                             </div>
                                             <div class="col-6 py-3 text-center">
                                                 <?php if ($vehicle['last_service']): ?>

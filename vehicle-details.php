@@ -205,10 +205,10 @@ if ($flash): ?>
                             </div>
                         </div>
                         <h6 class="text-muted mb-1 fw-normal fs-10">Current Mileage</h6>
-                        <h4 class="fs-6 fw-bold mb-1"><?php echo formatNumber($vehicle['current_mileage']); ?> <small class="fs-11 text-muted">km</small></h4>
+                        <h4 class="fs-6 fw-bold mb-1"><?php echo formatDistance($vehicle['current_mileage']); ?></h4>
                         <p class="fs-11 text-muted mb-0">
                             <?php if (!empty($vehicle['updated_at'])): ?>
-                                Updated <?php echo date('M d, Y', strtotime($vehicle['updated_at'])); ?>
+                                Updated <?php echo formatDateTimeForUser($vehicle['updated_at'], null, 'M d, Y'); ?>
                             <?php else: ?>
                                 &nbsp;
                             <?php endif; ?>
@@ -225,10 +225,10 @@ if ($flash): ?>
                             </div>
                         </div>
                         <h6 class="text-muted mb-1 fw-normal fs-10">Total KM Driven</h6>
-                        <h4 class="fs-6 fw-bold mb-1"><?php echo formatNumber($stats['total_km_driven']); ?> <small class="fs-11 text-muted">km</small></h4>
+                        <h4 class="fs-6 fw-bold mb-1"><?php echo formatDistance($stats['total_km_driven']); ?></h4>
                         <p class="fs-11 text-muted mb-0">
                             <?php if ($avgKmPerMonth !== null): ?>
-                                &asymp; <?php echo formatNumber(round($avgKmPerMonth)); ?> km/month
+                                &asymp; <?php echo formatDistance($avgKmPerMonth); ?>/month
                             <?php else: ?>
                                 &nbsp;
                             <?php endif; ?>
@@ -265,10 +265,10 @@ if ($flash): ?>
                             </div>
                         </div>
                         <h6 class="text-muted mb-1 fw-normal fs-10">Total Spent</h6>
-                        <h4 class="fs-6 fw-bold mb-1">Ksh. <?php echo formatNumber($stats['total_spent']); ?></h4>
+                        <h4 class="fs-6 fw-bold mb-1"><?php echo formatCurrency($stats['total_spent']); ?></h4>
                         <p class="fs-11 text-muted mb-0">
                             <?php if ($stats['total_services'] > 0): ?>
-                                Ksh. <?php echo formatNumber(round($avgCostPerService)); ?> avg/service
+                                <?php echo formatCurrency($avgCostPerService); ?> avg/service
                             <?php else: ?>
                                 &nbsp;
                             <?php endif; ?>
@@ -359,11 +359,11 @@ if ($flash): ?>
                         <div>
                             <small class="text-muted">Last service</small><br>
                             <strong><?php echo formatDate($lastService['service_date']); ?></strong>
-                            <span class="text-muted"> at <?php echo formatNumber($lastService['mileage']); ?> km</span>
+                            <span class="text-muted"> at <?php echo formatDistance($lastService['mileage']); ?></span>
                         </div>
                         <div class="text-end">
                             <small class="text-muted">Next service due</small><br>
-                            <strong class="<?php echo $textClass; ?>"><?php echo formatNumber($lastService['next_service_mileage']); ?> km</strong>
+                            <strong class="<?php echo $textClass; ?>"><?php echo formatDistance($lastService['next_service_mileage']); ?></strong>
                         </div>
                     </div>
 
@@ -380,9 +380,9 @@ if ($flash): ?>
                     <p class="text-center mt-2 mb-0">
                         <i class="fas <?php echo $statusIcon; ?> me-1 <?php echo $textClass; ?>"></i>
                         <?php if ($kmRemaining <= 0): ?>
-                            <span class="<?php echo $textClass; ?>"><strong><?php echo formatNumber(abs($kmRemaining)); ?> km overdue</strong></span>
+                            <span class="<?php echo $textClass; ?>"><strong><?php echo formatDistance(abs($kmRemaining)); ?> overdue</strong></span>
                         <?php else: ?>
-                            <span class="<?php echo $textClass; ?>"><strong><?php echo formatNumber($kmRemaining); ?> km remaining</strong></span>
+                            <span class="<?php echo $textClass; ?>"><strong><?php echo formatDistance($kmRemaining); ?> remaining</strong></span>
                         <?php endif; ?>
                     </p>
                 </div>
@@ -441,7 +441,7 @@ if ($flash): ?>
                                         <small class="text-muted">
                                             <?php
                                             $interval = [];
-                                            if ($item['interval_km']) $interval[] = number_format($item['interval_km']) . ' km';
+                                            if ($item['interval_km']) $interval[] = formatDistance($item['interval_km']);
                                             if ($item['interval_months']) $interval[] = $item['interval_months'] . ' months';
                                             echo implode(' / ', $interval) ?: '-';
                                             ?>
@@ -452,7 +452,7 @@ if ($flash): ?>
                                             <?php echo date('M d, Y', strtotime($item['last_replaced_date'])); ?><br>
                                         <?php endif; ?>
                                         <?php if ($item['last_replaced_mileage']): ?>
-                                            <small class="text-muted"><?php echo number_format($item['last_replaced_mileage']); ?> km</small>
+                                            <small class="text-muted"><?php echo formatDistance($item['last_replaced_mileage']); ?></small>
                                         <?php endif; ?>
                                         <?php if (!$item['last_replaced_date'] && !$item['last_replaced_mileage']): ?>
                                             <span class="text-muted">Not recorded</span>
@@ -463,7 +463,7 @@ if ($flash): ?>
                                             <?php echo date('M d, Y', strtotime($item['next_due_date'])); ?><br>
                                         <?php endif; ?>
                                         <?php if ($item['next_due_mileage']): ?>
-                                            <small class="text-muted"><?php echo number_format($item['next_due_mileage']); ?> km</small>
+                                            <small class="text-muted"><?php echo formatDistance($item['next_due_mileage']); ?></small>
                                         <?php endif; ?>
                                         <?php if (!$item['next_due_date'] && !$item['next_due_mileage']): ?>
                                             <span class="text-muted">Not set</span>
@@ -471,13 +471,13 @@ if ($flash): ?>
                                     </td>
                                     <td>
                                         <?php if ($item['status'] === 'overdue'): ?>
-                                            <span class="badge bg-danger"><i class="fas fa-exclamation-circle"></i> Overdue<?php echo $item['remaining'] > 0 ? ' (' . number_format($item['remaining']) . ' km)' : ''; ?></span>
+                                            <span class="badge bg-danger"><i class="fas fa-exclamation-circle"></i> Overdue<?php echo $item['remaining'] > 0 ? ' (' . formatDistance($item['remaining']) . ')' : ''; ?></span>
                                         <?php elseif ($item['status'] === 'due_soon'): ?>
-                                            <span class="badge bg-warning"><i class="fas fa-exclamation-triangle"></i> Due Soon<?php echo $item['remaining'] ? ' (' . number_format($item['remaining']) . ' km left)' : ''; ?></span>
+                                            <span class="badge bg-warning"><i class="fas fa-exclamation-triangle"></i> Due Soon<?php echo $item['remaining'] ? ' (' . formatDistance($item['remaining']) . ' left)' : ''; ?></span>
                                         <?php elseif ($item['status'] === 'upcoming'): ?>
-                                            <span class="badge bg-info"><i class="fas fa-clock"></i> Upcoming<?php echo $item['remaining'] ? ' (' . number_format($item['remaining']) . ' km left)' : ''; ?></span>
+                                            <span class="badge bg-info"><i class="fas fa-clock"></i> Upcoming<?php echo $item['remaining'] ? ' (' . formatDistance($item['remaining']) . ' left)' : ''; ?></span>
                                         <?php else: ?>
-                                            <span class="badge bg-success"><i class="fas fa-check-circle"></i> OK<?php echo $item['remaining'] ? ' (' . number_format($item['remaining']) . ' km left)' : ''; ?></span>
+                                            <span class="badge bg-success"><i class="fas fa-check-circle"></i> OK<?php echo $item['remaining'] ? ' (' . formatDistance($item['remaining']) . ' left)' : ''; ?></span>
                                         <?php endif; ?>
                                     </td>
                                 </tr>
@@ -525,14 +525,14 @@ if ($flash): ?>
                                 <div class="col">
                                     <div class="row gx-0 border-bottom pb-x1">
                                         <div class="col">
-                                            <h6 class="text-800 mb-1"><?php echo formatNumber($service['mileage']); ?> km
+                                            <h6 class="text-800 mb-1"><?php echo formatDistance($service['mileage']); ?>
                                                 <?php if ($service['item_count'] > 0): ?>
                                                     <span class="badge rounded-pill ms-2 badge-subtle-info"><?php echo $service['item_count']; ?> items</span>
                                                 <?php endif; ?>
                                             </h6>
                                             <p class="fs-10 text-600 mb-0">
                                                 <?php if ($service['service_cost'] > 0): ?>
-                                                    Ksh. <?php echo number_format($service['service_cost'], 2); ?>
+                                                    <?php echo formatCurrency($service['service_cost']); ?>
                                                 <?php endif; ?>
                                                 <?php if ($service['service_location']): ?>
                                                     &bull; <?php echo sanitize($service['service_location']); ?>

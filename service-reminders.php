@@ -90,7 +90,7 @@ if ($flash): ?>
             </div>
             <!--/.bg-holder-->
             <div class="card-body position-relative">
-                <h6>Urgent (< 500 km)</h6>
+                <h6>Urgent (&lt; <?php echo formatDistance(500); ?>)</h6>
                 <div class="display-4 fs-5 mb-2 fw-normal font-sans-serif text-800" ><?php echo count($urgent); ?></div><a class="fw-semi-bold fs-10 text-nowrap stretched-link" href="vehicles">See all</a>
             </div>
         </div>
@@ -101,7 +101,7 @@ if ($flash): ?>
             </div>
             <!--/.bg-holder-->
             <div class="card-body position-relative">
-                <h6>Coming Up (< 1500 km)</h6>
+                <h6>Coming Up (&lt; <?php echo formatDistance(1500); ?>)</h6>
                 <div class="display-4 fs-5 mb-2 fw-normal font-sans-serif text-800" ><?php echo count($upcoming); ?></div><a class="fw-semi-bold fs-10 text-nowrap stretched-link" href="vehicles">See all</a>
             </div>
         </div>
@@ -151,11 +151,11 @@ if ($flash): ?>
                                 <strong><?php echo sanitize($v['make'] . ' ' . $v['model']); ?></strong>
                                 <br><small class="text-muted"><?php echo $v['year']; ?> • <?php echo $v['color']; ?></small>
                             </td>
-                            <td><?php echo formatNumber($v['current_mileage']); ?> km</td>
-                            <td><?php echo formatNumber($v['next_service_mileage']); ?> km</td>
+                            <td><?php echo formatDistance($v['current_mileage']); ?></td>
+                            <td><?php echo formatDistance($v['next_service_mileage']); ?></td>
                             <td>
                             <span class="badge rounded-pill ms-2 badge-subtle-danger">
-                                <?php echo formatNumber(abs($v['km_remaining'])); ?> km overdue
+                                <?php echo formatDistance(abs($v['km_remaining'])); ?> overdue
                             </span>
                             </td>
                             <td><?php echo formatDate($v['last_service_date']); ?></td>
@@ -200,11 +200,11 @@ if ($flash): ?>
                                 <strong><?php echo sanitize($v['make'] . ' ' . $v['model']); ?></strong>
                                 <br><small class="text-muted"><?php echo $v['year']; ?> • <?php echo $v['color']; ?></small>
                             </td>
-                            <td><?php echo formatNumber($v['current_mileage']); ?> km</td>
-                            <td><?php echo formatNumber($v['next_service_mileage']); ?> km</td>
+                            <td><?php echo formatDistance($v['current_mileage']); ?></td>
+                            <td><?php echo formatDistance($v['next_service_mileage']); ?></td>
                             <td>
                             <span class="badge rounded-pill ms-2 badge-subtle-warning">
-                                <?php echo formatNumber($v['km_remaining']); ?> km left
+                                <?php echo formatDistance($v['km_remaining']); ?> left
                             </span>
                             </td>
                             <td>
@@ -251,11 +251,11 @@ if ($flash): ?>
                                 <strong><?php echo sanitize($v['make'] . ' ' . $v['model']); ?></strong>
                                 <br><small class="text-muted"><?php echo $v['year']; ?> • <?php echo $v['color']; ?></small>
                             </td>
-                            <td><?php echo formatNumber($v['current_mileage']); ?> km</td>
-                            <td><?php echo formatNumber($v['next_service_mileage']); ?> km</td>
+                            <td><?php echo formatDistance($v['current_mileage']); ?></td>
+                            <td><?php echo formatDistance($v['next_service_mileage']); ?></td>
                             <td>
                             <span class="badge rounded-pill ms-2 badge-subtle-info">
-                                <?php echo formatNumber($v['km_remaining']); ?> km left
+                                <?php echo formatDistance($v['km_remaining']); ?> left
                             </span>
                             </td>
                             <td style="width: 200px;">
@@ -302,11 +302,11 @@ if ($flash): ?>
                                 <strong><?php echo sanitize($v['make'] . ' ' . $v['model']); ?></strong>
                                 <br><small class="text-muted"><?php echo $v['year']; ?> • <?php echo $v['color']; ?></small>
                             </td>
-                            <td><?php echo formatNumber($v['current_mileage']); ?> km</td>
-                            <td><?php echo formatNumber($v['next_service_mileage']); ?> km</td>
+                            <td><?php echo formatDistance($v['current_mileage']); ?></td>
+                            <td><?php echo formatDistance($v['next_service_mileage']); ?></td>
                             <td>
                             <span class="badge rounded-pill ms-2 badge-subtle-info">
-                                <?php echo formatNumber($v['km_remaining']); ?> km left
+                                <?php echo formatDistance($v['km_remaining']); ?> left
                             </span>
                             </td>
                             <td style="width: 200px;">

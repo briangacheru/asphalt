@@ -183,7 +183,7 @@ $monthNames = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep'
                             </div>
                             <div class="flex-grow-1 ms-3">
                                 <h6 class="text-muted mb-1">Total (<?php echo $yearFilter; ?>)</h6>
-                                <h3 class="mb-0">Ksh<?php echo formatNumber($yearStats['total']); ?></h3>
+                                <h3 class="mb-0"><?php echo formatCurrency($yearStats['total']); ?></h3>
                             </div>
                         </div>
                     </div>
@@ -201,7 +201,7 @@ $monthNames = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep'
                             </div>
                             <div class="flex-grow-1 ms-3">
                                 <h6 class="text-muted mb-1">Services</h6>
-                                <h3 class="mb-0">Ksh<?php echo formatNumber($yearStats['service_cost']); ?></h3>
+                                <h3 class="mb-0"><?php echo formatCurrency($yearStats['service_cost']); ?></h3>
                                 <small class="text-muted"><?php echo $yearStats['service_count']; ?> services</small>
                             </div>
                         </div>
@@ -220,8 +220,8 @@ $monthNames = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep'
                             </div>
                             <div class="flex-grow-1 ms-3">
                                 <h6 class="text-muted mb-1">Fuel</h6>
-                                <h3 class="mb-0">Ksh<?php echo formatNumber($yearStats['fuel_cost']); ?></h3>
-                                <small class="text-muted"><?php echo number_format($yearStats['fuel_liters'], 0); ?>L consumed</small>
+                                <h3 class="mb-0"><?php echo formatCurrency($yearStats['fuel_cost']); ?></h3>
+                                <small class="text-muted"><?php echo formatVolume($yearStats['fuel_liters'], null, 0); ?> consumed</small>
                             </div>
                         </div>
                     </div>
@@ -239,7 +239,7 @@ $monthNames = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep'
                             </div>
                             <div class="flex-grow-1 ms-3">
                                 <h6 class="text-muted mb-1">Other Expenses</h6>
-                                <h3 class="mb-0">Ksh<?php echo formatNumber($yearStats['expense_cost']); ?></h3>
+                                <h3 class="mb-0"><?php echo formatCurrency($yearStats['expense_cost']); ?></h3>
                             </div>
                         </div>
                     </div>
@@ -257,7 +257,7 @@ $monthNames = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep'
                             </div>
                             <div class="flex-grow-1 ms-3">
                                 <h6 class="text-muted mb-1">Avg per Month</h6>
-                                <h3 class="mb-0">Ksh<?php echo formatNumber($yearStats['total'] / 12); ?></h3>
+                                <h3 class="mb-0"><?php echo formatCurrency($yearStats['total'] / 12); ?></h3>
                             </div>
                         </div>
                     </div>
@@ -311,7 +311,7 @@ $monthNames = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep'
                                 <div class="mb-4">
                                     <div class="d-flex justify-content-between align-items-center mb-2">
                                         <strong><?php echo sanitize($vs['make'] . ' ' . $vs['model']); ?></strong>
-                                        <strong class="text-primary">Ksh<?php echo formatNumber($vsTotal); ?></strong>
+                                        <strong class="text-primary"><?php echo formatCurrency($vsTotal); ?></strong>
                                     </div>
 
                                     <div class="progress mb-2" style="height: 8px;">
@@ -324,27 +324,27 @@ $monthNames = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep'
                                         <?php if ($serviceWidth > 0): ?>
                                             <div class="progress-bar bg-success" role="progressbar"
                                                  style="width: <?php echo $serviceWidth; ?>%;"
-                                                 title="Services: Ksh<?php echo formatNumber($vs['service_cost']); ?>">
+                                                 title="Services: <?php echo formatCurrency($vs['service_cost']); ?>">
                                             </div>
                                         <?php endif; ?>
                                         <?php if ($fuelWidth > 0): ?>
                                             <div class="progress-bar bg-warning" role="progressbar"
                                                  style="width: <?php echo $fuelWidth; ?>%;"
-                                                 title="Fuel: Ksh<?php echo formatNumber($vs['fuel_cost']); ?>">
+                                                 title="Fuel: <?php echo formatCurrency($vs['fuel_cost']); ?>">
                                             </div>
                                         <?php endif; ?>
                                         <?php if ($expenseWidth > 0): ?>
                                             <div class="progress-bar bg-info" role="progressbar"
                                                  style="width: <?php echo $expenseWidth; ?>%;"
-                                                 title="Other: Ksh<?php echo formatNumber($vs['expense_cost']); ?>">
+                                                 title="Other: <?php echo formatCurrency($vs['expense_cost']); ?>">
                                             </div>
                                         <?php endif; ?>
                                     </div>
 
                                     <div class="d-flex justify-content-between text-muted small">
-                                        <span><i class="fas fa-circle text-success" style="font-size: 0.6rem;"></i> Services: Ksh<?php echo formatNumber($vs['service_cost']); ?></span>
-                                        <span><i class="fas fa-circle text-warning" style="font-size: 0.6rem;"></i> Fuel: Ksh<?php echo formatNumber($vs['fuel_cost']); ?></span>
-                                        <span><i class="fas fa-circle text-info" style="font-size: 0.6rem;"></i> Other: Ksh<?php echo formatNumber($vs['expense_cost']); ?></span>
+                                        <span><i class="fas fa-circle text-success" style="font-size: 0.6rem;"></i> Services: <?php echo formatCurrency($vs['service_cost']); ?></span>
+                                        <span><i class="fas fa-circle text-warning" style="font-size: 0.6rem;"></i> Fuel: <?php echo formatCurrency($vs['fuel_cost']); ?></span>
+                                        <span><i class="fas fa-circle text-info" style="font-size: 0.6rem;"></i> Other: <?php echo formatCurrency($vs['expense_cost']); ?></span>
                                     </div>
                                 </div>
                             <?php endforeach; ?>
@@ -388,7 +388,7 @@ $monthNames = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep'
                                                 <span class="badge bg-secondary"><?php echo $si['count']; ?></span>
                                             </td>
                                             <td class="text-end">
-                                                <strong>Ksh<?php echo number_format($si['total_cost'], 2); ?></strong>
+                                                <strong><?php echo formatCurrency($si['total_cost']); ?></strong>
                                             </td>
                                         </tr>
                                     <?php endforeach; ?>
@@ -436,7 +436,7 @@ $monthNames = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep'
                                             </div>
                                             <h6 class="mb-0"><?php echo $ec['name']; ?></h6>
                                         </div>
-                                        <h3 class="mb-1">Ksh<?php echo formatNumber($ec['total']); ?></h3>
+                                        <h3 class="mb-1"><?php echo formatCurrency($ec['total']); ?></h3>
                                         <small class="text-muted">
                                             <i class="fas fa-receipt me-1"></i><?php echo $ec['count']; ?> transaction<?php echo $ec['count'] != 1 ? 's' : ''; ?>
                                         </small>
@@ -456,6 +456,7 @@ $monthNames = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep'
             // Monthly Breakdown Chart Data
             const monthlyData = <?php echo json_encode($monthlyData); ?>;
             const monthNames = <?php echo json_encode(array_slice($monthNames, 1)); ?>;
+            const CURRENCY_SYMBOL = <?php echo json_encode(getUserPreferences()['currency_symbol']); ?>;
 
             // Prepare data for chart
             const serviceCosts = monthlyData.map(m => parseFloat(m.service_cost));
@@ -522,14 +523,14 @@ $monthNames = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep'
                 },
                 yaxis: {
                     title: {
-                        text: 'Amount (Ksh)',
+                        text: 'Amount (' + CURRENCY_SYMBOL + ')',
                         style: {
                             fontSize: '12px'
                         }
                     },
                     labels: {
                         formatter: function (value) {
-                            return 'Ksh' + value.toFixed(0);
+                            return CURRENCY_SYMBOL + value.toFixed(0);
                         }
                     }
                 },
@@ -548,7 +549,7 @@ $monthNames = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep'
                 tooltip: {
                     y: {
                         formatter: function (val) {
-                            return 'Ksh' + val.toFixed(2);
+                            return CURRENCY_SYMBOL + val.toFixed(2);
                         }
                     }
                 },

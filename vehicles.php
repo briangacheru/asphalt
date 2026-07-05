@@ -129,9 +129,9 @@ if ($flash): ?>
                                                 </small>
                                                 <span class="badge <?php echo $badgeClass; ?> bg-opacity-75" style="font-size:.65rem;">
                                                 <?php if ($isOverdue): ?>
-                                                    <?php echo formatNumber(abs($kmRemaining)); ?> km overdue
+                                                    <?php echo formatDistance(abs($kmRemaining)); ?> overdue
                                                 <?php else: ?>
-                                                    <?php echo formatNumber($kmRemaining); ?> km left
+                                                    <?php echo formatDistance($kmRemaining); ?> left
                                                 <?php endif; ?>
                                             </span>
                                             </div>
@@ -161,12 +161,12 @@ if ($flash): ?>
                                                 <hr class="my-2">
                                                 <div>
                                                     <div class="d-flex flex-between-center mb-2">
-                                                        <small class="text-muted">Next service: <?php echo formatNumber($vehicle['next_service']); ?> km</small>
+                                                        <small class="text-muted">Next service: <?php echo formatDistance($vehicle['next_service']); ?></small>
                                                         <small class="<?php echo $textClass; ?> fw-semibold">
                                                             <?php if ($isOverdue): ?>
-                                                                <i class="fas fa-exclamation-circle me-1"></i><?php echo formatNumber(abs($kmRemaining)); ?> km overdue
+                                                                <i class="fas fa-exclamation-circle me-1"></i><?php echo formatDistance(abs($kmRemaining)); ?> overdue
                                                             <?php else: ?>
-                                                                <?php echo formatNumber($kmRemaining); ?> km left
+                                                                <?php echo formatDistance($kmRemaining); ?> left
                                                             <?php endif; ?>
                                                         </small>
                                                     </div>
@@ -186,7 +186,7 @@ if ($flash): ?>
                                             <div class="row g-0">
                                                 <div class="col-6 border-end <?php echo $dividerClass; ?> py-3 text-center">
                                                     <h6 class="text-600 mb-1 fs-11">Current Mileage</h6>
-                                                    <h6 class="fs-9 mb-0"><?php echo formatNumber($vehicle['current_mileage']); ?> km</h6>
+                                                    <h6 class="fs-9 mb-0"><?php echo formatDistance($vehicle['current_mileage']); ?></h6>
                                                 </div>
                                                 <div class="col-6 py-3 text-center">
                                                     <?php if ($vehicle['last_service']): ?>

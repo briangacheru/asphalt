@@ -106,7 +106,7 @@ if ($flash): ?>
                         <i class="fas fa-money-bill-wave fs-4"></i>
                     </div>
                     <div class="col-auto">
-                        <h4 class="fs-6 fw-normal text-warning">Ksh. <?php echo formatNumber($totalCost); ?></h4>
+                        <h4 class="fs-6 fw-normal text-warning"><?php echo formatCurrency($totalCost); ?></h4>
                     </div>
                 </div>
             </div>
@@ -121,7 +121,7 @@ if ($flash): ?>
                         <i class="fas fa-calculator fs-4"></i>
                     </div>
                     <div class="col-auto">
-                        <h4 class="fs-6 fw-normal text-warning">Ksh<?php echo count($services) ? formatNumber($totalCost / count($services)) : '0'; ?></h4>
+                        <h4 class="fs-6 fw-normal text-warning"><?php echo count($services) ? formatCurrency($totalCost / count($services)) : formatCurrency(0); ?></h4>
                     </div>
                 </div>
             </div>
@@ -156,10 +156,10 @@ if ($flash): ?>
                             onclick="window.location='service-items.php?service_id=<?php echo $s['id']; ?>'">
                             <td><strong><?php echo formatDate($s['service_date']); ?></strong></td>
                             <td><?php echo sanitize($s['make'] . ' ' . $s['model']); ?><br><small class="text-muted"><?php echo $s['year']; ?></small></td>
-                            <td><strong><?php echo formatNumber($s['mileage']); ?></strong> km</td>
-                            <td><?php echo formatNumber($s['next_service_mileage']); ?> km</td>
+                            <td><strong><?php echo formatDistance($s['mileage']); ?></strong></td>
+                            <td><?php echo formatDistance($s['next_service_mileage']); ?></td>
                             <td><span class="badge rounded-pill ms-2 badge-subtle-<?php echo $s['item_count'] > 0 ? 'success' : 'warning'; ?>"><?php echo $s['item_count']; ?> items</span></td>
-                            <td><?php echo $s['service_cost'] > 0 ? 'Ksh. ' . number_format($s['service_cost'], 2) : '-'; ?></td>
+                            <td><?php echo $s['service_cost'] > 0 ? formatCurrency($s['service_cost']) : '-'; ?></td>
                         </tr>
                     <?php endforeach; ?>
                     </tbody>

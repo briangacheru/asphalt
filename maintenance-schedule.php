@@ -299,14 +299,14 @@ function renderScheduleSection($items, $title, $badgeColor, $icon) {
                             data-bs-toggle="modal" data-bs-target="#editScheduleModal<?php echo $s['id']; ?>">
                             <td>
                                 <strong><?php echo sanitize($s['make'] . ' ' . $s['model']); ?></strong><br>
-                                <small class="text-muted"><?php echo number_format($s['current_mileage']); ?> km</small>
+                                <small class="text-muted"><?php echo formatDistance($s['current_mileage']); ?></small>
                             </td>
                             <td>
                                 <strong><?php echo sanitize($s['item_type']); ?></strong><br>
                                 <small class="text-muted">
                                     <?php
                                     $interval = [];
-                                    if ($s['interval_km']) $interval[] = number_format($s['interval_km']) . ' km';
+                                    if ($s['interval_km']) $interval[] = formatDistance($s['interval_km']);
                                     if ($s['interval_months']) $interval[] = $s['interval_months'] . ' months';
                                     echo implode(' / ', $interval);
                                     ?>
@@ -318,7 +318,7 @@ function renderScheduleSection($items, $title, $badgeColor, $icon) {
                                         <?php echo date('M d, Y', strtotime($s['last_replaced_date'])); ?><br>
                                     <?php endif; ?>
                                     <?php if ($s['last_replaced_mileage']): ?>
-                                        <small class="text-muted"><?php echo number_format($s['last_replaced_mileage']); ?> km</small>
+                                        <small class="text-muted"><?php echo formatDistance($s['last_replaced_mileage']); ?></small>
                                     <?php endif; ?>
                                 <?php else: ?>
                                     <span class="text-muted">Not recorded</span>
@@ -330,7 +330,7 @@ function renderScheduleSection($items, $title, $badgeColor, $icon) {
                                         <?php echo date('M d, Y', strtotime($s['next_due_date'])); ?><br>
                                     <?php endif; ?>
                                     <?php if ($s['next_due_mileage']): ?>
-                                        <small class="text-muted"><?php echo number_format($s['next_due_mileage']); ?> km</small>
+                                        <small class="text-muted"><?php echo formatDistance($s['next_due_mileage']); ?></small>
                                     <?php endif; ?>
                                 <?php else: ?>
                                     <span class="text-muted">Not set</span>
@@ -347,22 +347,22 @@ function renderScheduleSection($items, $title, $badgeColor, $icon) {
                                 <?php if ($s['status'] === 'overdue'): ?>
                                     <span class="badge bg-danger">
                                         <i class="fas fa-exclamation-circle"></i>
-                                        Overdue <?php echo $s['km_overdue'] > 0 ? '(' . number_format($s['km_overdue']) . ' km)' : ''; ?>
+                                        Overdue <?php echo $s['km_overdue'] > 0 ? '(' . formatDistance($s['km_overdue']) . ')' : ''; ?>
                                     </span>
                                 <?php elseif ($s['status'] === 'due_soon'): ?>
                                     <span class="badge bg-warning">
                                         <i class="fas fa-exclamation-triangle"></i>
-                                        Due Soon (<?php echo number_format($s['km_remaining']); ?> km left)
+                                        Due Soon (<?php echo formatDistance($s['km_remaining']); ?> left)
                                     </span>
                                 <?php elseif ($s['status'] === 'upcoming'): ?>
                                     <span class="badge bg-info">
                                         <i class="fas fa-clock"></i>
-                                        Upcoming (<?php echo number_format($s['km_remaining']); ?> km left)
+                                        Upcoming (<?php echo formatDistance($s['km_remaining']); ?> left)
                                     </span>
                                 <?php else: ?>
                                     <span class="badge bg-success">
                                         <i class="fas fa-check-circle"></i>
-                                        OK <?php echo $s['km_remaining'] ? '(' . number_format($s['km_remaining']) . ' km left)' : ''; ?>
+                                        OK <?php echo $s['km_remaining'] ? '(' . formatDistance($s['km_remaining']) . ' left)' : ''; ?>
                                     </span>
                                 <?php endif; ?>
                             </td>

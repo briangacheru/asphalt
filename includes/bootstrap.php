@@ -148,11 +148,72 @@ function getCurrentUser(): ?array {
     if (!isLoggedIn()) {
         return null;
     }
-    
+
     $pdo = getDBConnection();
-    $stmt = $pdo->prepare("SELECT id, email, first_name, last_name, phone, avatar FROM users WHERE id = ?");
+    $stmt = $pdo->prepare("SELECT id, email, first_name, last_name, phone, avatar, default_currency, currency_symbol, default_distance_unit, default_volume_unit, timezone FROM users WHERE id = ?");
     $stmt->execute([getCurrentUserId()]);
     return $stmt->fetch() ?: null;
+}
+
+/**
+ * Get the current logged-in user's display preferences (currency, distance
+ * unit, volume unit, timezone), cached per request. Falls back to app
+ * defaults for guests or if a preference isn't set.
+ */
+function getUserPreferences(): array {
+    return \App\Helpers\Preferences::forUser(getDBConnection(), getCurrentUserId());
+}
+
+/**
+ * Format a monetary amount using the given (or current user's) currency preference.
+ */
+function formatCurrency(int|float $amount, ?array $prefs = null, int $decimals = 2): string {
+    return \App\Helpers\Preferences::formatCurrency((float)$amount, $prefs ?? getUserPreferences(), $decimals);
+}
+
+/**
+ * Format a distance stored in km, converting to the user's preferred unit for display.
+ * Never use this for stored values or calculations — those must stay in raw km.
+ */
+function formatDistance(int|float $km, ?array $prefs = null, int $decimals = 0): string {
+    return \App\Helpers\Preferences::formatDistance((float)$km, $prefs ?? getUserPreferences(), $decimals);
+}
+
+/**
+ * Format a fuel volume stored in liters, converting to the user's preferred unit for display.
+ */
+function formatVolume(int|float $liters, ?array $prefs = null, int $decimals = 2): string {
+    return \App\Helpers\Preferences::formatVolume((float)$liters, $prefs ?? getUserPreferences(), $decimals);
+}
+
+/**
+ * Format a price-per-liter rate, converting to a price-per-gallon rate for display if preferred.
+ */
+function formatPricePerVolume(int|float $pricePerLiter, ?array $prefs = null, int $decimals = 2): string {
+    return \App\Helpers\Preferences::formatCurrencyPerVolume((float)$pricePerLiter, $prefs ?? getUserPreferences(), $decimals);
+}
+
+/**
+ * The unit label only ("km"/"mi"), for places that build their own string.
+ */
+function distanceUnitLabel(?array $prefs = null): string {
+    return \App\Helpers\Preferences::distanceUnit($prefs ?? getUserPreferences());
+}
+
+/**
+ * The unit label only ("L"/"gal"), for places that build their own string.
+ */
+function volumeUnitLabel(?array $prefs = null): string {
+    return \App\Helpers\Preferences::volumeUnit($prefs ?? getUserPreferences());
+}
+
+/**
+ * Format a real timestamp (DATETIME columns, e.g. created_at/updated_at/sent_at)
+ * in the user's chosen timezone. Do NOT use for DATE-only columns like
+ * service_date/fill_date/expense_date/next_due_date — use formatDate() for those.
+ */
+function formatDateTimeForUser(?string $datetime, ?array $prefs = null, string $format = 'M d, Y g:i A'): string {
+    return \App\Helpers\Preferences::formatDateTime($datetime, $prefs ?? getUserPreferences(), $format);
 }
 
 /**

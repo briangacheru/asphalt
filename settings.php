@@ -2,11 +2,16 @@
 $pageTitle = 'Settings';
 require_once 'includes/header.php';
 use App\Services\EmailService;
+use App\Helpers\Preferences;
 
 // Get current user settings
 $stmt = $pdo->prepare("SELECT * FROM users WHERE id = ?");
 $stmt->execute([$_SESSION['user_id']]);
 $user = $stmt->fetch();
+
+// Ensures the currency_symbol column exists (no migration runner in this app)
+// and gives us the resolved preferences for rendering the form below.
+$prefs = Preferences::forUser($pdo, (int)$_SESSION['user_id']);
 
 // Handle form submission
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -109,16 +114,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $default_volume_unit = sanitize($_POST['default_volume_unit'] ?? 'L');
         $timezone = sanitize($_POST['timezone'] ?? 'UTC');
 
+        // A custom currency (not in the built-in list) supplies its own code + symbol
+        $currency_symbol = null;
+        if ($default_currency === '__custom__') {
+            $default_currency = substr(strtoupper(sanitize($_POST['custom_currency_code'] ?? '')), 0, 10);
+            $currency_symbol = substr(sanitize($_POST['custom_currency_symbol'] ?? ''), 0, 10);
+
+            if ($default_currency === '' || $currency_symbol === '') {
+                setFlashMessage('danger', 'Please provide both a currency code and symbol.');
+                redirect('settings');
+            }
+        }
+
         try {
             $stmt = $pdo->prepare("
-                UPDATE users 
-                SET default_currency = ?, 
-                    default_distance_unit = ?, 
+                UPDATE users
+                SET default_currency = ?,
+                    currency_symbol = ?,
+                    default_distance_unit = ?,
                     default_volume_unit = ?,
                     timezone = ?
                 WHERE id = ?
             ");
-            $stmt->execute([$default_currency, $default_distance_unit, $default_volume_unit, $timezone, $_SESSION['user_id']]);
+            $stmt->execute([$default_currency, $currency_symbol, $default_distance_unit, $default_volume_unit, $timezone, $_SESSION['user_id']]);
+            Preferences::forget((int)$_SESSION['user_id']);
             setFlashMessage('success', 'Preferences updated successfully!');
         } catch (PDOException $e) {
             setFlashMessage('danger', 'Error updating preferences: ' . $e->getMessage());
@@ -550,22 +569,33 @@ foreach ($emailStatsRaw as $stat) {
                         <form method="POST">
                             <input type="hidden" name="action" value="update_preferences">
 
+                            <?php
+                            $knownCurrencies = Preferences::knownCurrencies();
+                            $isCustomCurrency = !array_key_exists($prefs['currency'], $knownCurrencies);
+                            ?>
                             <div class="row mb-3">
                                 <div class="col-md-6">
                                     <label class="form-label">Currency</label>
-                                    <select name="default_currency" class="form-select">
-                                        <option value="USD" <?php echo ($user['default_currency'] ?? 'USD') === 'USD' ? 'selected' : ''; ?>>USD ($)</option>
-                                        <option value="EUR" <?php echo ($user['default_currency'] ?? '') === 'EUR' ? 'selected' : ''; ?>>EUR (€)</option>
-                                        <option value="GBP" <?php echo ($user['default_currency'] ?? '') === 'GBP' ? 'selected' : ''; ?>>GBP (£)</option>
-                                        <option value="CAD" <?php echo ($user['default_currency'] ?? '') === 'CAD' ? 'selected' : ''; ?>>CAD ($)</option>
-                                        <option value="AUD" <?php echo ($user['default_currency'] ?? '') === 'AUD' ? 'selected' : ''; ?>>AUD ($)</option>
+                                    <select name="default_currency" id="currencySelect" class="form-select">
+                                        <?php foreach ($knownCurrencies as $code => $symbol): ?>
+                                            <option value="<?php echo $code; ?>" <?php echo (!$isCustomCurrency && $prefs['currency'] === $code) ? 'selected' : ''; ?>><?php echo $code; ?> (<?php echo $symbol; ?>)</option>
+                                        <?php endforeach; ?>
+                                        <option value="__custom__" <?php echo $isCustomCurrency ? 'selected' : ''; ?>>Other (specify)...</option>
                                     </select>
+                                    <div id="customCurrencyFields" class="row mt-2 <?php echo $isCustomCurrency ? '' : 'd-none'; ?>">
+                                        <div class="col-6">
+                                            <input type="text" name="custom_currency_code" class="form-control form-control-sm" placeholder="Code, e.g. KES" maxlength="10" value="<?php echo $isCustomCurrency ? sanitize($prefs['currency']) : ''; ?>">
+                                        </div>
+                                        <div class="col-6">
+                                            <input type="text" name="custom_currency_symbol" class="form-control form-control-sm" placeholder="Symbol, e.g. KSh" maxlength="10" value="<?php echo $isCustomCurrency ? sanitize($prefs['currency_symbol']) : ''; ?>">
+                                        </div>
+                                    </div>
                                 </div>
                                 <div class="col-md-6">
                                     <label class="form-label">Distance Unit</label>
                                     <select name="default_distance_unit" class="form-select">
-                                        <option value="km" <?php echo ($user['default_distance_unit'] ?? 'km') === 'km' ? 'selected' : ''; ?>>Kilometers (km)</option>
-                                        <option value="mi" <?php echo ($user['default_distance_unit'] ?? '') === 'mi' ? 'selected' : ''; ?>>Miles (mi)</option>
+                                        <option value="km" <?php echo $prefs['distance_unit'] === 'km' ? 'selected' : ''; ?>>Kilometers (km)</option>
+                                        <option value="mi" <?php echo $prefs['distance_unit'] === 'mi' ? 'selected' : ''; ?>>Miles (mi)</option>
                                     </select>
                                 </div>
                             </div>
@@ -574,21 +604,22 @@ foreach ($emailStatsRaw as $stat) {
                                 <div class="col-md-6">
                                     <label class="form-label">Volume Unit (Fuel)</label>
                                     <select name="default_volume_unit" class="form-select">
-                                        <option value="L" <?php echo ($user['default_volume_unit'] ?? 'L') === 'L' ? 'selected' : ''; ?>>Liters (L)</option>
-                                        <option value="gal" <?php echo ($user['default_volume_unit'] ?? '') === 'gal' ? 'selected' : ''; ?>>Gallons (gal)</option>
+                                        <option value="L" <?php echo $prefs['volume_unit'] === 'L' ? 'selected' : ''; ?>>Liters (L)</option>
+                                        <option value="gal" <?php echo $prefs['volume_unit'] === 'gal' ? 'selected' : ''; ?>>Gallons (gal)</option>
                                     </select>
                                 </div>
                                 <div class="col-md-6">
                                     <label class="form-label">Timezone</label>
                                     <select name="timezone" class="form-select">
-                                        <option value="UTC" <?php echo ($user['timezone'] ?? 'UTC') === 'UTC' ? 'selected' : ''; ?>>UTC</option>
-                                        <option value="America/New_York" <?php echo ($user['timezone'] ?? '') === 'America/New_York' ? 'selected' : ''; ?>>Eastern Time (US)</option>
-                                        <option value="America/Chicago" <?php echo ($user['timezone'] ?? '') === 'America/Chicago' ? 'selected' : ''; ?>>Central Time (US)</option>
-                                        <option value="America/Denver" <?php echo ($user['timezone'] ?? '') === 'America/Denver' ? 'selected' : ''; ?>>Mountain Time (US)</option>
-                                        <option value="America/Los_Angeles" <?php echo ($user['timezone'] ?? '') === 'America/Los_Angeles' ? 'selected' : ''; ?>>Pacific Time (US)</option>
-                                        <option value="Europe/London" <?php echo ($user['timezone'] ?? '') === 'Europe/London' ? 'selected' : ''; ?>>London</option>
-                                        <option value="Europe/Paris" <?php echo ($user['timezone'] ?? '') === 'Europe/Paris' ? 'selected' : ''; ?>>Paris</option>
-                                        <option value="Asia/Tokyo" <?php echo ($user['timezone'] ?? '') === 'Asia/Tokyo' ? 'selected' : ''; ?>>Tokyo</option>
+                                        <option value="UTC" <?php echo $prefs['timezone'] === 'UTC' ? 'selected' : ''; ?>>UTC</option>
+                                        <option value="Africa/Nairobi" <?php echo $prefs['timezone'] === 'Africa/Nairobi' ? 'selected' : ''; ?>>Nairobi</option>
+                                        <option value="America/New_York" <?php echo $prefs['timezone'] === 'America/New_York' ? 'selected' : ''; ?>>Eastern Time (US)</option>
+                                        <option value="America/Chicago" <?php echo $prefs['timezone'] === 'America/Chicago' ? 'selected' : ''; ?>>Central Time (US)</option>
+                                        <option value="America/Denver" <?php echo $prefs['timezone'] === 'America/Denver' ? 'selected' : ''; ?>>Mountain Time (US)</option>
+                                        <option value="America/Los_Angeles" <?php echo $prefs['timezone'] === 'America/Los_Angeles' ? 'selected' : ''; ?>>Pacific Time (US)</option>
+                                        <option value="Europe/London" <?php echo $prefs['timezone'] === 'Europe/London' ? 'selected' : ''; ?>>London</option>
+                                        <option value="Europe/Paris" <?php echo $prefs['timezone'] === 'Europe/Paris' ? 'selected' : ''; ?>>Paris</option>
+                                        <option value="Asia/Tokyo" <?php echo $prefs['timezone'] === 'Asia/Tokyo' ? 'selected' : ''; ?>>Tokyo</option>
                                     </select>
                                 </div>
                             </div>
@@ -601,6 +632,12 @@ foreach ($emailStatsRaw as $stat) {
                         </form>
                     </div>
                 </div>
+
+                <script>
+                    document.getElementById('currencySelect').addEventListener('change', function () {
+                        document.getElementById('customCurrencyFields').classList.toggle('d-none', this.value !== '__custom__');
+                    });
+                </script>
             </div>
 
             <!-- Right Column -->
@@ -646,7 +683,7 @@ foreach ($emailStatsRaw as $stat) {
                                     <div>
                                         <div class="fw-bold"><?php echo $info['label']; ?></div>
                                         <small class="text-muted">
-                                            Last: <?php echo $stats['last_sent'] ? date('M d, Y', strtotime($stats['last_sent'])) : 'Never'; ?>
+                                            Last: <?php echo $stats['last_sent'] ? formatDateTimeForUser($stats['last_sent'], $prefs, 'M d, Y') : 'Never'; ?>
                                         </small>
                                     </div>
                                 </div>
@@ -704,12 +741,12 @@ foreach ($emailStatsRaw as $stat) {
 
                         <div class="mb-3">
                             <label class="text-muted small">Member Since</label>
-                            <div><?php echo date('F d, Y', strtotime($user['created_at'])); ?></div>
+                            <div><?php echo formatDateTimeForUser($user['created_at'], $prefs, 'F d, Y'); ?></div>
                         </div>
 
                         <div class="mb-0">
                             <label class="text-muted small">Last Updated</label>
-                            <div><?php echo date('F d, Y', strtotime($user['updated_at'] ?? $user['created_at'])); ?></div>
+                            <div><?php echo formatDateTimeForUser($user['updated_at'] ?? $user['created_at'], $prefs, 'F d, Y'); ?></div>
                         </div>
                     </div>
                 </div>

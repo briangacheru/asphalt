@@ -14,6 +14,7 @@
 require_once __DIR__ . '/../vendor/autoload.php';
 use App\Database\Database;
 use App\Services\EmailService;
+use App\Helpers\Preferences;
 
 $pdo = Database::getInstance()->getConnection();
 $emailService = new EmailService($pdo);
@@ -36,7 +37,7 @@ const DUE_SOON_KM_WINDOW = 1000;
 const DUE_SOON_DAYS_WINDOW = 30;
 
 $stmt = $pdo->query("
-    SELECT ms.*, v.make, v.model, v.year, v.current_mileage,
+    SELECT ms.*, v.make, v.model, v.year, v.current_mileage, v.user_id,
            u.email_notifications_enabled
     FROM maintenance_schedule ms
     JOIN vehicles v ON ms.vehicle_id = v.id
@@ -62,10 +63,12 @@ foreach ($schedules as $item) {
         continue;
     }
 
+    $ownerPrefs = Preferences::forUser($pdo, (int)$item['user_id']);
+
     if ($kmOverdue !== null) {
         $remainingLabel = $kmOverdue > 0
-            ? number_format($kmOverdue) . ' km overdue'
-            : number_format(abs($kmOverdue)) . ' km remaining';
+            ? Preferences::formatDistance($kmOverdue, $ownerPrefs) . ' overdue'
+            : Preferences::formatDistance(abs($kmOverdue), $ownerPrefs) . ' remaining';
     } elseif ($daysUntilDue !== null) {
         $remainingLabel = $daysUntilDue < 0
             ? number_format(abs(round($daysUntilDue))) . ' day(s) overdue'

@@ -13,6 +13,7 @@ if (!class_exists('PHPMailer\PHPMailer\PHPMailer')) {
 use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\SMTP;
 use PHPMailer\PHPMailer\Exception;
+use App\Helpers\Preferences;
 
 /**
  * Email service for handling all email communications
@@ -245,24 +246,25 @@ class EmailService
             return false;
         }
 
+        $prefs = Preferences::forUser($this->pdo, $data['user_id']);
         $vehicleName = $data['make'] . ' ' . $data['model'] . ' (' . $data['year'] . ')';
 
         $content = sprintf('
             <h2 style="margin: 0 0 20px; color: #ffffff; font-size: 20px;">Service Recorded Successfully!</h2>
             <p style="margin: 0 0 20px; line-height: 1.6;">Hi %s,</p>
             <p style="margin: 0 0 20px; line-height: 1.6;">Your service for <strong>%s</strong> has been recorded.</p>
-            
+
             <div style="background: rgba(0,0,0,0.3); border-radius: 12px; padding: 20px; margin: 20px 0;">
                 <table style="width: 100%%; color: #e5e5ea;">
                     <tr><td style="padding: 8px 0; color: #86868b;">Date:</td><td style="padding: 8px 0; text-align: right;">%s</td></tr>
-                    <tr><td style="padding: 8px 0; color: #86868b;">Mileage:</td><td style="padding: 8px 0; text-align: right;">%s km</td></tr>
-                    <tr><td style="padding: 8px 0; color: #86868b;">Next Service:</td><td style="padding: 8px 0; text-align: right;">%s km</td></tr>
+                    <tr><td style="padding: 8px 0; color: #86868b;">Mileage:</td><td style="padding: 8px 0; text-align: right;">%s</td></tr>
+                    <tr><td style="padding: 8px 0; color: #86868b;">Next Service:</td><td style="padding: 8px 0; text-align: right;">%s</td></tr>
                 </table>
             </div>
-            
+
             <p style="margin: 20px 0; line-height: 1.6;"><strong>Don\'t forget to add service items!</strong></p>
             <p style="margin: 0 0 20px; line-height: 1.6;">Record what was changed during this service (oil filter, cabin filter, brake pads, etc.) along with brands and costs.</p>
-            
+
             <p style="margin: 30px 0; text-align: center;">
                 <a href="%s/service-items?vehicle_id=%d" style="display: inline-block; padding: 14px 32px; background: #ffffff; color: #000000; text-decoration: none; border-radius: 8px; font-weight: 600;">Add Service Items</a>
             </p>
@@ -270,8 +272,8 @@ class EmailService
             htmlspecialchars($data['first_name']),
             htmlspecialchars($vehicleName),
             date('M d, Y', strtotime($data['service_date'])),
-            number_format($data['mileage']),
-            number_format($data['next_service_mileage']),
+            Preferences::formatDistance($data['mileage'], $prefs),
+            Preferences::formatDistance($data['next_service_mileage'], $prefs),
             APP_URL,
             $vehicleId
         );
@@ -304,6 +306,7 @@ class EmailService
             return false;
         }
 
+        $prefs = Preferences::forUser($this->pdo, $data['user_id']);
         $vehicleName = $data['make'] . ' ' . $data['model'] . ' (' . $data['year'] . ')';
         $kmRemaining = $data['next_service'] ? $data['next_service'] - $data['current_mileage'] : null;
 
@@ -311,13 +314,13 @@ class EmailService
         if ($kmRemaining !== null) {
             if ($kmRemaining <= 0) {
                 $statusHtml = sprintf(
-                    '<div style="background: rgba(255,59,48,0.2); border: 1px solid rgba(255,59,48,0.3); border-radius: 8px; padding: 15px; margin: 20px 0; color: #ff3b30;"><strong>⚠️ Service Overdue!</strong> Your vehicle is %s km past due.</div>',
-                    number_format(abs($kmRemaining))
+                    '<div style="background: rgba(255,59,48,0.2); border: 1px solid rgba(255,59,48,0.3); border-radius: 8px; padding: 15px; margin: 20px 0; color: #ff3b30;"><strong>⚠️ Service Overdue!</strong> Your vehicle is %s past due.</div>',
+                    Preferences::formatDistance(abs($kmRemaining), $prefs)
                 );
             } elseif ($kmRemaining <= 1000) {
                 $statusHtml = sprintf(
-                    '<div style="background: rgba(255,149,0,0.2); border: 1px solid rgba(255,149,0,0.3); border-radius: 8px; padding: 15px; margin: 20px 0; color: #ff9500;"><strong>⏰ Service Soon!</strong> Only %s km until next service.</div>',
-                    number_format($kmRemaining)
+                    '<div style="background: rgba(255,149,0,0.2); border: 1px solid rgba(255,149,0,0.3); border-radius: 8px; padding: 15px; margin: 20px 0; color: #ff9500;"><strong>⏰ Service Soon!</strong> Only %s until next service.</div>',
+                    Preferences::formatDistance($kmRemaining, $prefs)
                 );
             }
         }
@@ -326,18 +329,18 @@ class EmailService
             <h2 style="margin: 0 0 20px; color: #ffffff; font-size: 20px;">Monthly Check-in</h2>
             <p style="margin: 0 0 20px; line-height: 1.6;">Hi %s,</p>
             <p style="margin: 0 0 20px; line-height: 1.6;">It\'s time for your monthly check-in for <strong>%s</strong>.</p>
-            
+
             %s
-            
+
             <div style="background: rgba(0,0,0,0.3); border-radius: 12px; padding: 20px; margin: 20px 0;">
                 <table style="width: 100%%; color: #e5e5ea;">
-                    <tr><td style="padding: 8px 0; color: #86868b;">Current Mileage:</td><td style="padding: 8px 0; text-align: right;">%s km</td></tr>
+                    <tr><td style="padding: 8px 0; color: #86868b;">Current Mileage:</td><td style="padding: 8px 0; text-align: right;">%s</td></tr>
                     %s
                 </table>
             </div>
-            
+
             <p style="margin: 20px 0; line-height: 1.6;">Please update your mileage and let us know if anything has changed:</p>
-            
+
             <p style="margin: 30px 0; text-align: center;">
                 <a href="%s/update-mileage?vehicle_id=%d" style="display: inline-block; padding: 14px 32px; background: #ffffff; color: #000000; text-decoration: none; border-radius: 8px; font-weight: 600;">Update Mileage</a>
             </p>
@@ -345,10 +348,10 @@ class EmailService
             htmlspecialchars($data['first_name']),
             htmlspecialchars($vehicleName),
             $statusHtml,
-            number_format($data['current_mileage']),
+            Preferences::formatDistance($data['current_mileage'], $prefs),
             $data['next_service'] ? sprintf(
-                '<tr><td style="padding: 8px 0; color: #86868b;">Next Service At:</td><td style="padding: 8px 0; text-align: right;">%s km</td></tr>',
-                number_format($data['next_service'])
+                '<tr><td style="padding: 8px 0; color: #86868b;">Next Service At:</td><td style="padding: 8px 0; text-align: right;">%s</td></tr>',
+                Preferences::formatDistance($data['next_service'], $prefs)
             ) : '',
             APP_URL,
             $vehicleId
@@ -382,6 +385,7 @@ class EmailService
             return false;
         }
 
+        $prefs = Preferences::forUser($this->pdo, $data['user_id']);
         $vehicleName = $data['make'] . ' ' . $data['model'] . ' (' . $data['year'] . ')';
 
         // Determine urgency level and message
@@ -389,20 +393,20 @@ class EmailService
         $subjectPrefix = '';
         if ($kmRemaining < 0) {
             $urgencyHtml = sprintf(
-                '<div style="background: rgba(255,59,48,0.2); border: 1px solid rgba(255,59,48,0.3); border-radius: 12px; padding: 20px; margin: 20px 0; color: #ff3b30;"><strong>🚨 OVERDUE!</strong> Your service is %s km overdue. Please schedule service immediately.</div>',
-                number_format(abs($kmRemaining))
+                '<div style="background: rgba(255,59,48,0.2); border: 1px solid rgba(255,59,48,0.3); border-radius: 12px; padding: 20px; margin: 20px 0; color: #ff3b30;"><strong>🚨 OVERDUE!</strong> Your service is %s overdue. Please schedule service immediately.</div>',
+                Preferences::formatDistance(abs($kmRemaining), $prefs)
             );
             $subjectPrefix = 'OVERDUE: ';
         } elseif ($kmRemaining <= 500) {
             $urgencyHtml = sprintf(
-                '<div style="background: rgba(255,59,48,0.2); border: 1px solid rgba(255,59,48,0.3); border-radius: 12px; padding: 20px; margin: 20px 0; color: #ff3b30;"><strong>⚠️ URGENT!</strong> Only %s km remaining until service is due.</div>',
-                number_format($kmRemaining)
+                '<div style="background: rgba(255,59,48,0.2); border: 1px solid rgba(255,59,48,0.3); border-radius: 12px; padding: 20px; margin: 20px 0; color: #ff3b30;"><strong>⚠️ URGENT!</strong> Only %s remaining until service is due.</div>',
+                Preferences::formatDistance($kmRemaining, $prefs)
             );
             $subjectPrefix = 'URGENT: ';
         } else {
             $urgencyHtml = sprintf(
-                '<div style="background: rgba(255,149,0,0.2); border: 1px solid rgba(255,149,0,0.3); border-radius: 12px; padding: 20px; margin: 20px 0; color: #ff9500;"><strong>📅 Service Reminder</strong> You have %s km remaining until your next service.</div>',
-                number_format($kmRemaining)
+                '<div style="background: rgba(255,149,0,0.2); border: 1px solid rgba(255,149,0,0.3); border-radius: 12px; padding: 20px; margin: 20px 0; color: #ff9500;"><strong>📅 Service Reminder</strong> You have %s remaining until your next service.</div>',
+                Preferences::formatDistance($kmRemaining, $prefs)
             );
         }
 
@@ -410,20 +414,20 @@ class EmailService
             <h2 style="margin: 0 0 20px; color: #ffffff; font-size: 20px;">Service Reminder</h2>
             <p style="margin: 0 0 20px; line-height: 1.6;">Hi %s,</p>
             <p style="margin: 0 0 20px; line-height: 1.6;">This is a friendly reminder about your upcoming service for <strong>%s</strong>.</p>
-            
+
             %s
-            
+
             <div style="background: rgba(0,0,0,0.3); border-radius: 12px; padding: 20px; margin: 20px 0;">
                 <table style="width: 100%%; color: #e5e5ea;">
                     <tr><td style="padding: 8px 0; color: #86868b;">Vehicle:</td><td style="padding: 8px 0; text-align: right;">%s</td></tr>
-                    <tr><td style="padding: 8px 0; color: #86868b;">Current Mileage:</td><td style="padding: 8px 0; text-align: right;">%s km</td></tr>
-                    <tr><td style="padding: 8px 0; color: #86868b;">Next Service At:</td><td style="padding: 8px 0; text-align: right;">%s km</td></tr>
-                    <tr><td style="padding: 8px 0; color: #86868b;">Km Remaining:</td><td style="padding: 8px 0; text-align: right; color: %s;">%s km</td></tr>
+                    <tr><td style="padding: 8px 0; color: #86868b;">Current Mileage:</td><td style="padding: 8px 0; text-align: right;">%s</td></tr>
+                    <tr><td style="padding: 8px 0; color: #86868b;">Next Service At:</td><td style="padding: 8px 0; text-align: right;">%s</td></tr>
+                    <tr><td style="padding: 8px 0; color: #86868b;">Remaining:</td><td style="padding: 8px 0; text-align: right; color: %s;">%s</td></tr>
                 </table>
             </div>
-            
+
             <p style="margin: 20px 0; line-height: 1.6;">Regular maintenance helps keep your vehicle running smoothly and prevents costly repairs down the road.</p>
-            
+
             <p style="margin: 30px 0; text-align: center;">
                 <a href="%s/update-mileage?vehicle_id=%d" style="display: inline-block; padding: 14px 32px; background: #ffffff; color: #000000; text-decoration: none; border-radius: 8px; font-weight: 600;">Update Mileage</a>
             </p>
@@ -432,10 +436,10 @@ class EmailService
             htmlspecialchars($vehicleName),
             $urgencyHtml,
             htmlspecialchars($vehicleName),
-            number_format($data['current_mileage']),
-            number_format($data['next_service']),
+            Preferences::formatDistance($data['current_mileage'], $prefs),
+            Preferences::formatDistance($data['next_service'], $prefs),
             $kmRemaining <= 500 ? '#ff3b30' : '#ff9500',
-            number_format($kmRemaining),
+            Preferences::formatDistance($kmRemaining, $prefs),
             APP_URL,
             $vehicleId
         );
@@ -467,20 +471,21 @@ class EmailService
             return false;
         }
 
+        $prefs = Preferences::forUser($this->pdo, $data['user_id']);
         $vehicleName = $data['make'] . ' ' . $data['model'] . ' (' . $data['year'] . ')';
 
         $content = sprintf('
             <h2 style="margin: 0 0 20px; color: #ffffff; font-size: 20px;">Low Mileage Alert</h2>
             <p style="margin: 0 0 20px; line-height: 1.6;">Hi %s,</p>
             <p style="margin: 0 0 20px; line-height: 1.6;">We noticed that your <strong>%s</strong> hasn\'t been driven much recently.</p>
-            
+
             <div style="background: rgba(0,0,0,0.3); border-radius: 12px; padding: 20px; margin: 20px 0;">
                 <table style="width: 100%%; color: #e5e5ea;">
                     <tr><td style="padding: 8px 0; color: #86868b;">Days Since Last Service:</td><td style="padding: 8px 0; text-align: right;">%s days</td></tr>
-                    <tr><td style="padding: 8px 0; color: #86868b;">Kilometers Driven:</td><td style="padding: 8px 0; text-align: right;">%s km</td></tr>
+                    <tr><td style="padding: 8px 0; color: #86868b;">Distance Driven:</td><td style="padding: 8px 0; text-align: right;">%s</td></tr>
                 </table>
             </div>
-            
+
             <p style="margin: 20px 0; line-height: 1.6;">Even if you don\'t drive much, regular maintenance is still important. Vehicles that sit idle can develop issues like:</p>
             <ul style="margin: 0 0 20px; padding-left: 20px; line-height: 1.8;">
                 <li>Battery drain</li>
@@ -488,9 +493,9 @@ class EmailService
                 <li>Brake corrosion</li>
                 <li>Fluid degradation</li>
             </ul>
-            
+
             <p style="margin: 20px 0; line-height: 1.6;">Consider taking your vehicle for a drive or scheduling a maintenance check.</p>
-            
+
             <p style="margin: 30px 0; text-align: center;">
                 <a href="%s/vehicle-details?id=%d" style="display: inline-block; padding: 14px 32px; background: #ffffff; color: #000000; text-decoration: none; border-radius: 8px; font-weight: 600;">View Vehicle Details</a>
             </p>
@@ -498,7 +503,7 @@ class EmailService
             htmlspecialchars($data['first_name']),
             htmlspecialchars($vehicleName),
             round($daysSinceService),
-            number_format($kmDriven),
+            Preferences::formatDistance($kmDriven, $prefs),
             APP_URL,
             $vehicleId
         );

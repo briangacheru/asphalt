@@ -221,7 +221,7 @@ if ($flash): ?>
             </div>
         </div>
         <div class="col-sm-6 col-lg-3">
-            <div class="card h-100 border-0 shadow-sm hover-lift" data-bs-toggle="tooltip" title="<?php echo $lastMonthLabel; ?>: <?php echo number_format($monthStats['last_liters'], 1); ?>L">
+            <div class="card h-100 border-0 shadow-sm hover-lift" data-bs-toggle="tooltip" title="<?php echo $lastMonthLabel; ?>: <?php echo formatVolume($monthStats['last_liters'], null, 1); ?>">
                 <div class="card-body p-3">
                     <div class="d-flex align-items-center justify-content-between mb-2">
                         <div class="icon-box bg-info bg-opacity-10 rounded-3 p-2">
@@ -230,13 +230,13 @@ if ($flash): ?>
                         <?php echo renderTrendBadge($literTrend); ?>
                     </div>
                     <h6 class="text-muted mb-1 fw-normal fs-10">Total Fuel &bull; <?php echo $thisMonthLabel; ?></h6>
-                    <h4 class="fs-6 fw-bold mb-1"><?php echo number_format($monthStats['this_liters'], 1); ?>L</h4>
-                    <p class="fs-11 text-muted mb-0">vs <?php echo $lastMonthLabel; ?>: <?php echo number_format($monthStats['last_liters'], 1); ?>L</p>
+                    <h4 class="fs-6 fw-bold mb-1"><?php echo formatVolume($monthStats['this_liters'], null, 1); ?></h4>
+                    <p class="fs-11 text-muted mb-0">vs <?php echo $lastMonthLabel; ?>: <?php echo formatVolume($monthStats['last_liters'], null, 1); ?></p>
                 </div>
             </div>
         </div>
         <div class="col-sm-6 col-lg-3">
-            <div class="card h-100 border-0 shadow-sm hover-lift" data-bs-toggle="tooltip" title="<?php echo $lastMonthLabel; ?>: Ksh. <?php echo number_format($monthStats['last_spent'], 2); ?>">
+            <div class="card h-100 border-0 shadow-sm hover-lift" data-bs-toggle="tooltip" title="<?php echo $lastMonthLabel; ?>: <?php echo formatCurrency($monthStats['last_spent']); ?>">
                 <div class="card-body p-3">
                     <div class="d-flex align-items-center justify-content-between mb-2">
                         <div class="icon-box bg-success bg-opacity-10 rounded-3 p-2">
@@ -245,13 +245,13 @@ if ($flash): ?>
                         <?php echo renderTrendBadge($spentTrend, 'down'); ?>
                     </div>
                     <h6 class="text-muted mb-1 fw-normal fs-10">Total Spent &bull; <?php echo $thisMonthLabel; ?></h6>
-                    <h4 class="fs-6 fw-bold mb-1">Ksh. <?php echo number_format($monthStats['this_spent'], 2); ?></h4>
-                    <p class="fs-11 text-muted mb-0">vs <?php echo $lastMonthLabel; ?>: Ksh. <?php echo number_format($monthStats['last_spent'], 2); ?></p>
+                    <h4 class="fs-6 fw-bold mb-1"><?php echo formatCurrency($monthStats['this_spent']); ?></h4>
+                    <p class="fs-11 text-muted mb-0">vs <?php echo $lastMonthLabel; ?>: <?php echo formatCurrency($monthStats['last_spent']); ?></p>
                 </div>
             </div>
         </div>
         <div class="col-sm-6 col-lg-3">
-            <div class="card h-100 border-0 shadow-sm hover-lift" data-bs-toggle="tooltip" title="<?php echo $lastMonthLabel; ?>: Ksh. <?php echo number_format($monthStats['last_avg_price'], 2); ?>">
+            <div class="card h-100 border-0 shadow-sm hover-lift" data-bs-toggle="tooltip" title="<?php echo $lastMonthLabel; ?>: <?php echo formatPricePerVolume($monthStats['last_avg_price']); ?>">
                 <div class="card-body p-3">
                     <div class="d-flex align-items-center justify-content-between mb-2">
                         <div class="icon-box bg-primary bg-opacity-10 rounded-3 p-2">
@@ -259,9 +259,9 @@ if ($flash): ?>
                         </div>
                         <?php echo renderTrendBadge($priceTrend, 'down'); ?>
                     </div>
-                    <h6 class="text-muted mb-1 fw-normal fs-10">Avg Price/L &bull; <?php echo $thisMonthLabel; ?></h6>
-                    <h4 class="fs-6 fw-bold mb-1">Ksh. <?php echo number_format($monthStats['this_avg_price'], 2); ?></h4>
-                    <p class="fs-11 text-muted mb-0">vs <?php echo $lastMonthLabel; ?>: Ksh. <?php echo number_format($monthStats['last_avg_price'], 2); ?></p>
+                    <h6 class="text-muted mb-1 fw-normal fs-10">Avg Price/<?php echo volumeUnitLabel(); ?> &bull; <?php echo $thisMonthLabel; ?></h6>
+                    <h4 class="fs-6 fw-bold mb-1"><?php echo formatPricePerVolume($monthStats['this_avg_price']); ?></h4>
+                    <p class="fs-11 text-muted mb-0">vs <?php echo $lastMonthLabel; ?>: <?php echo formatPricePerVolume($monthStats['last_avg_price']); ?></p>
                 </div>
             </div>
         </div>
@@ -288,7 +288,7 @@ if ($flash): ?>
                                 <th class="text-900 sort">Vehicle</th>
                                 <th class="text-900 sort">Mileage</th>
                                 <th class="text-900 sort">Liters</th>
-                                <th class="text-900 sort">Price/L</th>
+                                <th class="text-900 sort">Price/<?php echo volumeUnitLabel(); ?></th>
                                 <th class="text-900 sort">Total</th>
                                 <th class="text-900 sort">Station</th>
                                 <th class="text-900">Actions</th>
@@ -299,10 +299,10 @@ if ($flash): ?>
                                 <tr class="hover-actions-trigger btn-reveal-trigger hover-bg-100 cursor-pointer" onclick="editFuel(<?php echo htmlspecialchars(json_encode($l)); ?>)">
                                     <td><?php echo formatDate($l['fill_date']); ?></td>
                                     <td><?php echo sanitize($l['make'] . ' ' . $l['model']); ?></td>
-                                    <td><?php echo formatNumber($l['mileage']); ?> km</td>
-                                    <td><?php echo number_format($l['liters'], 2); ?> L</td>
-                                    <td>Ksh. <?php echo number_format($l['price_per_liter'], 2); ?></td>
-                                    <td><strong>Ksh. <?php echo number_format($l['total_cost'], 2); ?></strong></td>
+                                    <td><?php echo formatDistance($l['mileage']); ?></td>
+                                    <td><?php echo formatVolume($l['liters']); ?></td>
+                                    <td><?php echo formatPricePerVolume($l['price_per_liter']); ?></td>
+                                    <td><strong><?php echo formatCurrency($l['total_cost']); ?></strong></td>
                                     <td><?php echo $l['station_name'] ? sanitize($l['station_name']) : '-'; ?></td>
                                     <td class="align-middle white-space-nowrap text-end position-relative">
                                         <div class="hover-actions bg-100">
@@ -368,7 +368,7 @@ if ($flash): ?>
                                 <div class="form-text">Enter this or the total amount</div>
                             </div>
                             <div class="col-md-4 mb-3">
-                                <label class="form-label">Total Amount (Ksh)</label>
+                                <label class="form-label">Total Amount (<?php echo getUserPreferences()['currency_symbol']; ?>)</label>
                                 <input type="number" id="add_total_amount" step="0.01" class="form-control">
                                 <div class="form-text">Auto-fills liters</div>
                             </div>
@@ -429,7 +429,7 @@ if ($flash): ?>
                                 <div class="form-text">Enter this or the total amount</div>
                             </div>
                             <div class="col-md-4 mb-3">
-                                <label class="form-label">Total Amount (Ksh)</label>
+                                <label class="form-label">Total Amount (<?php echo getUserPreferences()['currency_symbol']; ?>)</label>
                                 <input type="number" id="edit_total_amount" step="0.01" class="form-control">
                                 <div class="form-text">Auto-fills liters</div>
                             </div>
