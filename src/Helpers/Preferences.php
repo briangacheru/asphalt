@@ -68,9 +68,17 @@ class Preferences
 
         self::ensureSchema($pdo);
 
-        $stmt = $pdo->prepare("SELECT default_currency, currency_symbol, default_distance_unit, default_volume_unit, timezone FROM users WHERE id = ?");
-        $stmt->execute([$userId]);
-        $row = $stmt->fetch() ?: [];
+        try {
+            $stmt = $pdo->prepare("SELECT default_currency, currency_symbol, default_distance_unit, default_volume_unit, timezone FROM users WHERE id = ?");
+            $stmt->execute([$userId]);
+            $row = $stmt->fetch() ?: [];
+        } catch (\PDOException $e) {
+            // currency_symbol may still be missing if ALTER TABLE isn't permitted on this host
+            $stmt = $pdo->prepare("SELECT default_currency, default_distance_unit, default_volume_unit, timezone FROM users WHERE id = ?");
+            $stmt->execute([$userId]);
+            $row = $stmt->fetch() ?: [];
+            $row['currency_symbol'] = null;
+        }
 
         $currency = $row['default_currency'] ?? self::DEFAULTS['currency'];
         $symbol = !empty($row['currency_symbol'])

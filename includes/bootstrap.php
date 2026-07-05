@@ -150,7 +150,7 @@ function getCurrentUser(): ?array {
     }
 
     $pdo = getDBConnection();
-    $stmt = $pdo->prepare("SELECT id, email, first_name, last_name, phone, avatar, default_currency, currency_symbol, default_distance_unit, default_volume_unit, timezone FROM users WHERE id = ?");
+    $stmt = $pdo->prepare("SELECT id, email, first_name, last_name, phone, avatar FROM users WHERE id = ?");
     $stmt->execute([getCurrentUserId()]);
     return $stmt->fetch() ?: null;
 }
