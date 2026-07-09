@@ -2,7 +2,7 @@
 RewriteEngine On
 
 # Set the base directory (adjust if your site is in a subfolder)
-RewriteBase /
+RewriteBase /asphalt/
 
 # ---------------------------------------------------------
 # SECURITY: Block Direct Access to Sensitive Folders/Files

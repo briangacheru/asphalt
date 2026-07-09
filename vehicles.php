@@ -1,20 +1,44 @@
 <?php
+require_once 'includes/bootstrap.php';
+\App\Middleware\AuthMiddleware::check();
+$pdo = \App\Database\Database::getInstance()->getConnection();
+$userId = \App\Middleware\AuthMiddleware::getCurrentUserId();
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $action = $_POST['action'] ?? '';
+
+    if (in_array($action, ['pin', 'unpin'], true) && verifyCSRFToken($_POST['csrf_token'] ?? '')) {
+        $vehicleId = (int)($_POST['vehicle_id'] ?? 0);
+
+        if ($action === 'pin') {
+            $pdo->prepare("UPDATE vehicles SET is_pinned = 1, pinned_at = NOW() WHERE id = ? AND user_id = ?")->execute([$vehicleId, $userId]);
+            setFlashMessage('success', 'Vehicle pinned to your dashboard.');
+        } else {
+            $pdo->prepare("UPDATE vehicles SET is_pinned = 0, pinned_at = NULL WHERE id = ? AND user_id = ?")->execute([$vehicleId, $userId]);
+            setFlashMessage('success', 'Vehicle unpinned from your dashboard.');
+        }
+    }
+
+    redirect('vehicles');
+}
+
 $pageTitle = 'My Vehicles';
 require_once 'includes/header.php';
 
 // Get all vehicles with stats
-$stmt = $pdo->query("
-    SELECT v.*, 
+$stmt = $pdo->prepare("
+    SELECT v.*,
            (SELECT COUNT(*) FROM service_records WHERE vehicle_id = v.id) as service_count,
            (SELECT service_date FROM service_records WHERE vehicle_id = v.id ORDER BY service_date DESC LIMIT 1) as last_service,
            (SELECT mileage FROM service_records WHERE vehicle_id = v.id ORDER BY service_date DESC LIMIT 1) as last_service_mileage,
            (SELECT next_service_mileage FROM service_records WHERE vehicle_id = v.id ORDER BY service_date DESC LIMIT 1) as next_service,
            (SELECT oil_interval FROM service_records WHERE vehicle_id = v.id ORDER BY service_date DESC LIMIT 1) as last_oil_interval,
            (SELECT COALESCE(SUM(service_cost), 0) FROM service_records WHERE vehicle_id = v.id) as total_spent
-    FROM vehicles v 
-    WHERE v.is_active = 1 
-    ORDER BY v.make, v.model
+    FROM vehicles v
+    WHERE v.user_id = ? AND v.is_active = 1
+    ORDER BY v.is_pinned DESC, v.id DESC
 ");
+$stmt->execute([$userId]);
 $vehicles = $stmt->fetchAll();
 ?>
 
@@ -120,7 +144,29 @@ if ($flash): ?>
                                 }
                                 ?>
                                 <div class="col-lg-6">
-                                    <div class="card h-100 overflow-hidden <?php echo $cardBorder; ?>">
+                                    <div class="card h-100 overflow-hidden <?php echo $cardBorder; ?> <?php echo $vehicle['is_pinned'] ? 'border-warning' : ''; ?>">
+
+                                        <div class="d-flex align-items-center justify-content-between px-2 py-1 position-relative" style="z-index:2;">
+                                            <?php if ($vehicle['is_pinned']): ?>
+                                                <span class="badge bg-warning bg-opacity-75" style="font-size:.6rem;">
+                                                    <i class="fas fa-thumbtack me-1"></i>Pinned
+                                                </span>
+                                            <?php else: ?>
+                                                <span></span>
+                                            <?php endif; ?>
+                                            <form method="POST" class="mb-0">
+                                                <?php echo csrfField(); ?>
+                                                <input type="hidden" name="action" value="<?php echo $vehicle['is_pinned'] ? 'unpin' : 'pin'; ?>">
+                                                <input type="hidden" name="vehicle_id" value="<?php echo $vehicle['id']; ?>">
+                                                <button type="submit"
+                                                        class="btn btn-sm rounded-circle shadow-sm d-flex align-items-center justify-content-center <?php echo $vehicle['is_pinned'] ? 'btn-warning' : 'btn-light'; ?>"
+                                                        style="width:26px;height:26px;padding:0;"
+                                                        data-bs-toggle="tooltip"
+                                                        title="<?php echo $vehicle['is_pinned'] ? 'Unpin from dashboard' : 'Pin to dashboard'; ?>">
+                                                    <i class="fas fa-thumbtack <?php echo $vehicle['is_pinned'] ? 'text-white' : 'text-600'; ?>" style="font-size:.6rem;"></i>
+                                                </button>
+                                            </form>
+                                        </div>
 
                                         <?php if ($vehicle['next_service']): ?>
                                             <div class="d-flex align-items-center justify-content-between px-3 py-2 <?php echo $badgeClass; ?> bg-opacity-10">

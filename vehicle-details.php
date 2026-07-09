@@ -1,8 +1,29 @@
 <?php
+require_once 'includes/bootstrap.php';
+\App\Middleware\AuthMiddleware::check();
+$pdo = \App\Database\Database::getInstance()->getConnection();
+$userId = \App\Middleware\AuthMiddleware::getCurrentUserId();
+
+$vehicleId = (int)($_GET['id'] ?? $_POST['vehicle_id'] ?? 0);
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $action = $_POST['action'] ?? '';
+
+    if (in_array($action, ['pin', 'unpin'], true) && verifyCSRFToken($_POST['csrf_token'] ?? '')) {
+        if ($action === 'pin') {
+            $pdo->prepare("UPDATE vehicles SET is_pinned = 1, pinned_at = NOW() WHERE id = ? AND user_id = ?")->execute([$vehicleId, $userId]);
+            setFlashMessage('success', 'Vehicle pinned to your dashboard.');
+        } else {
+            $pdo->prepare("UPDATE vehicles SET is_pinned = 0, pinned_at = NULL WHERE id = ? AND user_id = ?")->execute([$vehicleId, $userId]);
+            setFlashMessage('success', 'Vehicle unpinned from your dashboard.');
+        }
+    }
+
+    redirect('vehicle-details?id=' . $vehicleId);
+}
+
 $pageTitle = 'Vehicle Details';
 require_once 'includes/header.php';
-
-$vehicleId = (int)($_GET['id'] ?? 0);
 
 if (!$vehicleId) {
     setFlashMessage('danger', 'Invalid vehicle.');
@@ -104,6 +125,14 @@ $avgCostPerService = $stats['total_services'] > 0 ? $stats['total_spent'] / $sta
                 </div>
             </div>
             <div class="col-md-auto mt-4 mt-md-0">
+                <form method="POST" class="d-inline">
+                    <?php echo csrfField(); ?>
+                    <input type="hidden" name="action" value="<?php echo $vehicle['is_pinned'] ? 'unpin' : 'pin'; ?>">
+                    <input type="hidden" name="vehicle_id" value="<?php echo $vehicleId; ?>">
+                    <button type="submit" class="btn btn-sm <?php echo $vehicle['is_pinned'] ? 'btn-warning' : 'btn-outline-warning'; ?>">
+                        <i class="fas fa-thumbtack"></i> <?php echo $vehicle['is_pinned'] ? 'Unpin' : 'Pin to Dashboard'; ?>
+                    </button>
+                </form>
                 <a href="edit-vehicle?id=<?php echo $vehicleId; ?>" class="btn btn-sm btn-outline-primary">
                     <i class="fas fa-edit"></i> Edit
                 </a>

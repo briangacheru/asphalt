@@ -4,6 +4,19 @@ require_once __DIR__ . '/bootstrap.php';
 \App\Middleware\AuthMiddleware::check();
 $pdo = \App\Database\Database::getInstance()->getConnection();
 
+// One-time schema migration: add pin-to-dashboard support to vehicles table
+$pinMigrationFlag = __DIR__ . '/../uploads/.pinned_migration_done';
+if (!file_exists($pinMigrationFlag)) {
+    try {
+        $pdo->exec("ALTER TABLE vehicles
+            ADD COLUMN IF NOT EXISTS is_pinned TINYINT(1) NOT NULL DEFAULT 0,
+            ADD COLUMN IF NOT EXISTS pinned_at DATETIME NULL");
+    } catch (PDOException $e) {
+        error_log('Vehicle pin migration failed: ' . $e->getMessage());
+    }
+    @touch($pinMigrationFlag);
+}
+
 $currentUser = getCurrentUser();
 $userId = \App\Middleware\AuthMiddleware::getCurrentUserId();
 

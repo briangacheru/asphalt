@@ -2,41 +2,6 @@
 $pageTitle = 'Dashboard';
 require_once 'includes/header.php';
 
-// Get statistics for current user
-$stats = [];
-
-// Total vehicles
-$stmt = $pdo->prepare("SELECT COUNT(*) as count FROM vehicles WHERE user_id = ? AND is_active = 1");
-$stmt->execute([$userId]);
-$stats['total_vehicles'] = $stmt->fetch()['count'];
-
-// Total services
-$stmt = $pdo->prepare("SELECT COUNT(*) as count FROM service_records sr JOIN vehicles v ON sr.vehicle_id = v.id WHERE v.user_id = ?");
-$stmt->execute([$userId]);
-$stats['total_services'] = $stmt->fetch()['count'];
-
-// Total spent this year
-$stmt = $pdo->prepare("
-    SELECT COALESCE(SUM(sr.service_cost), 0) as total 
-    FROM service_records sr
-    JOIN vehicles v ON sr.vehicle_id = v.id
-    WHERE v.user_id = ? AND YEAR(sr.service_date) = YEAR(CURDATE())
-");
-$stmt->execute([$userId]);
-$stats['spent_this_year'] = $stmt->fetch()['total'];
-
-// Upcoming services (within 1000km)
-$stmt = $pdo->prepare("
-    SELECT COUNT(DISTINCT v.id) as count
-    FROM vehicles v
-    JOIN service_records sr ON v.id = sr.vehicle_id
-    WHERE v.user_id = ? AND v.is_active = 1 
-    AND sr.id = (SELECT MAX(id) FROM service_records WHERE vehicle_id = v.id)
-    AND (sr.next_service_mileage - v.current_mileage) <= 1000
-");
-$stmt->execute([$userId]);
-$stats['upcoming_services'] = $stmt->fetch()['count'];
-
 // Recent services
 $stmt = $pdo->prepare("
     SELECT sr.*, v.make, v.model, v.year
@@ -51,11 +16,11 @@ $recentServices = $stmt->fetchAll();
 
 // Vehicles needing service soon
 $stmt = $pdo->prepare("
-    SELECT v.*, sr.next_service_mileage, 
+    SELECT v.*, sr.next_service_mileage,
            (sr.next_service_mileage - v.current_mileage) as km_remaining
     FROM vehicles v
     JOIN service_records sr ON v.id = sr.vehicle_id
-    WHERE v.user_id = ? AND v.is_active = 1 
+    WHERE v.user_id = ? AND v.is_active = 1
     AND sr.id = (SELECT MAX(id) FROM service_records WHERE vehicle_id = v.id)
     AND (sr.next_service_mileage - v.current_mileage) <= 2000
     ORDER BY km_remaining ASC
@@ -66,15 +31,47 @@ $vehiclesNeedingService = $stmt->fetchAll();
 
 // All active vehicles for current user
 $stmt = $pdo->prepare("
-    SELECT v.*, 
+    SELECT v.*,
            (SELECT service_date FROM service_records WHERE vehicle_id = v.id ORDER BY service_date DESC LIMIT 1) as last_service,
-           (SELECT next_service_mileage FROM service_records WHERE vehicle_id = v.id ORDER BY service_date DESC LIMIT 1) as next_service
-    FROM vehicles v 
-    WHERE v.user_id = ? AND v.is_active = 1 
+           (SELECT next_service_mileage FROM service_records WHERE vehicle_id = v.id ORDER BY service_date DESC LIMIT 1) as next_service,
+           (SELECT fill_date FROM fuel_log WHERE vehicle_id = v.id ORDER BY fill_date DESC LIMIT 1) as last_fuel_date,
+           (SELECT mileage FROM fuel_log WHERE vehicle_id = v.id ORDER BY fill_date DESC LIMIT 1) as last_fuel_mileage
+    FROM vehicles v
+    WHERE v.user_id = ? AND v.is_active = 1
     ORDER BY v.make, v.model
 ");
 $stmt->execute([$userId]);
 $vehicles = $stmt->fetchAll();
+
+$pinnedVehicles = array_values(array_filter($vehicles, fn($v) => (int)$v['is_pinned'] === 1));
+
+// Most urgent maintenance schedule item per pinned vehicle
+$vehicleMaintenanceAlert = [];
+foreach ($pinnedVehicles as $v) {
+    $items = $pdo->prepare("SELECT * FROM maintenance_schedule WHERE vehicle_id = ?");
+    $items->execute([$v['id']]);
+    $best = null;
+    foreach ($items->fetchAll() as $item) {
+        $kmOverdue = $item['next_due_mileage'] ? $v['current_mileage'] - $item['next_due_mileage'] : null;
+        $dateOverdue = $item['next_due_date'] ? (strtotime($item['next_due_date']) < time()) : false;
+
+        if ($kmOverdue !== null && $kmOverdue > 0) {
+            $item['status'] = 'overdue';
+            $item['urgency'] = $kmOverdue;
+        } elseif ($dateOverdue) {
+            $item['status'] = 'overdue';
+            $item['urgency'] = PHP_INT_MAX;
+        } else {
+            $item['status'] = 'ok';
+            $item['urgency'] = $kmOverdue !== null ? $kmOverdue : -PHP_INT_MAX;
+        }
+
+        if ($best === null || $item['urgency'] > $best['urgency']) {
+            $best = $item;
+        }
+    }
+    $vehicleMaintenanceAlert[$v['id']] = $best;
+}
 ?>
 
     <?php
@@ -117,56 +114,85 @@ $vehicles = $stmt->fetchAll();
 </div>
 
 <div class="row g-3 mb-3">
-    <div class="col-sm-6 col-md-6 col-lg-3 col-xxl-3">
-        <div class="card overflow-hidden" style="min-width: 12rem">
-            <div class="bg-holder bg-card" style="background-image:url(assets/img/icons/spot-illustrations/corner-1.png);">
-            </div>
-            <!--/.bg-holder-->
-            <div class="card-body position-relative">
-                <h6>Total Vehicles</h6>
-                <div class="display-4 fs-5 mb-2 fw-normal font-sans-serif text-80" ><?php echo $stats['total_vehicles']; ?></div><a class="fw-semi-bold fs-10 text-nowrap stretched-link" href="vehicles">See all</a>
-            </div>
-        </div>
-    </div>
-    <div class="col-sm-6 col-md-6 col-lg-3 col-xxl-3">
-        <div class="card overflow-hidden" style="min-width: 12rem">
-            <div class="bg-holder bg-card" style="background-image:url(assets/img/icons/spot-illustrations/corner-2.png);">
-            </div>
-            <!--/.bg-holder-->
-            <div class="card-body position-relative">
-                <h6>Total Services</h6>
-                <div class="display-4 fs-5 mb-2 fw-normal font-sans-serif text-800" ><?php echo $stats['total_services']; ?></div><a class="fw-semi-bold fs-10 text-nowrap stretched-link" href="service-history">See all</a>
-            </div>
-        </div>
-    </div>
-    <div class="col-sm-6 col-md-6 col-lg-3 col-xxl-3">
-        <div class="card overflow-hidden" style="min-width: 12rem">
-            <div class="bg-holder bg-card" style="background-image:url(assets/img/icons/spot-illustrations/corner-3.png);">
-            </div>
-            <!--/.bg-holder-->
-            <div class="card-body position-relative">
-                <h6>Spent This Year</h6>
-                <div class="display-4 fs-5 mb-2 fw-normal font-sans-serif text-800" >Ksh. <?php echo formatNumber($stats['spent_this_year']); ?></div><a class="fw-semi-bold fs-10 text-nowrap stretched-link" href="service-history">See all</a>
-            </div>
-        </div>
-    </div>
-    <div class="col-sm-6 col-md-6 col-lg-3 col-xxl-3">
-        <div class="card overflow-hidden" style="min-width: 12rem">
-            <div class="bg-holder bg-card" style="background-image:url(assets/img/icons/spot-illustrations/corner-4.png);">
-            </div>
-            <!--/.bg-holder-->
-            <div class="card-body position-relative">
-                <h6>Services Due Soon
-                <?php if ($stats['upcoming_services'] > 0): ?>
-                    <span class="badge badge-subtle-danger rounded-pill ms-2" data-bs-toggle="tooltip" data-bs-placement="top" aria-label="Needs attention" data-bs-original-title="Needs attention"><span class="fas fa-bell" data-fa-transform="shrink-1"></span></span>
-                <?php endif; ?>
-                </h6>
-                <div class="display-4 fs-5 mb-2 fw-normal font-sans-serif text-800" ><?php echo $stats['upcoming_services']; ?>
+    <?php if (empty($pinnedVehicles)): ?>
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body text-center py-4">
+                    <i class="fas fa-thumbtack fs-3 text-300 mb-2"></i>
+                    <h6 class="fs-9 mb-1">No pinned vehicle</h6>
+                    <p class="fs-10 mb-3 text-600">Pin a vehicle from the Vehicles page to feature it here.</p>
+                    <a href="vehicles" class="btn btn-sm btn-outline-primary">
+                        <i class="fas fa-thumbtack"></i> Go to Vehicles
+                    </a>
                 </div>
-                <a class="fw-semi-bold fs-10 text-nowrap stretched-link" href="service-reminders">See all</a>
             </div>
         </div>
-    </div>
+    <?php else: ?>
+        <?php foreach ($pinnedVehicles as $vehicle): ?>
+            <?php $alert = $vehicleMaintenanceAlert[$vehicle['id']] ?? null; ?>
+            <div class="col-lg-6">
+                <div class="card h-100 overflow-hidden border-warning border-2">
+                    <div class="row g-0">
+                        <div class="col-sm-5">
+                            <?php if ($vehicle['image_path'] && file_exists(UPLOAD_DIR . $vehicle['image_path'])): ?>
+                                <img class="card-img-top h-100" src="uploads/<?php echo $vehicle['image_path']; ?>" alt="<?php echo sanitize($vehicle['make'] . ' ' . $vehicle['model']); ?>" style="min-height: 180px; object-fit: cover;">
+                            <?php else: ?>
+                                <div class="bg-light d-flex align-items-center justify-content-center h-100" style="min-height: 180px;">
+                                    <i class="fas fa-car fs-1 text-muted"></i>
+                                </div>
+                            <?php endif; ?>
+                        </div>
+                        <div class="col-sm-7">
+                            <div class="card-body">
+                                <h5 class="card-title mb-0"><?php echo sanitize($vehicle['make'] . ' ' . $vehicle['model']); ?></h5>
+                                <p class="fs-10 mb-2 text-600">
+                                    <?php echo $vehicle['year']; ?>
+                                    <?php if ($vehicle['license_plate']): ?>
+                                        &bull; <?php echo sanitize($vehicle['license_plate']); ?>
+                                    <?php endif; ?>
+                                </p>
+
+                                <ul class="list-unstyled mb-0 fs-10">
+                                    <li class="d-flex justify-content-between border-bottom py-1">
+                                        <span class="text-600">Mileage</span>
+                                        <strong><?php echo formatNumber($vehicle['current_mileage']); ?> km</strong>
+                                    </li>
+                                    <li class="d-flex justify-content-between border-bottom py-1">
+                                        <span class="text-600">Last Fuel Fill</span>
+                                        <strong>
+                                            <?php echo $vehicle['last_fuel_date'] ? date('M d, Y', strtotime($vehicle['last_fuel_date'])) : 'No fuel logs'; ?>
+                                        </strong>
+                                    </li>
+                                    <?php if ($vehicle['next_service']): ?>
+                                        <?php $kmRemaining = $vehicle['next_service'] - $vehicle['current_mileage']; ?>
+                                        <li class="d-flex justify-content-between border-bottom py-1">
+                                            <span class="text-600">Next Service</span>
+                                            <strong class="<?php echo $kmRemaining <= 0 ? 'text-danger' : ($kmRemaining <= 1000 ? 'text-warning' : ''); ?>">
+                                                <?php echo $kmRemaining <= 0 ? formatNumber(abs($kmRemaining)) . ' km overdue' : formatNumber($kmRemaining) . ' km left'; ?>
+                                            </strong>
+                                        </li>
+                                    <?php endif; ?>
+                                    <?php if ($alert): ?>
+                                        <li class="d-flex justify-content-between py-1">
+                                            <span class="text-600">Maintenance</span>
+                                            <strong class="<?php echo $alert['status'] === 'overdue' ? 'text-danger' : 'text-success'; ?>">
+                                                <?php echo sanitize($alert['item_type']); ?>
+                                                <?php echo $alert['status'] === 'overdue' ? ' due' : ' ok'; ?>
+                                            </strong>
+                                        </li>
+                                    <?php endif; ?>
+                                </ul>
+
+                                <a href="vehicle-details?id=<?php echo $vehicle['id']; ?>" class="btn btn-sm btn-outline-primary mt-2 fs-10">
+                                    <i class="fas fa-eye"></i> View Details
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        <?php endforeach; ?>
+    <?php endif; ?>
 </div>
 
 <div class="row g-0">

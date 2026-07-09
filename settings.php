@@ -555,6 +555,7 @@ foreach ($emailStatsRaw as $stat) {
                                     <label class="form-label">Currency</label>
                                     <select name="default_currency" class="form-select">
                                         <option value="USD" <?php echo ($user['default_currency'] ?? 'USD') === 'USD' ? 'selected' : ''; ?>>USD ($)</option>
+                                        <option value="KES" <?php echo ($user['default_currency'] ?? '') === 'KES' ? 'selected' : ''; ?>>KES (Ksh.)</option>
                                         <option value="EUR" <?php echo ($user['default_currency'] ?? '') === 'EUR' ? 'selected' : ''; ?>>EUR (€)</option>
                                         <option value="GBP" <?php echo ($user['default_currency'] ?? '') === 'GBP' ? 'selected' : ''; ?>>GBP (£)</option>
                                         <option value="CAD" <?php echo ($user['default_currency'] ?? '') === 'CAD' ? 'selected' : ''; ?>>CAD ($)</option>
@@ -582,6 +583,7 @@ foreach ($emailStatsRaw as $stat) {
                                     <label class="form-label">Timezone</label>
                                     <select name="timezone" class="form-select">
                                         <option value="UTC" <?php echo ($user['timezone'] ?? 'UTC') === 'UTC' ? 'selected' : ''; ?>>UTC</option>
+                                        <option value="Africa/Nairobi" <?php echo ($user['timezone'] ?? '') === 'Africa/Nairobi' ? 'selected' : ''; ?>>Nairobi</option>
                                         <option value="America/New_York" <?php echo ($user['timezone'] ?? '') === 'America/New_York' ? 'selected' : ''; ?>>Eastern Time (US)</option>
                                         <option value="America/Chicago" <?php echo ($user['timezone'] ?? '') === 'America/Chicago' ? 'selected' : ''; ?>>Central Time (US)</option>
                                         <option value="America/Denver" <?php echo ($user['timezone'] ?? '') === 'America/Denver' ? 'selected' : ''; ?>>Mountain Time (US)</option>
