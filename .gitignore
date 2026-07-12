@@ -1,4 +1,3 @@
-```php
 # Compiled and build artifacts
 *.pyc
 *.o
@@ -71,4 +70,3 @@ htmlcov/
 *.tar.bz2
 *.tar.xz
 *.tar.zst
-```

@@ -18,57 +18,71 @@ $email = '';
 
 // Handle login form submission
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $email = sanitize($_POST['email'] ?? '');
-    $password = $_POST['password'] ?? '';
-    $remember = isset($_POST['remember']);
-    
-    // Validation
-    if (empty($email)) {
-        $errors[] = 'Email is required';
-    }
-    if (empty($password)) {
-        $errors[] = 'Password is required';
-    }
-    
-    if (empty($errors)) {
-        // Find user
-        $stmt = $pdo->prepare("SELECT * FROM users WHERE email = ? AND is_active = 1");
-        $stmt->execute([$email]);
-        $user = $stmt->fetch();
+    // Verify CSRF token
+    if (!verifyCSRFToken($_POST['csrf_token'] ?? null)) {
+        $errors[] = 'Invalid security token. Please try again.';
+    } else {
+        $email = sanitize($_POST['email'] ?? '');
+        $password = $_POST['password'] ?? '';
+        $remember = isset($_POST['remember']);
         
-        if ($user && verifyPassword($password, $user['password'])) {
-            // Check if verified
-            if (!$user['is_verified']) {
-                $errors[] = 'Please verify your email address first. <a href="resend-verification?email=' . urlencode($email) . '">Resend verification email</a>';
-            } else {
-                // Login successful
-                $_SESSION['user_id'] = $user['id'];
-                $_SESSION['user_email'] = $user['email'];
-                $_SESSION['user_name'] = $user['first_name'];
-                
-                // Update last login
-                $pdo->prepare("UPDATE users SET last_login = NOW() WHERE id = ?")->execute([$user['id']]);
-                
-                // Handle remember me
-                if ($remember) {
-                    $token = generateToken();
-                    $expires = date('Y-m-d H:i:s', time() + REMEMBER_ME_EXPIRY);
+        // Validation
+        if (empty($email)) {
+            $errors[] = 'Email is required';
+        }
+        if (empty($password)) {
+            $errors[] = 'Password is required';
+        }
+        
+        if (empty($errors)) {
+            // Find user
+            $stmt = $pdo->prepare("SELECT * FROM users WHERE email = ? AND is_active = 1");
+            $stmt->execute([$email]);
+            $user = $stmt->fetch();
+            
+            if ($user && verifyPassword($password, $user['password'])) {
+                // Check if verified
+                if (!$user['is_verified']) {
+                    $errors[] = 'Please verify your email address first. <a href="resend-verification?email=' . urlencode($email) . '">Resend verification email</a>';
+                } else {
+                    // Login successful - regenerate session ID to prevent session fixation
+                    session_regenerate_id(true);
                     
-                    $pdo->prepare("INSERT INTO remember_tokens (user_id, token, expires_at) VALUES (?, ?, ?)")
-                        ->execute([$user['id'], $token, $expires]);
+                    $_SESSION['user_id'] = $user['id'];
+                    $_SESSION['user_email'] = $user['email'];
+                    $_SESSION['user_name'] = $user['first_name'];
                     
-                    setcookie('remember_token', $token, time() + REMEMBER_ME_EXPIRY, '/', '', false, true);
+                    // Update last login
+                    $pdo->prepare("UPDATE users SET last_login = NOW() WHERE id = ?")->execute([$user['id']]);
+                    
+                    // Handle remember me with secure cookie
+                    if ($remember) {
+                        $token = generateToken();
+                        $expires = date('Y-m-d H:i:s', time() + REMEMBER_ME_EXPIRY);
+                        
+                        $pdo->prepare("INSERT INTO remember_tokens (user_id, token, expires_at) VALUES (?, ?, ?)")
+                            ->execute([$user['id'], $token, $expires]);
+                        
+                        setcookie('remember_token', $token, [
+                            'expires' => time() + REMEMBER_ME_EXPIRY,
+                            'path' => '/',
+                            'domain' => '',
+                            'secure' => true,
+                            'httponly' => true,
+                            'samesite' => 'Strict'
+                        ]);
+                    }
+                    
+                    // Redirect
+                    $redirectTo = $_SESSION['redirect_after_login'] ?? APP_URL . '/';
+                    unset($_SESSION['redirect_after_login']);
+                    
+                    setFlashMessage('success', 'Welcome back, ' . $user['first_name'] . '!');
+                    redirect($redirectTo);
                 }
-                
-                // Redirect
-                $redirectTo = $_SESSION['redirect_after_login'] ?? APP_URL . '/';
-                unset($_SESSION['redirect_after_login']);
-                
-                setFlashMessage('success', 'Welcome back, ' . $user['first_name'] . '!');
-                redirect($redirectTo);
+            } else {
+                $errors[] = 'Invalid email or password';
             }
-        } else {
-            $errors[] = 'Invalid email or password';
         }
     }
 }
@@ -203,6 +217,7 @@ if (!isLoggedIn() && isset($_COOKIE['remember_token'])) {
                     </div>
                     <?php endif; ?>
                     <form method="POST" action="">
+                      <?php echo csrfField(); ?>
                       <div class="mb-3">
                         <label class="form-label" for="split-login-email">Email address</label>
                         <input class="form-control" id="split-login-email" type="email" name="email" value="<?php echo $email; ?>" placeholder="you@example.com" required autofocus />
