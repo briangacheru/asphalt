@@ -98,6 +98,23 @@ if ($vehicle['purchase_date']) {
     $avgKmPerMonth = $stats['total_km_driven'] / $monthsOwned;
 }
 $avgCostPerService = $stats['total_services'] > 0 ? $stats['total_spent'] / $stats['total_services'] : 0;
+
+// Get recent fuel logs
+$stmt = $pdo->prepare("SELECT * FROM fuel_log WHERE vehicle_id = ? ORDER BY fill_date DESC, id DESC LIMIT 5");
+$stmt->execute([$vehicleId]);
+$recentFuelLogs = $stmt->fetchAll();
+
+// Get recent expenses
+$stmt = $pdo->prepare("
+    SELECT e.*, ec.name as category_name, ec.icon as category_icon
+    FROM expenses e
+    JOIN expense_categories ec ON e.category_id = ec.id
+    WHERE e.vehicle_id = ?
+    ORDER BY e.expense_date DESC, e.id DESC
+    LIMIT 5
+");
+$stmt->execute([$vehicleId]);
+$recentExpenses = $stmt->fetchAll();
 ?>
 
 <div class="card mb-3">
@@ -579,6 +596,108 @@ if ($flash): ?>
                                 </div>
                             </div>
                         <?php endforeach; ?>
+                    </div>
+                <?php endif; ?>
+            </div>
+        </div>
+
+        <!-- Recent Fuel Logs -->
+        <div class="card mt-3">
+            <div class="card-header bg-body-tertiary">
+                <div class="row align-items-center">
+                    <div class="col">
+                        <h6 class="mb-0"><i class="fas fa-gas-pump"></i> Recent Fuel Logs</h6>
+                    </div>
+                    <div class="col-auto text-center pe-x1">
+                        <a href="fuel-log?vehicle_id=<?php echo $vehicleId; ?>" class="btn btn-sm btn-outline-primary"><i class="fas fa-eye"></i> View All</a>
+                    </div>
+                </div>
+            </div>
+            <div class="card-body p-0">
+                <?php if (empty($recentFuelLogs)): ?>
+                    <div class="empty-state text-center py-4">
+                        <i class="fas fa-gas-pump empty-state-icon fs-3 text-300 mb-3"></i>
+                        <h6 class="fs-9 mb-1">No fuel records yet!</h6>
+                        <p class="fs-10 mb-3">Record your first fueling to get started.</p>
+                        <a href="fuel-log?vehicle_id=<?php echo $vehicleId; ?>" class="btn btn-primary btn-sm">
+                            <i class="fas fa-plus"></i> Add Fuel Record
+                        </a>
+                    </div>
+                <?php else: ?>
+                    <div class="table-responsive">
+                        <table class="table table-responsive-sm mb-0 fs-10">
+                            <thead class="bg-200">
+                            <tr>
+                                <th class="text-900">Date</th>
+                                <th class="text-900">Mileage</th>
+                                <th class="text-900">Liters</th>
+                                <th class="text-900">Price/L</th>
+                                <th class="text-900">Total</th>
+                                <th class="text-900">Station</th>
+                            </tr>
+                            </thead>
+                            <tbody>
+                            <?php foreach ($recentFuelLogs as $f): ?>
+                                <tr>
+                                    <td><?php echo formatDate($f['fill_date']); ?></td>
+                                    <td><?php echo formatNumber($f['mileage']); ?> km</td>
+                                    <td><?php echo number_format($f['liters'], 2); ?> L</td>
+                                    <td>Ksh. <?php echo number_format($f['price_per_liter'], 2); ?></td>
+                                    <td><strong>Ksh. <?php echo number_format($f['total_cost'], 2); ?></strong></td>
+                                    <td><?php echo $f['station_name'] ? sanitize($f['station_name']) : '-'; ?></td>
+                                </tr>
+                            <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                <?php endif; ?>
+            </div>
+        </div>
+
+        <!-- Recent Expenses -->
+        <div class="card mt-3">
+            <div class="card-header bg-body-tertiary">
+                <div class="row align-items-center">
+                    <div class="col">
+                        <h6 class="mb-0"><i class="fas fa-receipt"></i> Recent Expenses</h6>
+                    </div>
+                    <div class="col-auto text-center pe-x1">
+                        <a href="expenses?vehicle_id=<?php echo $vehicleId; ?>" class="btn btn-sm btn-outline-primary"><i class="fas fa-eye"></i> View All</a>
+                    </div>
+                </div>
+            </div>
+            <div class="card-body p-0">
+                <?php if (empty($recentExpenses)): ?>
+                    <div class="empty-state text-center py-4">
+                        <i class="fas fa-receipt empty-state-icon fs-3 text-300 mb-3"></i>
+                        <h6 class="fs-9 mb-1">No expenses yet!</h6>
+                        <p class="fs-10 mb-3">Record your first expense to get started.</p>
+                        <a href="expenses?vehicle_id=<?php echo $vehicleId; ?>" class="btn btn-primary btn-sm">
+                            <i class="fas fa-plus"></i> Add Expense
+                        </a>
+                    </div>
+                <?php else: ?>
+                    <div class="table-responsive">
+                        <table class="table table-responsive-sm mb-0 fs-10">
+                            <thead class="bg-200">
+                            <tr>
+                                <th class="text-900">Date</th>
+                                <th class="text-900">Category</th>
+                                <th class="text-900">Description</th>
+                                <th class="text-900">Amount</th>
+                            </tr>
+                            </thead>
+                            <tbody>
+                            <?php foreach ($recentExpenses as $e): ?>
+                                <tr>
+                                    <td><?php echo formatDate($e['expense_date']); ?></td>
+                                    <td><i class="fas <?php echo $e['category_icon'] ? htmlspecialchars($e['category_icon']) : 'fa-tag'; ?> me-1 text-primary"></i><?php echo sanitize($e['category_name']); ?></td>
+                                    <td><?php echo $e['description'] ? sanitize($e['description']) : '-'; ?></td>
+                                    <td><strong>Ksh. <?php echo number_format($e['amount'], 2); ?></strong></td>
+                                </tr>
+                            <?php endforeach; ?>
+                            </tbody>
+                        </table>
                     </div>
                 <?php endif; ?>
             </div>
