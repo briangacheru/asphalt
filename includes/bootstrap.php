@@ -6,6 +6,9 @@
 
 // Start session if not already started
 if (session_status() === PHP_SESSION_NONE) {
+    $sessionLifetime = 7 * 24 * 3600; // 7 days
+    ini_set('session.gc_maxlifetime', (string) $sessionLifetime);
+    session_set_cookie_params($sessionLifetime);
     session_start();
 }
 
