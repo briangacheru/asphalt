@@ -13,6 +13,7 @@ if (!class_exists('PHPMailer\PHPMailer\PHPMailer')) {
 use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\SMTP;
 use PHPMailer\PHPMailer\Exception;
+use App\Helpers\IdCodec;
 
 /**
  * Email service for handling all email communications
@@ -264,7 +265,7 @@ class EmailService
             <p style="margin: 0 0 20px; line-height: 1.6;">Record what was changed during this service (oil filter, cabin filter, brake pads, etc.) along with brands and costs.</p>
             
             <p style="margin: 30px 0; text-align: center;">
-                <a href="%s/service-items?vehicle_id=%d" style="display: inline-block; padding: 14px 32px; background: #ffffff; color: #000000; text-decoration: none; border-radius: 8px; font-weight: 600;">Add Service Items</a>
+                <a href="%s/service-items?vehicle_id=%s" style="display: inline-block; padding: 14px 32px; background: #ffffff; color: #000000; text-decoration: none; border-radius: 8px; font-weight: 600;">Add Service Items</a>
             </p>
         ',
             htmlspecialchars($data['first_name']),
@@ -273,7 +274,7 @@ class EmailService
             number_format($data['mileage']),
             number_format($data['next_service_mileage']),
             APP_URL,
-            $vehicleId
+            IdCodec::encode($vehicleId)
         );
 
         $subject = "Service Recorded: $vehicleName - Add Details";
@@ -339,7 +340,7 @@ class EmailService
             <p style="margin: 20px 0; line-height: 1.6;">Please update your mileage and let us know if anything has changed:</p>
             
             <p style="margin: 30px 0; text-align: center;">
-                <a href="%s/update-mileage?vehicle_id=%d" style="display: inline-block; padding: 14px 32px; background: #ffffff; color: #000000; text-decoration: none; border-radius: 8px; font-weight: 600;">Update Mileage</a>
+                <a href="%s/update-mileage?vehicle_id=%s" style="display: inline-block; padding: 14px 32px; background: #ffffff; color: #000000; text-decoration: none; border-radius: 8px; font-weight: 600;">Update Mileage</a>
             </p>
         ',
             htmlspecialchars($data['first_name']),
@@ -351,7 +352,7 @@ class EmailService
                 number_format($data['next_service'])
             ) : '',
             APP_URL,
-            $vehicleId
+            IdCodec::encode($vehicleId)
         );
 
         $subject = "Monthly Check-in: $vehicleName";
@@ -425,7 +426,7 @@ class EmailService
             <p style="margin: 20px 0; line-height: 1.6;">Regular maintenance helps keep your vehicle running smoothly and prevents costly repairs down the road.</p>
             
             <p style="margin: 30px 0; text-align: center;">
-                <a href="%s/update-mileage?vehicle_id=%d" style="display: inline-block; padding: 14px 32px; background: #ffffff; color: #000000; text-decoration: none; border-radius: 8px; font-weight: 600;">Update Mileage</a>
+                <a href="%s/update-mileage?vehicle_id=%s" style="display: inline-block; padding: 14px 32px; background: #ffffff; color: #000000; text-decoration: none; border-radius: 8px; font-weight: 600;">Update Mileage</a>
             </p>
         ',
             htmlspecialchars($data['first_name']),
@@ -437,7 +438,7 @@ class EmailService
             $kmRemaining <= 500 ? '#ff3b30' : '#ff9500',
             number_format($kmRemaining),
             APP_URL,
-            $vehicleId
+            IdCodec::encode($vehicleId)
         );
 
         $subject = $subjectPrefix . "Service Reminder: $vehicleName";
@@ -492,7 +493,7 @@ class EmailService
             <p style="margin: 20px 0; line-height: 1.6;">Consider taking your vehicle for a drive or scheduling a maintenance check.</p>
             
             <p style="margin: 30px 0; text-align: center;">
-                <a href="%s/vehicle-details?id=%d" style="display: inline-block; padding: 14px 32px; background: #ffffff; color: #000000; text-decoration: none; border-radius: 8px; font-weight: 600;">View Vehicle Details</a>
+                <a href="%s/vehicle-details?id=%s" style="display: inline-block; padding: 14px 32px; background: #ffffff; color: #000000; text-decoration: none; border-radius: 8px; font-weight: 600;">View Vehicle Details</a>
             </p>
         ',
             htmlspecialchars($data['first_name']),
@@ -500,7 +501,7 @@ class EmailService
             round($daysSinceService),
             number_format($kmDriven),
             APP_URL,
-            $vehicleId
+            IdCodec::encode($vehicleId)
         );
 
         $subject = "Low Mileage Alert: $vehicleName";
@@ -573,7 +574,7 @@ class EmailService
             </div>
 
             <p style="margin: 30px 0; text-align: center;">
-                <a href="%s/maintenance-schedule?vehicle_id=%d" style="display: inline-block; padding: 14px 32px; background: #ffffff; color: #000000; text-decoration: none; border-radius: 8px; font-weight: 600;">View Maintenance Schedule</a>
+                <a href="%s/maintenance-schedule?vehicle_id=%s" style="display: inline-block; padding: 14px 32px; background: #ffffff; color: #000000; text-decoration: none; border-radius: 8px; font-weight: 600;">View Maintenance Schedule</a>
             </p>
         ',
             htmlspecialchars($data['first_name']),
@@ -581,7 +582,7 @@ class EmailService
             $bannerHtml,
             $rows,
             APP_URL,
-            $vehicleId
+            IdCodec::encode($vehicleId)
         );
 
         $subjectPrefix = $hasOverdue ? 'OVERDUE: ' : 'Due Soon: ';

@@ -4,16 +4,18 @@ require_once 'includes/bootstrap.php';
 use App\Database\Database;
 use App\Models\Vehicle;
 use App\Services\EmailService;
+use App\Helpers\IdCodec;
 
 $pdo = Database::getInstance()->getConnection();
 $userId = getCurrentUserId();
 
-// Get all active vehicles
-$vehiclesStmt = $pdo->query("SELECT id, make, model, year, license_plate, current_mileage FROM vehicles WHERE is_active = 1 ORDER BY make, model");
+// Get all active vehicles belonging to the current user
+$vehiclesStmt = $pdo->prepare("SELECT id, make, model, year, license_plate, current_mileage FROM vehicles WHERE is_active = 1 AND user_id = ? ORDER BY make, model");
+$vehiclesStmt->execute([$userId]);
 $vehicles = $vehiclesStmt->fetchAll();
 
 // Pre-selected vehicle
-$selectedVehicleId = $_GET['vehicle_id'] ?? null;
+$selectedVehicleId = IdCodec::decode($_GET['vehicle_id'] ?? null);
 $selectedVehicle = null;
 if ($selectedVehicleId) {
     foreach ($vehicles as $v) {
@@ -45,12 +47,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!$mileage || $mileage < 0) $errors[] = 'Please enter a valid mileage';
     if (!in_array($oil_interval, $oilIntervals)) $errors[] = 'Please select a valid oil interval';
 
-    // Validate mileage against current
+    // Validate the vehicle belongs to the current user, and mileage against current
+    $vehicleData = null;
     if ($vehicle_id) {
-        $stmt = $pdo->prepare("SELECT current_mileage FROM vehicles WHERE id = ?");
-        $stmt->execute([$vehicle_id]);
+        $stmt = $pdo->prepare("SELECT current_mileage FROM vehicles WHERE id = ? AND user_id = ?");
+        $stmt->execute([$vehicle_id, $userId]);
         $vehicleData = $stmt->fetch();
-        if ($vehicleData && $mileage < $vehicleData['current_mileage']) {
+        if (!$vehicleData) {
+            $errors[] = 'Vehicle not found';
+        } elseif ($mileage < $vehicleData['current_mileage']) {
             $errors[] = 'Mileage cannot be less than current mileage (' . formatNumber($vehicleData['current_mileage']) . ' km)';
         }
     }
@@ -101,8 +106,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $serviceRecordId = $pdo->lastInsertId();
 
             // Update vehicle's current mileage
-            $stmt = $pdo->prepare("UPDATE vehicles SET current_mileage = ? WHERE id = ?");
-            $stmt->execute([$mileage, $vehicle_id]);
+            $stmt = $pdo->prepare("UPDATE vehicles SET current_mileage = ? WHERE id = ? AND user_id = ?");
+            $stmt->execute([$mileage, $vehicle_id, $userId]);
 
             // Log mileage
             $stmt = $pdo->prepare("
@@ -116,7 +121,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $emailService->sendServiceDetailsEmail($serviceRecordId);
 
             setFlashMessage('success', 'Service record added successfully! Check your email for a reminder to add service item details.');
-            redirect('service-items?service_id=' . $serviceRecordId);
+            redirect('service-items?service_id=' . IdCodec::encode($serviceRecordId));
 
         } catch (PDOException $e) {
             $errors[] = 'Database error: ' . $e->getMessage();

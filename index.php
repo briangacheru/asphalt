@@ -2,6 +2,8 @@
 $pageTitle = 'Dashboard';
 require_once 'includes/header.php';
 
+use App\Helpers\IdCodec;
+
 // Recent services
 $stmt = $pdo->prepare("
     SELECT sr.*, v.make, v.model, v.year
@@ -183,7 +185,7 @@ foreach ($pinnedVehicles as $v) {
                                     <?php endif; ?>
                                 </ul>
 
-                                <a href="vehicle-details?id=<?php echo $vehicle['id']; ?>" class="btn btn-sm btn-outline-primary mt-2 fs-10">
+                                <a href="vehicle-details?id=<?php echo IdCodec::encode($vehicle['id']); ?>" class="btn btn-sm btn-outline-primary mt-2 fs-10">
                                     <i class="fas fa-eye"></i> View Details
                                 </a>
                             </div>
@@ -443,7 +445,7 @@ foreach ($pinnedVehicles as $v) {
                                         </div>
                                     </div>
 
-                                    <a class="stretched-link" href="vehicle-details?id=<?php echo $vehicle['id']; ?>"></a>
+                                    <a class="stretched-link" href="vehicle-details?id=<?php echo IdCodec::encode($vehicle['id']); ?>"></a>
                                 </div>
                             </div>
                         <?php endforeach; ?>

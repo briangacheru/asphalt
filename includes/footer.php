@@ -119,6 +119,7 @@
     <script src="vendors/flatpickr/flatpickr.min.js"></script>
     <script src="vendors/tinymce/tinymce.min.js"></script>
     <script src="vendors/dropzone/dropzone-min.js"></script>
+    <script src="vendors/glightbox/glightbox.min.js"></script>
     <?php if (isset($extraScripts)) echo $extraScripts; ?>
 
   </body>

@@ -3,19 +3,21 @@ $pageTitle = 'Update Mileage';
 require_once 'includes/header.php';
 use App\Database\Database;
 use App\Services\EmailService;
+use App\Helpers\IdCodec;
 
-// Get all active vehicles
-$vehiclesStmt = $pdo->query("
-    SELECT v.*, 
+// Get all active vehicles belonging to the current user
+$vehiclesStmt = $pdo->prepare("
+    SELECT v.*,
            (SELECT mileage FROM service_records WHERE vehicle_id = v.id ORDER BY service_date DESC LIMIT 1) as last_service_mileage,
            (SELECT next_service_mileage FROM service_records WHERE vehicle_id = v.id ORDER BY service_date DESC LIMIT 1) as next_service
-    FROM vehicles v 
-    WHERE v.is_active = 1 
+    FROM vehicles v
+    WHERE v.is_active = 1 AND v.user_id = ?
     ORDER BY v.make, v.model
 ");
+$vehiclesStmt->execute([$userId]);
 $vehicles = $vehiclesStmt->fetchAll();
 
-$selectedVehicleId = $_GET['vehicle_id'] ?? null;
+$selectedVehicleId = IdCodec::decode($_GET['vehicle_id'] ?? null);
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $vehicle_id = (int)($_POST['vehicle_id'] ?? 0);
@@ -27,8 +29,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!$vehicle_id) {
         $errors[] = 'Please select a vehicle';
     } else {
-        $stmt = $pdo->prepare("SELECT current_mileage FROM vehicles WHERE id = ?");
-        $stmt->execute([$vehicle_id]);
+        $stmt = $pdo->prepare("SELECT current_mileage FROM vehicles WHERE id = ? AND user_id = ?");
+        $stmt->execute([$vehicle_id, $userId]);
         $vehicle = $stmt->fetch();
 
         if (!$vehicle) {
@@ -40,8 +42,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if (empty($errors)) {
         try {
-            $stmt = $pdo->prepare("UPDATE vehicles SET current_mileage = ? WHERE id = ?");
-            $stmt->execute([$new_mileage, $vehicle_id]);
+            $stmt = $pdo->prepare("UPDATE vehicles SET current_mileage = ? WHERE id = ? AND user_id = ?");
+            $stmt->execute([$new_mileage, $vehicle_id, $userId]);
 
             $stmt = $pdo->prepare("INSERT INTO mileage_log (vehicle_id, mileage, log_date, source, notes) VALUES (?, ?, CURDATE(), 'manual', ?)");
             $stmt->execute([$vehicle_id, $new_mileage, $notes]);

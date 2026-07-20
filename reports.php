@@ -2,23 +2,32 @@
 $pageTitle = 'Reports';
 require_once 'includes/header.php';
 
-$vehicles = $pdo->query("SELECT id, make, model, year FROM vehicles WHERE is_active = 1 ORDER BY make, model")->fetchAll();
-$vehicleFilter = $_GET['vehicle_id'] ?? '';
-$yearFilter = $_GET['year'] ?? date('Y');
+use App\Helpers\IdCodec;
+
+$vehiclesStmt = $pdo->prepare("SELECT id, make, model, year FROM vehicles WHERE is_active = 1 AND user_id = ? ORDER BY make, model");
+$vehiclesStmt->execute([$userId]);
+$vehicles = $vehiclesStmt->fetchAll();
+$vehicleFilter = IdCodec::decode($_GET['vehicle_id'] ?? null);
+$yearFilter = (int)($_GET['year'] ?? date('Y'));
 
 $years = range(date('Y'), date('Y') - 5);
 
-$whereVehicle = $vehicleFilter ? "AND vehicle_id = $vehicleFilter" : "";
+// All queries below are scoped to the current user's own vehicles
+$userVehicleIds = "SELECT id FROM vehicles WHERE user_id = " . (int)$userId;
+$whereVehicle = "AND vehicle_id IN ($userVehicleIds)";
+if ($vehicleFilter) {
+    $whereVehicle .= " AND vehicle_id = " . (int)$vehicleFilter;
+}
 
 // Overall Statistics
 $overallStats = $pdo->query("
-    SELECT 
-        (SELECT COUNT(*) FROM vehicles WHERE is_active = 1) as total_vehicles,
-        (SELECT COUNT(*) FROM service_records) as total_services,
-        (SELECT COALESCE(SUM(service_cost), 0) FROM service_records) as total_service_cost,
-        (SELECT COALESCE(SUM(total_cost), 0) FROM fuel_log) as total_fuel_cost,
-        (SELECT COALESCE(SUM(amount), 0) FROM expenses) as total_expenses,
-        (SELECT COALESCE(SUM(liters), 0) FROM fuel_log) as total_fuel
+    SELECT
+        (SELECT COUNT(*) FROM vehicles WHERE is_active = 1 AND user_id = " . (int)$userId . ") as total_vehicles,
+        (SELECT COUNT(*) FROM service_records WHERE vehicle_id IN ($userVehicleIds)) as total_services,
+        (SELECT COALESCE(SUM(service_cost), 0) FROM service_records WHERE vehicle_id IN ($userVehicleIds)) as total_service_cost,
+        (SELECT COALESCE(SUM(total_cost), 0) FROM fuel_log WHERE vehicle_id IN ($userVehicleIds)) as total_fuel_cost,
+        (SELECT COALESCE(SUM(amount), 0) FROM expenses WHERE vehicle_id IN ($userVehicleIds)) as total_expenses,
+        (SELECT COALESCE(SUM(liters), 0) FROM fuel_log WHERE vehicle_id IN ($userVehicleIds)) as total_fuel
 ")->fetch();
 
 // Year Statistics
@@ -75,27 +84,27 @@ $serviceItems = $pdo->query("
 
 // Expense categories
 $expenseCategories = $pdo->query("
-    SELECT 
+    SELECT
         ec.name,
         ec.icon,
         COUNT(e.id) as count,
         COALESCE(SUM(e.amount), 0) as total
     FROM expense_categories ec
-    LEFT JOIN expenses e ON ec.id = e.category_id AND YEAR(e.expense_date) = $yearFilter " . ($vehicleFilter ? "AND e.vehicle_id = $vehicleFilter" : "") . "
+    LEFT JOIN expenses e ON ec.id = e.category_id AND YEAR(e.expense_date) = $yearFilter AND e.vehicle_id IN ($userVehicleIds) " . ($vehicleFilter ? "AND e.vehicle_id = $vehicleFilter" : "") . "
     GROUP BY ec.id
     ORDER BY total DESC
 ")->fetchAll();
 
 // Per vehicle stats
 $vehicleStats = $pdo->query("
-    SELECT 
+    SELECT
         v.id, v.make, v.model, v.year,
         COALESCE((SELECT SUM(service_cost) FROM service_records WHERE vehicle_id = v.id AND YEAR(service_date) = $yearFilter), 0) as service_cost,
         COALESCE((SELECT SUM(total_cost) FROM fuel_log WHERE vehicle_id = v.id AND YEAR(fill_date) = $yearFilter), 0) as fuel_cost,
         COALESCE((SELECT SUM(amount) FROM expenses WHERE vehicle_id = v.id AND YEAR(expense_date) = $yearFilter), 0) as expense_cost,
         COALESCE((SELECT SUM(liters) FROM fuel_log WHERE vehicle_id = v.id AND YEAR(fill_date) = $yearFilter), 0) as fuel_liters
     FROM vehicles v
-    WHERE v.is_active = 1
+    WHERE v.is_active = 1 AND v.user_id = " . (int)$userId . "
     ORDER BY (
         COALESCE((SELECT SUM(service_cost) FROM service_records WHERE vehicle_id = v.id AND YEAR(service_date) = $yearFilter), 0) +
         COALESCE((SELECT SUM(total_cost) FROM fuel_log WHERE vehicle_id = v.id AND YEAR(fill_date) = $yearFilter), 0) +
@@ -142,7 +151,7 @@ $monthNames = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep'
                         <select name="vehicle_id" class="form-select">
                             <option value="">All Vehicles</option>
                             <?php foreach ($vehicles as $v): ?>
-                                <option value="<?php echo $v['id']; ?>" <?php echo $vehicleFilter == $v['id'] ? 'selected' : ''; ?>>
+                                <option value="<?php echo IdCodec::encode($v['id']); ?>" <?php echo $vehicleFilter == $v['id'] ? 'selected' : ''; ?>>
                                     <?php echo sanitize($v['make'] . ' ' . $v['model'] . ' (' . $v['year'] . ')'); ?>
                                 </option>
                             <?php endforeach; ?>

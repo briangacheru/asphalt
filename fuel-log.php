@@ -2,8 +2,12 @@
 $pageTitle = 'Fuel Log';
 require_once 'includes/header.php';
 
-$vehicles = $pdo->query("SELECT id, make, model, year FROM vehicles WHERE is_active = 1 ORDER BY make, model")->fetchAll();
-$vehicleFilter = $_GET['vehicle_id'] ?? '';
+use App\Helpers\IdCodec;
+
+$vehicles = $pdo->prepare("SELECT id, make, model, year FROM vehicles WHERE is_active = 1 AND user_id = ? ORDER BY make, model");
+$vehicles->execute([$userId]);
+$vehicles = $vehicles->fetchAll();
+$vehicleFilter = IdCodec::decode($_GET['vehicle_id'] ?? null);
 
 // Handle Add
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'add') {
@@ -18,19 +22,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 
     if ($vehicle_id && $mileage && $liters && $price_per_liter) {
         try {
-            // Fuel type comes from the vehicle's own profile, not re-entered here
-            $vStmt = $pdo->prepare("SELECT fuel_type FROM vehicles WHERE id = ?");
-            $vStmt->execute([$vehicle_id]);
-            $fuel_type = $vStmt->fetchColumn() ?: '';
+            // Fuel type comes from the vehicle's own profile, not re-entered here.
+            // This SELECT also verifies the vehicle belongs to the current user.
+            $vStmt = $pdo->prepare("SELECT fuel_type FROM vehicles WHERE id = ? AND user_id = ?");
+            $vStmt->execute([$vehicle_id, $userId]);
+            $vRow = $vStmt->fetch();
+
+            if (!$vRow) {
+                setFlashMessage('danger', 'Vehicle not found.');
+                redirect('fuel-log' . ($vehicleFilter ? '?vehicle_id=' . IdCodec::encode($vehicleFilter) : ''));
+            }
+            $fuel_type = $vRow['fuel_type'] ?: '';
 
             $stmt = $pdo->prepare("INSERT INTO fuel_log (vehicle_id, fill_date, mileage, liters, price_per_liter, total_cost, fuel_type, station_name, full_tank) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
             $stmt->execute([$vehicle_id, $fill_date, $mileage, $liters, $price_per_liter, $total_cost, $fuel_type, $station_name, $full_tank]);
 
             // Update vehicle mileage if higher
-            $pdo->prepare("UPDATE vehicles SET current_mileage = GREATEST(current_mileage, ?) WHERE id = ?")->execute([$mileage, $vehicle_id]);
+            $pdo->prepare("UPDATE vehicles SET current_mileage = GREATEST(current_mileage, ?) WHERE id = ? AND user_id = ?")->execute([$mileage, $vehicle_id, $userId]);
 
             setFlashMessage('success', 'Fuel record added!');
-            redirect('fuel-log' . ($vehicleFilter ? '?vehicle_id=' . $vehicleFilter : ''));
+            redirect('fuel-log' . ($vehicleFilter ? '?vehicle_id=' . IdCodec::encode($vehicleFilter) : ''));
         } catch (PDOException $e) {
             setFlashMessage('danger', 'Error: ' . $e->getMessage());
         }
@@ -51,19 +62,38 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 
     if ($fuel_id && $vehicle_id && $mileage && $liters && $price_per_liter) {
         try {
-            // Fuel type comes from the vehicle's own profile, not re-entered here
-            $vStmt = $pdo->prepare("SELECT fuel_type FROM vehicles WHERE id = ?");
-            $vStmt->execute([$vehicle_id]);
-            $fuel_type = $vStmt->fetchColumn() ?: '';
+            // Verify the record being edited belongs to one of the user's own vehicles
+            $ownStmt = $pdo->prepare("
+                SELECT fl.id FROM fuel_log fl
+                JOIN vehicles v ON fl.vehicle_id = v.id
+                WHERE fl.id = ? AND v.user_id = ?
+            ");
+            $ownStmt->execute([$fuel_id, $userId]);
+            if (!$ownStmt->fetch()) {
+                setFlashMessage('danger', 'Fuel record not found.');
+                redirect('fuel-log' . ($vehicleFilter ? '?vehicle_id=' . IdCodec::encode($vehicleFilter) : ''));
+            }
+
+            // Fuel type comes from the vehicle's own profile, not re-entered here.
+            // This SELECT also verifies the (possibly reassigned) vehicle belongs to the current user.
+            $vStmt = $pdo->prepare("SELECT fuel_type FROM vehicles WHERE id = ? AND user_id = ?");
+            $vStmt->execute([$vehicle_id, $userId]);
+            $vRow = $vStmt->fetch();
+
+            if (!$vRow) {
+                setFlashMessage('danger', 'Vehicle not found.');
+                redirect('fuel-log' . ($vehicleFilter ? '?vehicle_id=' . IdCodec::encode($vehicleFilter) : ''));
+            }
+            $fuel_type = $vRow['fuel_type'] ?: '';
 
             $stmt = $pdo->prepare("UPDATE fuel_log SET vehicle_id = ?, fill_date = ?, mileage = ?, liters = ?, price_per_liter = ?, total_cost = ?, fuel_type = ?, station_name = ?, full_tank = ? WHERE id = ?");
             $stmt->execute([$vehicle_id, $fill_date, $mileage, $liters, $price_per_liter, $total_cost, $fuel_type, $station_name, $full_tank, $fuel_id]);
 
             // Update vehicle mileage if higher
-            $pdo->prepare("UPDATE vehicles SET current_mileage = GREATEST(current_mileage, ?) WHERE id = ?")->execute([$mileage, $vehicle_id]);
+            $pdo->prepare("UPDATE vehicles SET current_mileage = GREATEST(current_mileage, ?) WHERE id = ? AND user_id = ?")->execute([$mileage, $vehicle_id, $userId]);
 
             setFlashMessage('success', 'Fuel record updated!');
-            redirect('fuel-log' . ($vehicleFilter ? '?vehicle_id=' . $vehicleFilter : ''));
+            redirect('fuel-log' . ($vehicleFilter ? '?vehicle_id=' . IdCodec::encode($vehicleFilter) : ''));
         } catch (PDOException $e) {
             setFlashMessage('danger', 'Error: ' . $e->getMessage());
         }
@@ -76,29 +106,39 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 
     if ($fuel_id) {
         try {
-            $stmt = $pdo->prepare("DELETE FROM fuel_log WHERE id = ?");
-            $stmt->execute([$fuel_id]);
+            $stmt = $pdo->prepare("
+                DELETE fl FROM fuel_log fl
+                JOIN vehicles v ON fl.vehicle_id = v.id
+                WHERE fl.id = ? AND v.user_id = ?
+            ");
+            $stmt->execute([$fuel_id, $userId]);
             setFlashMessage('success', 'Fuel record deleted!');
-            redirect('fuel-log' . ($vehicleFilter ? '?vehicle_id=' . $vehicleFilter : ''));
+            redirect('fuel-log' . ($vehicleFilter ? '?vehicle_id=' . IdCodec::encode($vehicleFilter) : ''));
         } catch (PDOException $e) {
             setFlashMessage('danger', 'Error: ' . $e->getMessage());
         }
     }
 }
 
-// Get fuel logs
-$where = $vehicleFilter ? "WHERE fl.vehicle_id = $vehicleFilter" : "";
+// Get fuel logs — always scoped to the current user's own vehicles
+$where = "WHERE v.user_id = " . (int)$userId;
+if ($vehicleFilter) {
+    $where .= " AND fl.vehicle_id = " . (int)$vehicleFilter;
+}
 $logs = $pdo->query("
-    SELECT fl.*, v.make, v.model, v.year 
-    FROM fuel_log fl 
-    JOIN vehicles v ON fl.vehicle_id = v.id 
+    SELECT fl.*, v.make, v.model, v.year
+    FROM fuel_log fl
+    JOIN vehicles v ON fl.vehicle_id = v.id
     $where
     ORDER BY fl.id DESC
     LIMIT 100
 ")->fetchAll();
 
-// Calculate this month vs last month stats
-$monthWhere = $vehicleFilter ? "WHERE vehicle_id = $vehicleFilter" : "";
+// Calculate this month vs last month stats — also scoped to the current user
+$monthWhere = "WHERE v.user_id = " . (int)$userId;
+if ($vehicleFilter) {
+    $monthWhere .= " AND fl.vehicle_id = " . (int)$vehicleFilter;
+}
 $monthStats = $pdo->query("
     SELECT
         COALESCE(SUM(CASE WHEN DATE_FORMAT(fill_date, '%Y-%m') = DATE_FORMAT(CURDATE(), '%Y-%m') THEN 1 ELSE 0 END), 0) as this_count,
@@ -109,7 +149,8 @@ $monthStats = $pdo->query("
         COALESCE(SUM(CASE WHEN DATE_FORMAT(fill_date, '%Y-%m') = DATE_FORMAT(CURDATE() - INTERVAL 1 MONTH, '%Y-%m') THEN total_cost ELSE 0 END), 0) as last_spent,
         COALESCE(AVG(CASE WHEN DATE_FORMAT(fill_date, '%Y-%m') = DATE_FORMAT(CURDATE(), '%Y-%m') THEN price_per_liter END), 0) as this_avg_price,
         COALESCE(AVG(CASE WHEN DATE_FORMAT(fill_date, '%Y-%m') = DATE_FORMAT(CURDATE() - INTERVAL 1 MONTH, '%Y-%m') THEN price_per_liter END), 0) as last_avg_price
-    FROM fuel_log
+    FROM fuel_log fl
+    JOIN vehicles v ON fl.vehicle_id = v.id
     $monthWhere
 ")->fetch();
 
@@ -196,7 +237,7 @@ if ($flash): ?>
                 <select name="vehicle_id" class="form-control" style="width: auto; min-width: 200px;" onchange="this.form.submit()">
                     <option value="">All Vehicles</option>
                     <?php foreach ($vehicles as $v): ?>
-                        <option value="<?php echo $v['id']; ?>" <?php echo $vehicleFilter == $v['id'] ? 'selected' : ''; ?>><?php echo sanitize($v['make'] . ' ' . $v['model']); ?></option>
+                        <option value="<?php echo IdCodec::encode($v['id']); ?>" <?php echo $vehicleFilter == $v['id'] ? 'selected' : ''; ?>><?php echo sanitize($v['make'] . ' ' . $v['model']); ?></option>
                     <?php endforeach; ?>
                 </select>
                 <?php if ($vehicleFilter): ?><a href="fuel-log" class="btn btn-outline"><i class="fas fa-times"></i></a><?php endif; ?>
@@ -487,8 +528,8 @@ if ($flash): ?>
                 make: '<?php echo addslashes($v['make']); ?>',
                     model: '<?php echo addslashes($v['model']); ?>',
                     currentMileage: <?php
-                $vStmt = $pdo->prepare("SELECT current_mileage FROM vehicles WHERE id = ?");
-                $vStmt->execute([$v['id']]);
+                $vStmt = $pdo->prepare("SELECT current_mileage FROM vehicles WHERE id = ? AND user_id = ?");
+                $vStmt->execute([$v['id'], $userId]);
                 $vData = $vStmt->fetch();
                 echo $vData['current_mileage'] ?? 0;
                 ?>

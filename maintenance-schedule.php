@@ -2,8 +2,12 @@
 $pageTitle = 'Maintenance Schedule';
 require_once 'includes/header.php';
 
-$vehicles = $pdo->query("SELECT id, make, model, year FROM vehicles WHERE is_active = 1 ORDER BY make, model")->fetchAll();
-$vehicleFilter = $_GET['vehicle_id'] ?? '';
+use App\Helpers\IdCodec;
+
+$vehiclesStmt = $pdo->prepare("SELECT id, make, model, year FROM vehicles WHERE is_active = 1 AND user_id = ? ORDER BY make, model");
+$vehiclesStmt->execute([$userId]);
+$vehicles = $vehiclesStmt->fetchAll();
+$vehicleFilter = IdCodec::decode($_GET['vehicle_id'] ?? null);
 
 // Default maintenance items with recommended intervals
 $defaultItems = [
@@ -29,6 +33,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
 
     if ($action === 'add_schedule') {
+        if (!verifyCSRFToken($_POST['csrf_token'] ?? '')) {
+            setFlashMessage('danger', 'Invalid security token. Please try again.');
+            redirect('maintenance-schedule' . ($vehicleFilter ? '?vehicle_id=' . IdCodec::encode($vehicleFilter) : ''));
+        }
+
         $vehicle_id = (int)$_POST['vehicle_id'];
         $item_type = sanitize($_POST['item_type']);
         $interval_km = !empty($_POST['interval_km']) ? (int)$_POST['interval_km'] : null;
@@ -42,17 +51,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $next_due_mileage = $last_replaced_mileage && $interval_km ? $last_replaced_mileage + $interval_km : null;
         $next_due_date = $last_replaced_date && $interval_months ? date('Y-m-d', strtotime("+$interval_months months", strtotime($last_replaced_date))) : null;
 
-        try {
-            $stmt = $pdo->prepare("INSERT INTO maintenance_schedule (vehicle_id, item_type, interval_km, interval_months, last_replaced_date, last_replaced_mileage, next_due_mileage, next_due_date, priority, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-            $stmt->execute([$vehicle_id, $item_type, $interval_km, $interval_months, $last_replaced_date, $last_replaced_mileage, $next_due_mileage, $next_due_date, $priority, $notes]);
-            setFlashMessage('success', 'Maintenance item added successfully!');
-        } catch (PDOException $e) {
-            setFlashMessage('danger', 'Error: ' . $e->getMessage());
+        $ownStmt = $pdo->prepare("SELECT id FROM vehicles WHERE id = ? AND user_id = ?");
+        $ownStmt->execute([$vehicle_id, $userId]);
+
+        if (!$ownStmt->fetch()) {
+            setFlashMessage('danger', 'Vehicle not found.');
+        } else {
+            try {
+                $stmt = $pdo->prepare("INSERT INTO maintenance_schedule (vehicle_id, item_type, interval_km, interval_months, last_replaced_date, last_replaced_mileage, next_due_mileage, next_due_date, priority, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+                $stmt->execute([$vehicle_id, $item_type, $interval_km, $interval_months, $last_replaced_date, $last_replaced_mileage, $next_due_mileage, $next_due_date, $priority, $notes]);
+                setFlashMessage('success', 'Maintenance item added successfully!');
+            } catch (PDOException $e) {
+                setFlashMessage('danger', 'Error: ' . $e->getMessage());
+            }
         }
-        redirect('maintenance-schedule' . ($vehicleFilter ? '?vehicle_id=' . $vehicleFilter : ''));
+        redirect('maintenance-schedule' . ($vehicleFilter ? '?vehicle_id=' . IdCodec::encode($vehicleFilter) : ''));
     }
 
     if ($action === 'edit_schedule') {
+        if (!verifyCSRFToken($_POST['csrf_token'] ?? '')) {
+            setFlashMessage('danger', 'Invalid security token. Please try again.');
+            redirect('maintenance-schedule' . ($vehicleFilter ? '?vehicle_id=' . IdCodec::encode($vehicleFilter) : ''));
+        }
+
         $id = (int)$_POST['schedule_id'];
         $vehicle_id = (int)$_POST['vehicle_id'];
         $item_type = sanitize($_POST['item_type']);
@@ -67,23 +88,46 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $next_due_mileage = $last_replaced_mileage && $interval_km ? $last_replaced_mileage + $interval_km : null;
         $next_due_date = $last_replaced_date && $interval_months ? date('Y-m-d', strtotime("+$interval_months months", strtotime($last_replaced_date))) : null;
 
-        try {
-            $stmt = $pdo->prepare("UPDATE maintenance_schedule SET vehicle_id = ?, item_type = ?, interval_km = ?, interval_months = ?, last_replaced_date = ?, last_replaced_mileage = ?, next_due_mileage = ?, next_due_date = ?, priority = ?, notes = ? WHERE id = ?");
-            $stmt->execute([$vehicle_id, $item_type, $interval_km, $interval_months, $last_replaced_date, $last_replaced_mileage, $next_due_mileage, $next_due_date, $priority, $notes, $id]);
-            setFlashMessage('success', 'Maintenance item updated successfully!');
-        } catch (PDOException $e) {
-            setFlashMessage('danger', 'Error: ' . $e->getMessage());
+        $ownScheduleStmt = $pdo->prepare("
+            SELECT ms.id FROM maintenance_schedule ms
+            JOIN vehicles v ON ms.vehicle_id = v.id
+            WHERE ms.id = ? AND v.user_id = ?
+        ");
+        $ownScheduleStmt->execute([$id, $userId]);
+
+        $ownVehicleStmt = $pdo->prepare("SELECT id FROM vehicles WHERE id = ? AND user_id = ?");
+        $ownVehicleStmt->execute([$vehicle_id, $userId]);
+
+        if (!$ownScheduleStmt->fetch() || !$ownVehicleStmt->fetch()) {
+            setFlashMessage('danger', 'Maintenance item not found.');
+        } else {
+            try {
+                $stmt = $pdo->prepare("UPDATE maintenance_schedule SET vehicle_id = ?, item_type = ?, interval_km = ?, interval_months = ?, last_replaced_date = ?, last_replaced_mileage = ?, next_due_mileage = ?, next_due_date = ?, priority = ?, notes = ? WHERE id = ?");
+                $stmt->execute([$vehicle_id, $item_type, $interval_km, $interval_months, $last_replaced_date, $last_replaced_mileage, $next_due_mileage, $next_due_date, $priority, $notes, $id]);
+                setFlashMessage('success', 'Maintenance item updated successfully!');
+            } catch (PDOException $e) {
+                setFlashMessage('danger', 'Error: ' . $e->getMessage());
+            }
         }
-        redirect('maintenance-schedule' . ($vehicleFilter ? '?vehicle_id=' . $vehicleFilter : ''));
+        redirect('maintenance-schedule' . ($vehicleFilter ? '?vehicle_id=' . IdCodec::encode($vehicleFilter) : ''));
     }
 
     if ($action === 'mark_done') {
+        if (!verifyCSRFToken($_POST['csrf_token'] ?? '')) {
+            setFlashMessage('danger', 'Invalid security token. Please try again.');
+            redirect('maintenance-schedule' . ($vehicleFilter ? '?vehicle_id=' . IdCodec::encode($vehicleFilter) : ''));
+        }
+
         $id = (int)$_POST['schedule_id'];
         $new_mileage = (int)$_POST['new_mileage'];
         $new_date = date('Y-m-d');
 
-        $stmt = $pdo->prepare("SELECT * FROM maintenance_schedule WHERE id = ?");
-        $stmt->execute([$id]);
+        $stmt = $pdo->prepare("
+            SELECT ms.* FROM maintenance_schedule ms
+            JOIN vehicles v ON ms.vehicle_id = v.id
+            WHERE ms.id = ? AND v.user_id = ?
+        ");
+        $stmt->execute([$id, $userId]);
         $item = $stmt->fetch();
 
         if ($item) {
@@ -94,23 +138,38 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmt->execute([$new_date, $new_mileage, $next_due_mileage, $next_due_date, $id]);
 
             // Update vehicle mileage if higher
-            $pdo->prepare("UPDATE vehicles SET current_mileage = GREATEST(current_mileage, ?) WHERE id = ?")->execute([$new_mileage, $item['vehicle_id']]);
+            $pdo->prepare("UPDATE vehicles SET current_mileage = GREATEST(current_mileage, ?) WHERE id = ? AND user_id = ?")->execute([$new_mileage, $item['vehicle_id'], $userId]);
 
             setFlashMessage('success', 'Maintenance marked as completed!');
+        } else {
+            setFlashMessage('danger', 'Maintenance item not found.');
         }
-        redirect('maintenance-schedule' . ($vehicleFilter ? '?vehicle_id=' . $vehicleFilter : ''));
+        redirect('maintenance-schedule' . ($vehicleFilter ? '?vehicle_id=' . IdCodec::encode($vehicleFilter) : ''));
     }
 
     if ($action === 'delete') {
+        if (!verifyCSRFToken($_POST['csrf_token'] ?? '')) {
+            setFlashMessage('danger', 'Invalid security token. Please try again.');
+            redirect('maintenance-schedule' . ($vehicleFilter ? '?vehicle_id=' . IdCodec::encode($vehicleFilter) : ''));
+        }
+
         $id = (int)$_POST['schedule_id'];
-        $pdo->prepare("DELETE FROM maintenance_schedule WHERE id = ?")->execute([$id]);
+        $stmt = $pdo->prepare("
+            DELETE ms FROM maintenance_schedule ms
+            JOIN vehicles v ON ms.vehicle_id = v.id
+            WHERE ms.id = ? AND v.user_id = ?
+        ");
+        $stmt->execute([$id, $userId]);
         setFlashMessage('success', 'Maintenance item deleted successfully.');
-        redirect('maintenance-schedule' . ($vehicleFilter ? '?vehicle_id=' . $vehicleFilter : ''));
+        redirect('maintenance-schedule' . ($vehicleFilter ? '?vehicle_id=' . IdCodec::encode($vehicleFilter) : ''));
     }
 }
 
-// Get schedules
-$where = $vehicleFilter ? "WHERE ms.vehicle_id = $vehicleFilter" : "";
+// Get schedules — scoped to the current user's own vehicles
+$where = "WHERE v.user_id = " . (int)$userId;
+if ($vehicleFilter) {
+    $where .= " AND ms.vehicle_id = " . (int)$vehicleFilter;
+}
 $schedules = $pdo->query("
     SELECT ms.*, v.make, v.model, v.year, v.current_mileage
     FROM maintenance_schedule ms
@@ -179,7 +238,7 @@ foreach ($schedules as $s) {
                             <select name="vehicle_id" class="form-control" onchange="this.form.submit()">
                                 <option value="">All Vehicles</option>
                                 <?php foreach ($vehicles as $v): ?>
-                                    <option value="<?php echo $v['id']; ?>" <?php echo $vehicleFilter == $v['id'] ? 'selected' : ''; ?>>
+                                    <option value="<?php echo IdCodec::encode($v['id']); ?>" <?php echo $vehicleFilter == $v['id'] ? 'selected' : ''; ?>>
                                         <?php echo sanitize($v['make'] . ' ' . $v['model'] . ' (' . $v['year'] . ')'); ?>
                                     </option>
                                 <?php endforeach; ?>
@@ -271,7 +330,7 @@ if ($flash): ?>
 // Function to render schedule sections
 function renderScheduleSection($items, $title, $badgeColor, $icon) {
     if (empty($items)) return;
-    global $pdo;
+    global $pdo, $vehicles;
     ?>
     <div class="card mb-3">
         <div class="card-header d-flex align-items-center bg-body-tertiary">
@@ -392,6 +451,7 @@ function renderScheduleSection($items, $title, $badgeColor, $icon) {
                                             </div>
                                             <form method="POST">
                                                 <div class="modal-body">
+                                                    <?php echo csrfField(); ?>
                                                     <input type="hidden" name="action" value="mark_done">
                                                     <input type="hidden" name="schedule_id" value="<?php echo $s['id']; ?>">
                                                     <p><strong><?php echo sanitize($s['item_type']); ?></strong> for <?php echo sanitize($s['make'] . ' ' . $s['model']); ?></p>
@@ -420,6 +480,7 @@ function renderScheduleSection($items, $title, $badgeColor, $icon) {
                                             </div>
                                             <form method="POST">
                                                 <div class="modal-body">
+                                                    <?php echo csrfField(); ?>
                                                     <input type="hidden" name="action" value="edit_schedule">
                                                     <input type="hidden" name="schedule_id" value="<?php echo $s['id']; ?>">
 
@@ -427,10 +488,7 @@ function renderScheduleSection($items, $title, $badgeColor, $icon) {
                                                         <div class="col-md-6 mb-3">
                                                             <label class="form-label">Vehicle <span class="text-danger">*</span></label>
                                                             <select name="vehicle_id" class="form-control" required>
-                                                                <?php
-                                                                $allVehicles = $pdo->query("SELECT id, make, model, year FROM vehicles WHERE is_active = 1 ORDER BY make, model")->fetchAll();
-                                                                foreach ($allVehicles as $v):
-                                                                    ?>
+                                                                <?php foreach ($vehicles as $v): ?>
                                                                     <option value="<?php echo $v['id']; ?>" <?php echo $s['vehicle_id'] == $v['id'] ? 'selected' : ''; ?>>
                                                                         <?php echo sanitize($v['make'] . ' ' . $v['model'] . ' (' . $v['year'] . ')'); ?>
                                                                     </option>
@@ -500,6 +558,7 @@ function renderScheduleSection($items, $title, $badgeColor, $icon) {
                                             </div>
                                             <form method="POST">
                                                 <div class="modal-body">
+                                                    <?php echo csrfField(); ?>
                                                     <input type="hidden" name="action" value="delete">
                                                     <input type="hidden" name="schedule_id" value="<?php echo $s['id']; ?>">
                                                     <p>Are you sure you want to delete this maintenance item?</p>
@@ -560,6 +619,7 @@ if (empty($schedules)): ?>
                 </div>
                 <form method="POST">
                     <div class="modal-body">
+                        <?php echo csrfField(); ?>
                         <input type="hidden" name="action" value="add_schedule">
 
                         <div class="row">

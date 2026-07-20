@@ -17,6 +17,59 @@ if (!file_exists($pinMigrationFlag)) {
     @touch($pinMigrationFlag);
 }
 
+// One-time schema migration: add vehicle_documents table (gallery of insurance,
+// bill of lading, receipts, and other vehicle-related files)
+$documentsMigrationFlag = __DIR__ . '/../uploads/.documents_migration_done';
+if (!file_exists($documentsMigrationFlag)) {
+    try {
+        $pdo->exec("CREATE TABLE IF NOT EXISTS vehicle_documents (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            vehicle_id INT NOT NULL,
+            category VARCHAR(30) NOT NULL DEFAULT 'other',
+            title VARCHAR(255) NULL,
+            file_name VARCHAR(255) NOT NULL,
+            file_path VARCHAR(255) NOT NULL,
+            file_type VARCHAR(100) NOT NULL,
+            file_size INT UNSIGNED NOT NULL,
+            uploaded_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            KEY idx_vehicle_id (vehicle_id),
+            CONSTRAINT fk_vehicle_documents_vehicle FOREIGN KEY (vehicle_id) REFERENCES vehicles(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    } catch (PDOException $e) {
+        error_log('Vehicle documents migration failed: ' . $e->getMessage());
+    }
+    @touch($documentsMigrationFlag);
+}
+
+// One-time schema migration: add vehicle_document_categories table (user-manageable
+// categories + icons for the Documents & Photos gallery, shared across all users
+// the same way expense_categories is)
+$documentCategoriesMigrationFlag = __DIR__ . '/../uploads/.document_categories_migration_done';
+if (!file_exists($documentCategoriesMigrationFlag)) {
+    try {
+        $pdo->exec("CREATE TABLE IF NOT EXISTS vehicle_document_categories (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            slug VARCHAR(50) NOT NULL,
+            label VARCHAR(100) NOT NULL,
+            icon VARCHAR(50) NOT NULL DEFAULT 'fa-file',
+            color VARCHAR(20) NOT NULL DEFAULT 'dark',
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE KEY uniq_slug (slug)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+        $pdo->exec("INSERT IGNORE INTO vehicle_document_categories (slug, label, icon, color) VALUES
+            ('insurance', 'Insurance', 'fa-shield-alt', 'primary'),
+            ('bill_of_lading', 'Bill of Lading', 'fa-ship', 'info'),
+            ('fuel_receipt', 'Fuel Receipt', 'fa-gas-pump', 'warning'),
+            ('registration', 'Registration', 'fa-id-card', 'success'),
+            ('inspection', 'Inspection', 'fa-clipboard-check', 'secondary'),
+            ('other', 'Other', 'fa-file', 'dark')");
+    } catch (PDOException $e) {
+        error_log('Vehicle document categories migration failed: ' . $e->getMessage());
+    }
+    @touch($documentCategoriesMigrationFlag);
+}
+
 $currentUser = getCurrentUser();
 $userId = \App\Middleware\AuthMiddleware::getCurrentUserId();
 
@@ -69,9 +122,6 @@ $currentPage = basename($_SERVER['PHP_SELF'], '.php');
     <meta name="theme-color" content="#ffffff">
     <script src="assets/js/config.js"></script>
     <script src="vendors/simplebar/simplebar.min.js"></script>
-    <script src="vendors/datatables.net-bs5/dataTables.bootstrap5.min.css"></script>
-    <script src="vendors/select2/select2.min.css"></script>
-    <script src="vendors/select2-bootstrap-5-theme/select2-bootstrap-5-theme.min.css"></script>
 
 
 
@@ -81,12 +131,16 @@ $currentPage = basename($_SERVER['PHP_SELF'], '.php');
     <link rel="preconnect" href="https://fonts.gstatic.com">
     <link href="https://fonts.googleapis.com/css?family=Open+Sans:300,400,500,600,700%7cPoppins:300,400,500,600,700,800,900&amp;display=swap" rel="stylesheet">
     <link href="vendors/simplebar/simplebar.min.css" rel="stylesheet">
+    <link href="vendors/datatables.net-bs5/dataTables.bootstrap5.min.css" rel="stylesheet">
+    <link href="vendors/select2/select2.min.css" rel="stylesheet">
+    <link href="vendors/select2-bootstrap-5-theme/select2-bootstrap-5-theme.min.css" rel="stylesheet">
     <link href="assets/css/theme-rtl.css" rel="stylesheet" id="style-rtl">
     <link href="assets/css/theme.css" rel="stylesheet" id="style-default">
     <link href="assets/css/user-rtl.css" rel="stylesheet" id="user-style-rtl">
     <link href="assets/css/user.css" rel="stylesheet" id="user-style-default">
     <link href="vendors/flatpickr/flatpickr.min.css" rel="stylesheet" />
     <link href="vendors/dropzone/dropzone.css" rel="stylesheet" />
+    <link href="vendors/glightbox/glightbox.min.css" rel="stylesheet" />
       <script>
       var isRTL = JSON.parse(localStorage.getItem('isRTL'));
       if (isRTL) {
@@ -233,7 +287,7 @@ $currentPage = basename($_SERVER['PHP_SELF'], '.php');
                           </div>
                       </div>
                     <?php foreach (array_slice($sidebarVehicles, 0, 5) as $vehicle): ?>
-                      <!-- parent pages--><a href="vehicle-details?id=<?php echo $vehicle['id']; ?>" class="nav-link" role="button">
+                      <!-- parent pages--><a href="vehicle-details?id=<?php echo \App\Helpers\IdCodec::encode($vehicle['id']); ?>" class="nav-link" role="button">
                           <div class="d-flex align-items-center"><span class="nav-link-icon"><span class="fas fa-car-side"></span></span>
                               <span class="nav-link-text ps-1"><?php echo sanitize($vehicle['make'] . ' ' . $vehicle['model']); ?></span>
                           </div>

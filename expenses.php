@@ -2,9 +2,13 @@
 $pageTitle = 'Expenses';
 require_once 'includes/header.php';
 
-$vehicles = $pdo->query("SELECT id, make, model, year FROM vehicles WHERE is_active = 1 ORDER BY make, model")->fetchAll();
+use App\Helpers\IdCodec;
+
+$vehiclesStmt = $pdo->prepare("SELECT id, make, model, year FROM vehicles WHERE is_active = 1 AND user_id = ? ORDER BY make, model");
+$vehiclesStmt->execute([$userId]);
+$vehicles = $vehiclesStmt->fetchAll();
 $categories = $pdo->query("SELECT DISTINCT id, name, icon FROM expense_categories ORDER BY name")->fetchAll();
-$vehicleFilter = $_GET['vehicle_id'] ?? '';
+$vehicleFilter = IdCodec::decode($_GET['vehicle_id'] ?? null);
 
 // Item types for repair/service categories
 $itemTypes = [
@@ -73,7 +77,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     // Verify CSRF token
     if (!verifyCSRFToken($_POST['csrf_token'] ?? '')) {
         setFlashMessage('danger', 'Invalid security token. Please try again.');
-        redirect('expenses' . ($vehicleFilter ? '?vehicle_id=' . $vehicleFilter : ''));
+        redirect('expenses' . ($vehicleFilter ? '?vehicle_id=' . IdCodec::encode($vehicleFilter) : ''));
     }
     
     $vehicle_id = (int)($_POST['vehicle_id'] ?? 0);
@@ -105,19 +109,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         if ($uploaded) $receipt_path = $uploaded;
     }
 
-    if ($vehicle_id && $category_id && $amount > 0) {
+    $ownsVehicle = false;
+    if ($vehicle_id) {
+        $ownStmt = $pdo->prepare("SELECT id FROM vehicles WHERE id = ? AND user_id = ?");
+        $ownStmt->execute([$vehicle_id, $userId]);
+        $ownsVehicle = (bool) $ownStmt->fetch();
+    }
+
+    if ($vehicle_id && $category_id && $amount > 0 && $ownsVehicle) {
         try {
             $stmt = $pdo->prepare("INSERT INTO expenses (vehicle_id, category_id, expense_date, amount, description, item_type, item_name, brand, part_number, quantity, cost_per_unit, item_notes, receipt_path) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
             $stmt->execute([$vehicle_id, $category_id, $expense_date, $amount, $description, $item_type ?: null, $item_name ?: null, $brand ?: null, $part_number ?: null, $quantity ?: null, $cost_per_unit ?: null, $item_notes ?: null, $receipt_path]);
             setFlashMessage('success', 'Expense added!');
-            redirect('expenses' . ($vehicleFilter ? '?vehicle_id=' . $vehicleFilter : ''));
+            redirect('expenses' . ($vehicleFilter ? '?vehicle_id=' . IdCodec::encode($vehicleFilter) : ''));
         } catch (PDOException $e) {
             // Fallback: try without new columns in case migration hasn't run
             try {
                 $stmt = $pdo->prepare("INSERT INTO expenses (vehicle_id, category_id, expense_date, amount, description) VALUES (?, ?, ?, ?, ?)");
                 $stmt->execute([$vehicle_id, $category_id, $expense_date, $amount, $description]);
                 setFlashMessage('success', 'Expense added! (Note: Run DB migration to save item details.)');
-                redirect('expenses' . ($vehicleFilter ? '?vehicle_id=' . $vehicleFilter : ''));
+                redirect('expenses' . ($vehicleFilter ? '?vehicle_id=' . IdCodec::encode($vehicleFilter) : ''));
             } catch (PDOException $e2) {
                 setFlashMessage('danger', 'Error: ' . $e2->getMessage());
             }
@@ -130,7 +141,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     // Verify CSRF token
     if (!verifyCSRFToken($_POST['csrf_token'] ?? '')) {
         setFlashMessage('danger', 'Invalid security token. Please try again.');
-        redirect('expenses' . ($vehicleFilter ? '?vehicle_id=' . $vehicleFilter : ''));
+        redirect('expenses' . ($vehicleFilter ? '?vehicle_id=' . IdCodec::encode($vehicleFilter) : ''));
     }
     
     $expense_id    = (int)($_POST['expense_id'] ?? 0);
@@ -165,19 +176,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     // Clear receipt if user checked the remove box
     if (!empty($_POST['remove_receipt'])) $receipt_path = '';
 
-    if ($expense_id && $vehicle_id && $category_id && $amount > 0) {
+    $ownsExpense = false;
+    $ownsNewVehicle = false;
+    if ($expense_id) {
+        $ownStmt = $pdo->prepare("
+            SELECT e.id FROM expenses e
+            JOIN vehicles v ON e.vehicle_id = v.id
+            WHERE e.id = ? AND v.user_id = ?
+        ");
+        $ownStmt->execute([$expense_id, $userId]);
+        $ownsExpense = (bool) $ownStmt->fetch();
+    }
+    if ($vehicle_id) {
+        $ownVehicleStmt = $pdo->prepare("SELECT id FROM vehicles WHERE id = ? AND user_id = ?");
+        $ownVehicleStmt->execute([$vehicle_id, $userId]);
+        $ownsNewVehicle = (bool) $ownVehicleStmt->fetch();
+    }
+
+    if ($expense_id && $vehicle_id && $category_id && $amount > 0 && $ownsExpense && $ownsNewVehicle) {
         try {
             $stmt = $pdo->prepare("UPDATE expenses SET vehicle_id=?, category_id=?, expense_date=?, amount=?, description=?, item_type=?, item_name=?, brand=?, part_number=?, quantity=?, cost_per_unit=?, item_notes=?, receipt_path=? WHERE id=?");
             $stmt->execute([$vehicle_id, $category_id, $expense_date, $amount, $description, $item_type ?: null, $item_name ?: null, $brand ?: null, $part_number ?: null, $quantity ?: null, $cost_per_unit ?: null, $item_notes ?: null, $receipt_path ?: null, $expense_id]);
             setFlashMessage('success', 'Expense updated!');
-            redirect('expenses' . ($vehicleFilter ? '?vehicle_id=' . $vehicleFilter : ''));
+            redirect('expenses' . ($vehicleFilter ? '?vehicle_id=' . IdCodec::encode($vehicleFilter) : ''));
         } catch (PDOException $e) {
             // Fallback without new columns
             try {
                 $stmt = $pdo->prepare("UPDATE expenses SET vehicle_id=?, category_id=?, expense_date=?, amount=?, description=? WHERE id=?");
                 $stmt->execute([$vehicle_id, $category_id, $expense_date, $amount, $description, $expense_id]);
                 setFlashMessage('success', 'Expense updated! (Note: Run DB migration to save item details.)');
-                redirect('expenses' . ($vehicleFilter ? '?vehicle_id=' . $vehicleFilter : ''));
+                redirect('expenses' . ($vehicleFilter ? '?vehicle_id=' . IdCodec::encode($vehicleFilter) : ''));
             } catch (PDOException $e2) {
                 setFlashMessage('danger', 'Error: ' . $e2->getMessage());
             }
@@ -190,46 +218,64 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     // Verify CSRF token
     if (!verifyCSRFToken($_POST['csrf_token'] ?? '')) {
         setFlashMessage('danger', 'Invalid security token. Please try again.');
-        redirect('expenses' . ($vehicleFilter ? '?vehicle_id=' . $vehicleFilter : ''));
+        redirect('expenses' . ($vehicleFilter ? '?vehicle_id=' . IdCodec::encode($vehicleFilter) : ''));
     }
     
     $expense_id = (int)($_POST['expense_id'] ?? 0);
 
     if ($expense_id) {
         try {
-            $stmt = $pdo->prepare("DELETE FROM expenses WHERE id = ?");
-            $stmt->execute([$expense_id]);
+            $stmt = $pdo->prepare("
+                DELETE e FROM expenses e
+                JOIN vehicles v ON e.vehicle_id = v.id
+                WHERE e.id = ? AND v.user_id = ?
+            ");
+            $stmt->execute([$expense_id, $userId]);
             setFlashMessage('success', 'Expense deleted!');
-            redirect('expenses' . ($vehicleFilter ? '?vehicle_id=' . $vehicleFilter : ''));
+            redirect('expenses' . ($vehicleFilter ? '?vehicle_id=' . IdCodec::encode($vehicleFilter) : ''));
         } catch (PDOException $e) {
             setFlashMessage('danger', 'Error: ' . $e->getMessage());
         }
     }
 }
 
-$where = $vehicleFilter ? "WHERE e.vehicle_id = $vehicleFilter" : "";
+// All queries below are scoped to the current user's own vehicles
+$where = "WHERE v.user_id = " . (int)$userId;
+if ($vehicleFilter) {
+    $where .= " AND e.vehicle_id = " . (int)$vehicleFilter;
+}
 $expenses = $pdo->query("
     SELECT e.*, v.make, v.model, ec.name as category_name, ec.icon
-    FROM expenses e 
-    JOIN vehicles v ON e.vehicle_id = v.id 
+    FROM expenses e
+    JOIN vehicles v ON e.vehicle_id = v.id
     JOIN expense_categories ec ON e.category_id = ec.id
     $where
     ORDER BY e.id DESC
     LIMIT 50
 ")->fetchAll();
 
+$statsWhere = "WHERE v.user_id = " . (int)$userId;
+if ($vehicleFilter) {
+    $statsWhere .= " AND e.vehicle_id = " . (int)$vehicleFilter;
+}
 $stats = $pdo->query("
-    SELECT COALESCE(SUM(amount), 0) as total,
+    SELECT COALESCE(SUM(e.amount), 0) as total,
            COUNT(*) as count,
-           COALESCE(SUM(CASE WHEN MONTH(expense_date) = MONTH(CURDATE()) THEN amount ELSE 0 END), 0) as this_month
-    FROM expenses " . ($vehicleFilter ? "WHERE vehicle_id = $vehicleFilter" : "")
-)->fetch();
+           COALESCE(SUM(CASE WHEN MONTH(e.expense_date) = MONTH(CURDATE()) THEN e.amount ELSE 0 END), 0) as this_month
+    FROM expenses e
+    JOIN vehicles v ON e.vehicle_id = v.id
+    $statsWhere
+")->fetch();
 
+$categoryScopedExpenses = "SELECT e.* FROM expenses e JOIN vehicles v ON e.vehicle_id = v.id WHERE v.user_id = " . (int)$userId;
+if ($vehicleFilter) {
+    $categoryScopedExpenses .= " AND e.vehicle_id = " . (int)$vehicleFilter;
+}
 $byCategory = $pdo->query("
     SELECT ec.id, ec.name, ec.icon, COALESCE(SUM(e.amount), 0) as total
     FROM expense_categories ec
-    LEFT JOIN expenses e ON ec.id = e.category_id " . ($vehicleFilter ? "AND e.vehicle_id = $vehicleFilter" : "") . "
-    GROUP BY ec.id, ec.name, ec.icon 
+    LEFT JOIN ($categoryScopedExpenses) e ON ec.id = e.category_id
+    GROUP BY ec.id, ec.name, ec.icon
     ORDER BY total DESC
 ")->fetchAll();
 ?>
@@ -277,7 +323,7 @@ if ($flash): ?>
                 <select name="vehicle_id" class="form-control" style="width: auto; min-width: 200px;" onchange="this.form.submit()">
                     <option value="">All Vehicles</option>
                     <?php foreach ($vehicles as $v): ?>
-                        <option value="<?php echo $v['id']; ?>" <?php echo $vehicleFilter == $v['id'] ? 'selected' : ''; ?>><?php echo sanitize($v['make'] . ' ' . $v['model']); ?></option>
+                        <option value="<?php echo IdCodec::encode($v['id']); ?>" <?php echo $vehicleFilter == $v['id'] ? 'selected' : ''; ?>><?php echo sanitize($v['make'] . ' ' . $v['model']); ?></option>
                     <?php endforeach; ?>
                 </select>
                 <?php if ($vehicleFilter): ?><a href="expenses" class="btn btn-outline"><i class="fas fa-times"></i></a><?php endif; ?>
@@ -471,14 +517,18 @@ if ($flash): ?>
                 </div>
                 <div class="card-body p-0">
                     <?php
-                    $monthlyWhere = $vehicleFilter ? "AND vehicle_id = $vehicleFilter" : "";
+                    $monthlyWhere = "AND v.user_id = " . (int)$userId;
+                    if ($vehicleFilter) {
+                        $monthlyWhere .= " AND e.vehicle_id = " . (int)$vehicleFilter;
+                    }
                     $monthly = $pdo->query("
-                        SELECT DATE_FORMAT(expense_date, '%Y-%m') as month_key,
-                               DATE_FORMAT(expense_date, '%b %Y')  as month_label,
+                        SELECT DATE_FORMAT(e.expense_date, '%Y-%m') as month_key,
+                               DATE_FORMAT(e.expense_date, '%b %Y')  as month_label,
                                COUNT(*)                             as count,
-                               SUM(amount)                         as total
-                        FROM expenses
-                        WHERE expense_date >= DATE_SUB(CURDATE(), INTERVAL 12 MONTH)
+                               SUM(e.amount)                        as total
+                        FROM expenses e
+                        JOIN vehicles v ON e.vehicle_id = v.id
+                        WHERE e.expense_date >= DATE_SUB(CURDATE(), INTERVAL 12 MONTH)
                         $monthlyWhere
                         GROUP BY month_key, month_label
                         ORDER BY month_key DESC

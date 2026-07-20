@@ -1,6 +1,7 @@
 <?php
 require_once 'includes/bootstrap.php';
 \App\Middleware\AuthMiddleware::check();
+use App\Helpers\IdCodec;
 $pdo = \App\Database\Database::getInstance()->getConnection();
 $userId = \App\Middleware\AuthMiddleware::getCurrentUserId();
 
@@ -246,7 +247,7 @@ if ($flash): ?>
                                             </div>
                                         </div>
 
-                                        <a class="stretched-link" href="vehicle-details?id=<?php echo $vehicle['id']; ?>"></a>
+                                        <a class="stretched-link" href="vehicle-details?id=<?php echo IdCodec::encode($vehicle['id']); ?>"></a>
                                     </div>
                                 </div>
                             <?php endforeach; ?>

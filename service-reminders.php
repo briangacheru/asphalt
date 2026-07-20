@@ -2,17 +2,21 @@
 $pageTitle = 'Service Reminders';
 require_once 'includes/header.php';
 
-// Get vehicles with upcoming services
-$stmt = $pdo->query("
+use App\Helpers\IdCodec;
+
+// Get vehicles with upcoming services — scoped to the current user's own vehicles
+$stmt = $pdo->prepare("
     SELECT v.*, sr.next_service_mileage, sr.service_date as last_service_date,
            (sr.next_service_mileage - v.current_mileage) as km_remaining,
            sr.oil_interval
     FROM vehicles v
     JOIN service_records sr ON v.id = sr.vehicle_id
-    WHERE v.is_active = 1 
+    WHERE v.is_active = 1
+    AND v.user_id = ?
     AND sr.id = (SELECT MAX(id) FROM service_records WHERE vehicle_id = v.id)
     ORDER BY km_remaining ASC
 ");
+$stmt->execute([$userId]);
 $vehicles = $stmt->fetchAll();
 
 // Separate into categories
@@ -160,7 +164,7 @@ if ($flash): ?>
                             </td>
                             <td><?php echo formatDate($v['last_service_date']); ?></td>
                             <td>
-                                <a href="add-service?vehicle_id=<?php echo $v['id']; ?>" class="btn btn-sm btn-danger">
+                                <a href="add-service?vehicle_id=<?php echo IdCodec::encode($v['id']); ?>" class="btn btn-sm btn-danger">
                                     <i class="fas fa-wrench"></i> Service Now
                                 </a>
                             </td>
@@ -208,7 +212,7 @@ if ($flash): ?>
                             </span>
                             </td>
                             <td>
-                                <a href="add-service?vehicle_id=<?php echo $v['id']; ?>" class="btn btn-sm btn-warning">
+                                <a href="add-service?vehicle_id=<?php echo IdCodec::encode($v['id']); ?>" class="btn btn-sm btn-warning">
                                     <i class="fas fa-wrench"></i> Schedule
                                 </a>
                             </td>

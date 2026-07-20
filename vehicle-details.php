@@ -1,10 +1,11 @@
 <?php
 require_once 'includes/bootstrap.php';
 \App\Middleware\AuthMiddleware::check();
+use App\Helpers\IdCodec;
 $pdo = \App\Database\Database::getInstance()->getConnection();
 $userId = \App\Middleware\AuthMiddleware::getCurrentUserId();
 
-$vehicleId = (int)($_GET['id'] ?? $_POST['vehicle_id'] ?? 0);
+$vehicleId = IdCodec::decode($_GET['id'] ?? null) ?? IdCodec::decode($_POST['vehicle_id'] ?? null) ?? 0;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
@@ -19,7 +20,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
-    redirect('vehicle-details?id=' . $vehicleId);
+    redirect('vehicle-details?id=' . IdCodec::encode($vehicleId));
 }
 
 $pageTitle = 'Vehicle Details';
@@ -31,8 +32,8 @@ if (!$vehicleId) {
 }
 
 // Get vehicle
-$stmt = $pdo->prepare("SELECT * FROM vehicles WHERE id = ?");
-$stmt->execute([$vehicleId]);
+$stmt = $pdo->prepare("SELECT * FROM vehicles WHERE id = ? AND user_id = ?");
+$stmt->execute([$vehicleId, $userId]);
 $vehicle = $stmt->fetch();
 
 if (!$vehicle) {
@@ -115,6 +116,11 @@ $stmt = $pdo->prepare("
 ");
 $stmt->execute([$vehicleId]);
 $recentExpenses = $stmt->fetchAll();
+
+// Get recent documents & photos
+$stmt = $pdo->prepare("SELECT * FROM vehicle_documents WHERE vehicle_id = ? ORDER BY uploaded_at DESC, id DESC LIMIT 8");
+$stmt->execute([$vehicleId]);
+$recentDocuments = $stmt->fetchAll();
 ?>
 
 <div class="card mb-3">
@@ -145,15 +151,15 @@ $recentExpenses = $stmt->fetchAll();
                 <form method="POST" class="d-inline">
                     <?php echo csrfField(); ?>
                     <input type="hidden" name="action" value="<?php echo $vehicle['is_pinned'] ? 'unpin' : 'pin'; ?>">
-                    <input type="hidden" name="vehicle_id" value="<?php echo $vehicleId; ?>">
+                    <input type="hidden" name="vehicle_id" value="<?php echo IdCodec::encode($vehicleId); ?>">
                     <button type="submit" class="btn btn-sm <?php echo $vehicle['is_pinned'] ? 'btn-warning' : 'btn-outline-warning'; ?>">
                         <i class="fas fa-thumbtack"></i> <?php echo $vehicle['is_pinned'] ? 'Unpin' : 'Pin to Dashboard'; ?>
                     </button>
                 </form>
-                <a href="edit-vehicle?id=<?php echo $vehicleId; ?>" class="btn btn-sm btn-outline-primary">
+                <a href="edit-vehicle?id=<?php echo IdCodec::encode($vehicleId); ?>" class="btn btn-sm btn-outline-primary">
                     <i class="fas fa-edit"></i> Edit
                 </a>
-                <a href="add-service?vehicle_id=<?php echo $vehicleId; ?>" class="btn btn-sm  btn-outline-success">
+                <a href="add-service?vehicle_id=<?php echo IdCodec::encode($vehicleId); ?>" class="btn btn-sm  btn-outline-success">
                     <i class="fas fa-wrench"></i> Add Service
                 </a>
             </div>
@@ -433,7 +439,7 @@ if ($flash): ?>
                     </p>
                 </div>
                 <div class="card-footer">
-                    <a href="add-service?vehicle_id=<?php echo $vehicleId; ?>" class="btn btn-sm btn-outline-primary w-100">
+                    <a href="add-service?vehicle_id=<?php echo IdCodec::encode($vehicleId); ?>" class="btn btn-sm btn-outline-primary w-100">
                         <i class="fas fa-wrench me-1"></i>Record New Service
                     </a>
                 </div>
@@ -454,7 +460,7 @@ if ($flash): ?>
                         </h6>
                     </div>
                     <div class="col-auto text-center pe-x1">
-                        <a href="maintenance-schedule?vehicle_id=<?php echo $vehicleId; ?>" class="btn btn-sm btn-outline-primary"><i class="fas fa-cog"></i> Manage</a>
+                        <a href="maintenance-schedule?vehicle_id=<?php echo IdCodec::encode($vehicleId); ?>" class="btn btn-sm btn-outline-primary"><i class="fas fa-cog"></i> Manage</a>
                     </div>
                 </div>
             </div>
@@ -464,7 +470,7 @@ if ($flash): ?>
                         <i class="fas fa-calendar-alt empty-state-icon fs-3 text-300 mb-3"></i>
                         <h6 class="fs-9 mb-1">No maintenance items scheduled!</h6>
                         <p class="fs-10 mb-3">Track intervals like oil changes, filters, and brake pads.</p>
-                        <a href="maintenance-schedule?vehicle_id=<?php echo $vehicleId; ?>" class="btn btn-primary btn-sm">
+                        <a href="maintenance-schedule?vehicle_id=<?php echo IdCodec::encode($vehicleId); ?>" class="btn btn-primary btn-sm">
                             <i class="fas fa-plus"></i> Add Maintenance Item
                         </a>
                     </div>
@@ -549,7 +555,7 @@ if ($flash): ?>
                         <h6 class="mb-0"><i class="fas fa-history"></i> Recent Services</h6>
                     </div>
                     <div class="col-auto text-center pe-x1">
-                        <a href="service-history?vehicle_id=<?php echo $vehicleId; ?>" class="btn btn-sm btn-outline-primary"><i class="fas fa-eye"></i> View All</a>
+                        <a href="service-history?vehicle_id=<?php echo IdCodec::encode($vehicleId); ?>" class="btn btn-sm btn-outline-primary"><i class="fas fa-eye"></i> View All</a>
                     </div>
                 </div>
             </div>
@@ -559,7 +565,7 @@ if ($flash): ?>
                         <i class="fas fa-wrench empty-state-icon fs-3 text-300 mb-3"></i>
                         <h6 class="fs-9 mb-1">No services yet!</h6>
                         <p class="fs-10 mb-0">Record your first service to get started.</p>
-                        <a href="add-service?vehicle_id=<?php echo $vehicleId; ?>" class="btn btn-primary btn-sm">
+                        <a href="add-service?vehicle_id=<?php echo IdCodec::encode($vehicleId); ?>" class="btn btn-primary btn-sm">
                             <i class="fas fa-plus"></i> Add Service
                         </a>
                     </div>
@@ -590,7 +596,7 @@ if ($flash): ?>
                                                     &bull; <?php echo sanitize($service['service_location']); ?>
                                                 <?php endif; ?>
                                                 <br>
-                                                <a href="service-items?service_id=<?php echo $service['id']; ?>" class="btn rounded-sm-pill btn-sm btn-outline-secondary mt-1">
+                                                <a href="service-items?service_id=<?php echo IdCodec::encode($service['id']); ?>" class="btn rounded-sm-pill btn-sm btn-outline-secondary mt-1">
                                                     View Details
                                                 </a>
                                             </p>
@@ -615,7 +621,7 @@ if ($flash): ?>
                         <h6 class="mb-0"><i class="fas fa-gas-pump"></i> Recent Fuel Logs</h6>
                     </div>
                     <div class="col-auto text-center pe-x1">
-                        <a href="fuel-log?vehicle_id=<?php echo $vehicleId; ?>" class="btn btn-sm btn-outline-primary"><i class="fas fa-eye"></i> View All</a>
+                        <a href="fuel-log?vehicle_id=<?php echo IdCodec::encode($vehicleId); ?>" class="btn btn-sm btn-outline-primary"><i class="fas fa-eye"></i> View All</a>
                     </div>
                 </div>
             </div>
@@ -625,7 +631,7 @@ if ($flash): ?>
                         <i class="fas fa-gas-pump empty-state-icon fs-3 text-300 mb-3"></i>
                         <h6 class="fs-9 mb-1">No fuel records yet!</h6>
                         <p class="fs-10 mb-3">Record your first fueling to get started.</p>
-                        <a href="fuel-log?vehicle_id=<?php echo $vehicleId; ?>" class="btn btn-primary btn-sm">
+                        <a href="fuel-log?vehicle_id=<?php echo IdCodec::encode($vehicleId); ?>" class="btn btn-primary btn-sm">
                             <i class="fas fa-plus"></i> Add Fuel Record
                         </a>
                     </div>
@@ -674,7 +680,7 @@ if ($flash): ?>
                         <h6 class="mb-0"><i class="fas fa-receipt"></i> Recent Expenses</h6>
                     </div>
                     <div class="col-auto text-center pe-x1">
-                        <a href="expenses?vehicle_id=<?php echo $vehicleId; ?>" class="btn btn-sm btn-outline-primary"><i class="fas fa-eye"></i> View All</a>
+                        <a href="expenses?vehicle_id=<?php echo IdCodec::encode($vehicleId); ?>" class="btn btn-sm btn-outline-primary"><i class="fas fa-eye"></i> View All</a>
                     </div>
                 </div>
             </div>
@@ -684,7 +690,7 @@ if ($flash): ?>
                         <i class="fas fa-receipt empty-state-icon fs-3 text-300 mb-3"></i>
                         <h6 class="fs-9 mb-1">No expenses yet!</h6>
                         <p class="fs-10 mb-3">Record your first expense to get started.</p>
-                        <a href="expenses?vehicle_id=<?php echo $vehicleId; ?>" class="btn btn-primary btn-sm">
+                        <a href="expenses?vehicle_id=<?php echo IdCodec::encode($vehicleId); ?>" class="btn btn-primary btn-sm">
                             <i class="fas fa-plus"></i> Add Expense
                         </a>
                     </div>
@@ -715,6 +721,49 @@ if ($flash): ?>
                                     </div>
                                 </div>
                             </div>
+                        <?php endforeach; ?>
+                    </div>
+                <?php endif; ?>
+            </div>
+        </div>
+
+        <!-- Documents & Photos -->
+        <div class="card mt-3">
+            <div class="card-header bg-body-tertiary">
+                <div class="row align-items-center">
+                    <div class="col">
+                        <h6 class="mb-0"><i class="fas fa-images"></i> Documents & Photos</h6>
+                    </div>
+                    <div class="col-auto text-center pe-x1">
+                        <a href="vehicle-documents?vehicle_id=<?php echo IdCodec::encode($vehicleId); ?>" class="btn btn-sm btn-outline-primary"><i class="fas fa-eye"></i> View All</a>
+                    </div>
+                </div>
+            </div>
+            <div class="card-body">
+                <?php if (empty($recentDocuments)): ?>
+                    <div class="empty-state text-center py-4">
+                        <i class="fas fa-images empty-state-icon fs-3 text-300 mb-3"></i>
+                        <h6 class="fs-9 mb-1">No documents yet!</h6>
+                        <p class="fs-10 mb-3">Store insurance, bill of lading, receipts, and photos here.</p>
+                        <a href="vehicle-documents?vehicle_id=<?php echo IdCodec::encode($vehicleId); ?>" class="btn btn-primary btn-sm">
+                            <i class="fas fa-upload"></i> Upload Document
+                        </a>
+                    </div>
+                <?php else: ?>
+                    <div class="d-flex flex-wrap gap-2">
+                        <?php foreach ($recentDocuments as $doc):
+                            $isImage = str_starts_with($doc['file_type'], 'image/');
+                            $fileUrl = 'uploads/documents/' . rawurlencode($doc['file_path']);
+                        ?>
+                            <a href="vehicle-documents?vehicle_id=<?php echo IdCodec::encode($vehicleId); ?>" class="text-decoration-none" title="<?php echo sanitize($doc['title'] ?: $doc['file_name']); ?>">
+                                <?php if ($isImage): ?>
+                                    <img src="<?php echo $fileUrl; ?>" class="rounded-3 border" style="width:64px; height:64px; object-fit:cover;" alt="">
+                                <?php else: ?>
+                                    <div class="rounded-3 border bg-body-tertiary d-flex align-items-center justify-content-center" style="width:64px; height:64px;">
+                                        <i class="fas fa-file-pdf text-danger fs-4"></i>
+                                    </div>
+                                <?php endif; ?>
+                            </a>
                         <?php endforeach; ?>
                     </div>
                 <?php endif; ?>

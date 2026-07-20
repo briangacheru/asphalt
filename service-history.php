@@ -2,16 +2,18 @@
 $pageTitle = 'Service History';
 require_once 'includes/header.php';
 
-$vehicleFilter = $_GET['vehicle_id'] ?? '';
+use App\Helpers\IdCodec;
+
+$vehicleFilter = IdCodec::decode($_GET['vehicle_id'] ?? null);
 $dateFrom = $_GET['date_from'] ?? '';
 $dateTo = $_GET['date_to'] ?? '';
 
-$where = [];
-$params = [];
+$where = ["v.user_id = ?"];
+$params = [$userId];
 if ($vehicleFilter) { $where[] = "sr.vehicle_id = ?"; $params[] = $vehicleFilter; }
 if ($dateFrom) { $where[] = "sr.service_date >= ?"; $params[] = $dateFrom; }
 if ($dateTo) { $where[] = "sr.service_date <= ?"; $params[] = $dateTo; }
-$whereClause = $where ? 'WHERE ' . implode(' AND ', $where) : '';
+$whereClause = 'WHERE ' . implode(' AND ', $where);
 
 $stmt = $pdo->prepare("
     SELECT sr.*, v.make, v.model, v.year, v.license_plate,
@@ -22,7 +24,9 @@ $stmt = $pdo->prepare("
 $stmt->execute($params);
 $services = $stmt->fetchAll();
 
-$vehicles = $pdo->query("SELECT id, make, model, year FROM vehicles WHERE is_active = 1 ORDER BY make, model")->fetchAll();
+$vehiclesStmt = $pdo->prepare("SELECT id, make, model, year FROM vehicles WHERE is_active = 1 AND user_id = ? ORDER BY make, model");
+$vehiclesStmt->execute([$userId]);
+$vehicles = $vehiclesStmt->fetchAll();
 $totalCost = array_sum(array_column($services, 'service_cost'));
 ?>
 
@@ -68,7 +72,7 @@ if ($flash): ?>
             <select name="vehicle_id" class="form-control" style="width: auto; min-width: 200px;">
                 <option value="">All Vehicles</option>
                 <?php foreach ($vehicles as $v): ?>
-                    <option value="<?php echo $v['id']; ?>" <?php echo $vehicleFilter == $v['id'] ? 'selected' : ''; ?>><?php echo sanitize($v['make'] . ' ' . $v['model']); ?></option>
+                    <option value="<?php echo IdCodec::encode($v['id']); ?>" <?php echo $vehicleFilter == $v['id'] ? 'selected' : ''; ?>><?php echo sanitize($v['make'] . ' ' . $v['model']); ?></option>
                 <?php endforeach; ?>
             </select>
             <input type="date" name="date_from" class="form-control" style="width: auto;" value="<?php echo $dateFrom; ?>">
@@ -153,7 +157,7 @@ if ($flash): ?>
                     <tbody>
                     <?php foreach ($services as $s): ?>
                         <tr class="hover-actions-trigger btn-reveal-trigger hover-bg-300 cursor-pointer"
-                            onclick="window.location='service-items.php?service_id=<?php echo $s['id']; ?>'">
+                            onclick="window.location='service-items.php?service_id=<?php echo IdCodec::encode($s['id']); ?>'">
                             <td><strong><?php echo formatDate($s['service_date']); ?></strong></td>
                             <td><?php echo sanitize($s['make'] . ' ' . $s['model']); ?><br><small class="text-muted"><?php echo $s['year']; ?></small></td>
                             <td><strong><?php echo formatNumber($s['mileage']); ?></strong> km</td>

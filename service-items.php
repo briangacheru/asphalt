@@ -2,21 +2,23 @@
 $pageTitle = 'Service Items';
 require_once 'includes/header.php';
 
-$serviceId = (int)($_GET['service_id'] ?? 0);
+use App\Helpers\IdCodec;
+
+$serviceId = IdCodec::decode($_GET['service_id'] ?? null) ?? 0;
 
 if (!$serviceId) {
     setFlashMessage('danger', 'Invalid service record.');
     redirect('service-history');
 }
 
-// Get service record with vehicle info
+// Get service record with vehicle info — scoped to the current user's own vehicle
 $stmt = $pdo->prepare("
     SELECT sr.*, v.make, v.model, v.year, v.license_plate
     FROM service_records sr
     JOIN vehicles v ON sr.vehicle_id = v.id
-    WHERE sr.id = ?
+    WHERE sr.id = ? AND v.user_id = ?
 ");
-$stmt->execute([$serviceId]);
+$stmt->execute([$serviceId, $userId]);
 $service = $stmt->fetch();
 
 if (!$service) {
@@ -79,7 +81,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $stmt->execute([$serviceId, $serviceId]);
 
                 setFlashMessage('success', 'Item added successfully!');
-                redirect('service-items?service_id=' . $serviceId);
+                redirect('service-items?service_id=' . IdCodec::encode($serviceId));
             } catch (PDOException $e) {
                 setFlashMessage('danger', 'Error adding item: ' . $e->getMessage());
             }
@@ -112,7 +114,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $stmt->execute([$serviceId, $serviceId]);
 
                 setFlashMessage('success', 'Item updated successfully!');
-                redirect('service-items?service_id=' . $serviceId);
+                redirect('service-items?service_id=' . IdCodec::encode($serviceId));
             } catch (PDOException $e) {
                 setFlashMessage('danger', 'Error updating item: ' . $e->getMessage());
             }
@@ -133,7 +135,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $stmt->execute([$serviceId, $serviceId]);
 
                 setFlashMessage('success', 'Item deleted successfully!');
-                redirect('service-items?service_id=' . $serviceId);
+                redirect('service-items?service_id=' . IdCodec::encode($serviceId));
             } catch (PDOException $e) {
                 setFlashMessage('danger', 'Error deleting item.');
             }
@@ -176,7 +178,7 @@ $totalCost = array_reduce($existingItems, function($sum, $item) {
                     </div>
                 </div>
                 <div class="col-md-auto mt-4 mt-md-0">
-                    <a class="btn btn-outline-primary btn-sm me-2" href="vehicle-details?id=<?php echo $service['vehicle_id']; ?>" role="button">
+                    <a class="btn btn-outline-primary btn-sm me-2" href="vehicle-details?id=<?php echo IdCodec::encode($service['vehicle_id']); ?>" role="button">
                         <i class="fas fa-car"></i> Vehicle Details
                     </a>
                     <a class="btn btn-outline-secondary btn-sm me-2" href="service-history" role="button">

@@ -172,6 +172,7 @@ The application uses the following main tables:
 - `expenses` - Vehicle expense tracking
 - `service_items` - Predefined service item templates
 - `email_logs` - Email notification history
+- `vehicle_documents` - Uploaded documents & photos per vehicle (insurance, bill of lading, receipts, etc.); created automatically on first request, see `includes/header.php`
 
 ## Security Features
 
