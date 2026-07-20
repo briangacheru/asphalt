@@ -458,7 +458,7 @@ if ($flash): ?>
                     </div>
                 </div>
             </div>
-            <div class="card-body p-0">
+            <div class="card-body scrollbar recent-activity-body-height ps-2">
                 <?php if (empty($maintenanceItems)): ?>
                     <div class="empty-state text-center py-4">
                         <i class="fas fa-calendar-alt empty-state-icon fs-3 text-300 mb-3"></i>
@@ -469,67 +469,73 @@ if ($flash): ?>
                         </a>
                     </div>
                 <?php else: ?>
-                    <div class="table-responsive">
-                        <table class="table table-responsive-sm mb-0 fs-10">
-                            <thead class="bg-200">
-                            <tr>
-                                <th class="text-900">Item</th>
-                                <th class="text-900">Last Done</th>
-                                <th class="text-900">Next Due</th>
-                                <th class="text-900">Status</th>
-                            </tr>
-                            </thead>
-                            <tbody>
-                            <?php foreach ($maintenanceItems as $item): ?>
-                                <tr>
-                                    <td>
-                                        <strong><?php echo sanitize($item['item_type']); ?></strong><br>
-                                        <small class="text-muted">
-                                            <?php
-                                            $interval = [];
-                                            if ($item['interval_km']) $interval[] = number_format($item['interval_km']) . ' km';
-                                            if ($item['interval_months']) $interval[] = $item['interval_months'] . ' months';
-                                            echo implode(' / ', $interval) ?: '-';
-                                            ?>
-                                        </small>
-                                    </td>
-                                    <td>
-                                        <?php if ($item['last_replaced_date']): ?>
-                                            <?php echo date('M d, Y', strtotime($item['last_replaced_date'])); ?><br>
-                                        <?php endif; ?>
-                                        <?php if ($item['last_replaced_mileage']): ?>
-                                            <small class="text-muted"><?php echo number_format($item['last_replaced_mileage']); ?> km</small>
-                                        <?php endif; ?>
-                                        <?php if (!$item['last_replaced_date'] && !$item['last_replaced_mileage']): ?>
-                                            <span class="text-muted">Not recorded</span>
-                                        <?php endif; ?>
-                                    </td>
-                                    <td>
-                                        <?php if ($item['next_due_date']): ?>
-                                            <?php echo date('M d, Y', strtotime($item['next_due_date'])); ?><br>
-                                        <?php endif; ?>
-                                        <?php if ($item['next_due_mileage']): ?>
-                                            <small class="text-muted"><?php echo number_format($item['next_due_mileage']); ?> km</small>
-                                        <?php endif; ?>
-                                        <?php if (!$item['next_due_date'] && !$item['next_due_mileage']): ?>
-                                            <span class="text-muted">Not set</span>
-                                        <?php endif; ?>
-                                    </td>
-                                    <td>
-                                        <?php if ($item['status'] === 'overdue'): ?>
-                                            <span class="badge bg-danger"><i class="fas fa-exclamation-circle"></i> Overdue<?php echo $item['remaining'] > 0 ? ' (' . number_format($item['remaining']) . ' km)' : ''; ?></span>
-                                        <?php elseif ($item['status'] === 'due_soon'): ?>
-                                            <span class="badge bg-warning"><i class="fas fa-exclamation-triangle"></i> Due Soon<?php echo $item['remaining'] ? ' (' . number_format($item['remaining']) . ' km left)' : ''; ?></span>
-                                        <?php elseif ($item['status'] === 'upcoming'): ?>
-                                            <span class="badge bg-info"><i class="fas fa-clock"></i> Upcoming<?php echo $item['remaining'] ? ' (' . number_format($item['remaining']) . ' km left)' : ''; ?></span>
-                                        <?php else: ?>
-                                            <span class="badge bg-success"><i class="fas fa-check-circle"></i> OK<?php echo $item['remaining'] ? ' (' . number_format($item['remaining']) . ' km left)' : ''; ?></span>
-                                        <?php endif; ?>
-                                    </td>
-                                </tr>
-                            <?php endforeach; ?>
-                            </tbody>
-                        </table>
+                    <div>
+                        <?php foreach ($maintenanceItems as $item):
+                            switch ($item['status']) {
+                                case 'overdue':
+                                    $mColor = 'danger'; $mIcon = 'fa-exclamation-circle'; $mLabel = 'Overdue';
+                                    break;
+                                case 'due_soon':
+                                    $mColor = 'warning'; $mIcon = 'fa-exclamation-triangle'; $mLabel = 'Due Soon';
+                                    break;
+                                case 'upcoming':
+                                    $mColor = 'info'; $mIcon = 'fa-clock'; $mLabel = 'Upcoming';
+                                    break;
+                                default:
+                                    $mColor = 'success'; $mIcon = 'fa-check-circle'; $mLabel = 'OK';
+                            }
+                        ?>
+                            <div class="row g-3 timeline timeline-<?php echo $mColor; ?> timeline-current pb-x1">
+                                <div class="col-auto ps-4 ms-2">
+                                    <div class="ps-2">
+                                        <div class="icon-item icon-item-sm rounded-circle bg-soft-<?php echo $mColor; ?> shadow-none">
+                                            <i class="fas <?php echo $mIcon; ?> text-<?php echo $mColor; ?>"></i>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col">
+                                    <div class="row gx-0 border-bottom pb-x1">
+                                        <div class="col">
+                                            <h6 class="text-800 mb-1"><?php echo sanitize($item['item_type']); ?>
+                                                <span class="badge rounded-pill ms-2 badge-subtle-<?php echo $mColor; ?>"><?php echo $mLabel; ?></span>
+                                            </h6>
+                                            <p class="fs-10 text-600 mb-0">
+                                                <?php
+                                                $interval = [];
+                                                if ($item['interval_km']) $interval[] = number_format($item['interval_km']) . ' km';
+                                                if ($item['interval_months']) $interval[] = $item['interval_months'] . ' months';
+                                                echo $interval ? implode(' / ', $interval) . ' interval' : 'No interval set';
+                                                ?>
+                                                <?php if ($item['remaining']): ?>
+                                                    &bull; <?php echo number_format($item['remaining']); ?> km <?php echo $item['status'] === 'overdue' ? 'overdue' : 'left'; ?>
+                                                <?php endif; ?>
+                                                <br>
+                                                <?php if ($item['last_replaced_date'] || $item['last_replaced_mileage']): ?>
+                                                    Last done:
+                                                    <?php if ($item['last_replaced_date']): ?><?php echo date('M d, Y', strtotime($item['last_replaced_date'])); ?><?php endif; ?>
+                                                    <?php if ($item['last_replaced_mileage']): ?> at <?php echo number_format($item['last_replaced_mileage']); ?> km<?php endif; ?>
+                                                <?php else: ?>
+                                                    Not recorded yet
+                                                <?php endif; ?>
+                                            </p>
+                                        </div>
+                                        <div class="col-auto">
+                                            <p class="fs-11 text-500 mb-0 text-end">
+                                                <?php if ($item['next_due_date']): ?>
+                                                    <?php echo date('M d, Y', strtotime($item['next_due_date'])); ?><br>
+                                                <?php endif; ?>
+                                                <?php if ($item['next_due_mileage']): ?>
+                                                    <?php echo number_format($item['next_due_mileage']); ?> km
+                                                <?php endif; ?>
+                                                <?php if (!$item['next_due_date'] && !$item['next_due_mileage']): ?>
+                                                    Not set
+                                                <?php endif; ?>
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        <?php endforeach; ?>
                     </div>
                 <?php endif; ?>
             </div>
@@ -613,7 +619,7 @@ if ($flash): ?>
                     </div>
                 </div>
             </div>
-            <div class="card-body p-0">
+            <div class="card-body scrollbar recent-activity-body-height ps-2">
                 <?php if (empty($recentFuelLogs)): ?>
                     <div class="empty-state text-center py-4">
                         <i class="fas fa-gas-pump empty-state-icon fs-3 text-300 mb-3"></i>
@@ -624,31 +630,37 @@ if ($flash): ?>
                         </a>
                     </div>
                 <?php else: ?>
-                    <div class="table-responsive">
-                        <table class="table table-responsive-sm mb-0 fs-10">
-                            <thead class="bg-200">
-                            <tr>
-                                <th class="text-900">Date</th>
-                                <th class="text-900">Mileage</th>
-                                <th class="text-900">Liters</th>
-                                <th class="text-900">Price/L</th>
-                                <th class="text-900">Total</th>
-                                <th class="text-900">Station</th>
-                            </tr>
-                            </thead>
-                            <tbody>
-                            <?php foreach ($recentFuelLogs as $f): ?>
-                                <tr>
-                                    <td><?php echo formatDate($f['fill_date']); ?></td>
-                                    <td><?php echo formatNumber($f['mileage']); ?> km</td>
-                                    <td><?php echo number_format($f['liters'], 2); ?> L</td>
-                                    <td>Ksh. <?php echo number_format($f['price_per_liter'], 2); ?></td>
-                                    <td><strong>Ksh. <?php echo number_format($f['total_cost'], 2); ?></strong></td>
-                                    <td><?php echo $f['station_name'] ? sanitize($f['station_name']) : '-'; ?></td>
-                                </tr>
-                            <?php endforeach; ?>
-                            </tbody>
-                        </table>
+                    <div>
+                        <?php foreach ($recentFuelLogs as $f): ?>
+                            <div class="row g-3 timeline timeline-info timeline-current pb-x1">
+                                <div class="col-auto ps-4 ms-2">
+                                    <div class="ps-2">
+                                        <div class="icon-item icon-item-sm rounded-circle bg-soft-info shadow-none">
+                                            <i class="fas fa-gas-pump text-info"></i>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col">
+                                    <div class="row gx-0 border-bottom pb-x1">
+                                        <div class="col">
+                                            <h6 class="text-800 mb-1"><?php echo formatNumber($f['mileage']); ?> km
+                                                <span class="badge rounded-pill ms-2 badge-subtle-info"><?php echo number_format($f['liters'], 2); ?> L</span>
+                                            </h6>
+                                            <p class="fs-10 text-600 mb-0">
+                                                <strong>Ksh. <?php echo number_format($f['total_cost'], 2); ?></strong>
+                                                &bull; Ksh. <?php echo number_format($f['price_per_liter'], 2); ?>/L
+                                                <?php if ($f['station_name']): ?>
+                                                    &bull; <?php echo sanitize($f['station_name']); ?>
+                                                <?php endif; ?>
+                                            </p>
+                                        </div>
+                                        <div class="col-auto">
+                                            <p class="fs-11 text-500 mb-0"><?php echo formatDate($f['fill_date']); ?></p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        <?php endforeach; ?>
                     </div>
                 <?php endif; ?>
             </div>
@@ -666,7 +678,7 @@ if ($flash): ?>
                     </div>
                 </div>
             </div>
-            <div class="card-body p-0">
+            <div class="card-body scrollbar recent-activity-body-height ps-2">
                 <?php if (empty($recentExpenses)): ?>
                     <div class="empty-state text-center py-4">
                         <i class="fas fa-receipt empty-state-icon fs-3 text-300 mb-3"></i>
@@ -677,27 +689,33 @@ if ($flash): ?>
                         </a>
                     </div>
                 <?php else: ?>
-                    <div class="table-responsive">
-                        <table class="table table-responsive-sm mb-0 fs-10">
-                            <thead class="bg-200">
-                            <tr>
-                                <th class="text-900">Date</th>
-                                <th class="text-900">Category</th>
-                                <th class="text-900">Description</th>
-                                <th class="text-900">Amount</th>
-                            </tr>
-                            </thead>
-                            <tbody>
-                            <?php foreach ($recentExpenses as $e): ?>
-                                <tr>
-                                    <td><?php echo formatDate($e['expense_date']); ?></td>
-                                    <td><i class="fas <?php echo $e['category_icon'] ? htmlspecialchars($e['category_icon']) : 'fa-tag'; ?> me-1 text-primary"></i><?php echo sanitize($e['category_name']); ?></td>
-                                    <td><?php echo $e['description'] ? sanitize($e['description']) : '-'; ?></td>
-                                    <td><strong>Ksh. <?php echo number_format($e['amount'], 2); ?></strong></td>
-                                </tr>
-                            <?php endforeach; ?>
-                            </tbody>
-                        </table>
+                    <div>
+                        <?php foreach ($recentExpenses as $e): ?>
+                            <div class="row g-3 timeline timeline-warning timeline-current pb-x1">
+                                <div class="col-auto ps-4 ms-2">
+                                    <div class="ps-2">
+                                        <div class="icon-item icon-item-sm rounded-circle bg-soft-warning shadow-none">
+                                            <i class="fas <?php echo $e['category_icon'] ? htmlspecialchars($e['category_icon']) : 'fa-tag'; ?> text-warning"></i>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col">
+                                    <div class="row gx-0 border-bottom pb-x1">
+                                        <div class="col">
+                                            <h6 class="text-800 mb-1">Ksh. <?php echo number_format($e['amount'], 2); ?>
+                                                <span class="badge rounded-pill ms-2 badge-subtle-warning"><?php echo sanitize($e['category_name']); ?></span>
+                                            </h6>
+                                            <p class="fs-10 text-600 mb-0">
+                                                <?php echo $e['description'] ? sanitize($e['description']) : 'No description'; ?>
+                                            </p>
+                                        </div>
+                                        <div class="col-auto">
+                                            <p class="fs-11 text-500 mb-0"><?php echo formatDate($e['expense_date']); ?></p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        <?php endforeach; ?>
                     </div>
                 <?php endif; ?>
             </div>
