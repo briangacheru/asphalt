@@ -72,7 +72,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <?php
 $flash = getFlashMessage();
 if ($flash): ?>
-    <div class="alert alert-<?php echo $flash['type']; ?> alert-dismissible fade show" role="alert">
+    <div class="alert alert-<?php echo $flash['type']; ?> alert-dismissible alert-sticky fade show" role="alert">
         <i class="fas fa-<?php echo $flash['type'] === 'success' ? 'check-circle' : ($flash['type'] === 'danger' ? 'exclamation-circle' : 'info-circle'); ?>"></i>
         <span><?php echo $flash['message']; ?></span>
         <button class="btn-close" type="button" data-bs-dismiss="alert" aria-label="Close"></button>

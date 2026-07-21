@@ -327,6 +327,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['delete_vehicle'])) {
                     <h6 class="mb-2 mb-md-0">Update vehicle information</h6>
                 </div>
                 <div class="col-auto">
+                    <button type="button" class="btn btn-outline-secondary btn-sm me-2" data-bs-toggle="modal" data-bs-target="#exportVehicleModal">
+                        <i class="fas fa-file-export"></i> Export
+                    </button>
                     <button type="button" class="btn btn-danger btn-sm me-2" data-bs-toggle="modal" data-bs-target="#deleteVehicleModal">
                         <i class="fas fa-trash"></i> Delete Vehicle
                     </button>
@@ -334,6 +337,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['delete_vehicle'])) {
                     <button class="btn btn-outline-primary btn-sm" type="submit" form="vehicleForm">
                         <i class="fas fa-save"></i> Update Vehicle
                     </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Export Confirmation Modal -->
+    <div class="modal fade" id="exportVehicleModal" tabindex="-1" aria-labelledby="exportVehicleModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="exportVehicleModalLabel">
+                        <i class="fas fa-file-export"></i> Export Vehicle
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="mb-2">This will download a ZIP file containing:</p>
+                    <ul class="mb-3">
+                        <li>Full service history, fuel log, expenses, and maintenance schedule</li>
+                        <li>All uploaded documents and photos</li>
+                    </ul>
+                    <p class="mb-0 text-muted fs-10">
+                        <i class="fas fa-info-circle"></i> Useful when selling this vehicle, or as a personal backup.
+                    </p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+                    <a href="export-vehicle?vehicle_id=<?php echo IdCodec::encode($vehicleId); ?>" class="btn btn-primary btn-sm">
+                        <i class="fas fa-download"></i> Confirm & Download
+                    </a>
                 </div>
             </div>
         </div>

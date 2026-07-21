@@ -265,7 +265,7 @@ if ($flash): ?>
             <div class="btn-group flex-wrap mb-3" role="group" id="category-filter">
                 <button type="button" class="btn btn-sm btn-outline-primary active" data-filter="all">All</button>
                 <?php foreach ($documentCategories as $key => $cat): ?>
-                    <button type="button" class="btn btn-sm btn-outline-primary" data-filter="<?php echo sanitize($key); ?>">
+                    <button type="button" class="btn btn-sm btn-outline-<?php echo sanitize($cat['color']); ?>" data-filter="<?php echo sanitize($key); ?>">
                         <i class="fas <?php echo sanitize($cat['icon']); ?> me-1"></i><?php echo sanitize($cat['label']); ?>
                     </button>
                 <?php endforeach; ?>
@@ -286,7 +286,7 @@ if ($flash): ?>
                                     class="btn btn-sm btn-danger rounded-circle p-0 position-absolute top-0 end-0 m-1 z-1"
                                     style="width:22px;height:22px;line-height:1;"
                                     title="Delete"
-                                    onclick="confirmDeleteDocument('<?php echo (int) $doc['id']; ?>', <?php echo json_encode($displayTitle, JSON_HEX_APOS | JSON_HEX_QUOT); ?>)">
+                                    onclick='confirmDeleteDocument(<?php echo (int) $doc['id']; ?>, <?php echo json_encode($displayTitle, JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_HEX_TAG); ?>)'>
                                 <i class="fas fa-times fs-11"></i>
                             </button>
                             <?php if ($isImage): ?>
@@ -423,6 +423,41 @@ if ($flash): ?>
     </div>
 </div>
 
+<!-- Delete Category Modal -->
+<div class="modal fade" id="delete-category-modal" tabindex="-1" aria-labelledby="deleteCategoryModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title" id="deleteCategoryModalLabel">
+                    <i class="fas fa-exclamation-triangle"></i> Delete Category
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form method="POST" id="delete-category-form">
+                <?php echo csrfField(); ?>
+                <input type="hidden" name="action" value="delete_category">
+                <input type="hidden" name="category_id" id="delete-category-id">
+                <div class="modal-body">
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-circle"></i>
+                        <strong>Warning:</strong> This action cannot be undone.
+                    </div>
+                    <p class="mb-0">
+                        Are you sure you want to delete the category <strong id="delete-category-name-display"></strong>?
+                        This is only possible if no documents currently use it.
+                    </p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-danger btn-sm">
+                        <i class="fas fa-trash"></i> Delete Category
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <!-- Manage Categories Modal -->
 <div class="modal fade" id="manage-categories-modal" tabindex="-1" aria-labelledby="manageCategoriesModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-lg modal-dialog-scrollable">
@@ -457,14 +492,10 @@ if ($flash): ?>
                                             title="Edit">
                                         <i class="fas fa-edit"></i>
                                     </button>
-                                    <form method="POST" class="d-inline" onsubmit="return confirm('Delete this category? It must not be in use by any document.');">
-                                        <?php echo csrfField(); ?>
-                                        <input type="hidden" name="action" value="delete_category">
-                                        <input type="hidden" name="category_id" value="<?php echo (int) $cat['id']; ?>">
-                                        <button type="submit" class="btn btn-sm btn-outline-danger" title="Delete">
-                                            <i class="fas fa-trash"></i>
-                                        </button>
-                                    </form>
+                                    <button type="button" class="btn btn-sm btn-outline-danger" title="Delete"
+                                            onclick='confirmDeleteCategory(<?php echo (int) $cat['id']; ?>, <?php echo json_encode($cat['label'], JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_HEX_TAG); ?>)'>
+                                        <i class="fas fa-trash"></i>
+                                    </button>
                                 </td>
                             </tr>
                         <?php endforeach; ?>
@@ -678,6 +709,13 @@ if ($flash): ?>
         document.getElementById('delete-document-name-input').value = '';
         document.getElementById('delete-document-form').dataset.expectedName = name;
         new bootstrap.Modal(document.getElementById('delete-document-modal')).show();
+    }
+
+    // Called via inline onclick from each category row's delete button
+    function confirmDeleteCategory(id, label) {
+        document.getElementById('delete-category-id').value = id;
+        document.getElementById('delete-category-name-display').textContent = label;
+        new bootstrap.Modal(document.getElementById('delete-category-modal')).show();
     }
 </script>
 
