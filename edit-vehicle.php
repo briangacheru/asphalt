@@ -3,6 +3,8 @@ $pageTitle = 'Edit Vehicle';
 require_once 'includes/header.php';
 
 use App\Helpers\IdCodec;
+use App\Services\VehicleExportService;
+use App\Services\EmailService;
 
 // Get vehicle ID
 $vehicleId = IdCodec::decode($_GET['id'] ?? null) ?? 0;
@@ -26,6 +28,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_vehicle'])) {
         $vehicle_plate = $vehicle['license_plate'] ?? '';
 
         if ($entered_plate === $vehicle_plate) {
+            // Email a full backup export (data + files) before deleting, as a safety net
+            $export = (new VehicleExportService($pdo))->buildZip($vehicleId, $userId);
+            if ($export && !empty($currentUser['email'])) {
+                try {
+                    (new EmailService($pdo))->sendVehicleExportEmail($vehicleId, $userId, $export['path'], $export['filename']);
+                } catch (\Throwable $e) {
+                    error_log('Vehicle export email failed: ' . $e->getMessage());
+                }
+                @unlink($export['path']);
+            }
+
             // Delete vehicle image if exists
             if (!empty($vehicle['image_path']) && file_exists(UPLOAD_DIR . $vehicle['image_path'])) {
                 unlink(UPLOAD_DIR . $vehicle['image_path']);

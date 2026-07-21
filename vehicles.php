@@ -69,6 +69,9 @@ if ($flash): ?>
                     </div>
                 </div>
                 <div class="col-md-auto mt-4 mt-md-0">
+                    <a class="btn btn-outline-secondary btn-sm me-2" href="import-vehicle" role="button" title="Import a vehicle exported from this app">
+                        <i class="fas fa-file-import"></i> Import Vehicle
+                    </a>
                     <a class="btn btn-outline-success btn-sm me-2" href="add-vehicle" role="button">
                         <i class="fas fa-plus"></i> Add Vehicle
                     </a>

@@ -59,10 +59,17 @@ class EmailService
     }
 
     /**
-     * Send an email
+     * Send an email. Pass $attachmentPath (and optionally $attachmentName) to
+     * attach a single file — used for the vehicle export backup on delete.
      */
-    public function send(string $to, string $subject, string $htmlBody, string $plainBody = ''): bool
-    {
+    public function send(
+        string $to,
+        string $subject,
+        string $htmlBody,
+        string $plainBody = '',
+        ?string $attachmentPath = null,
+        ?string $attachmentName = null
+    ): bool {
         try {
             // Clear previous recipients and attachments
             $this->mailer->clearAddresses();
@@ -72,6 +79,10 @@ class EmailService
             $this->mailer->Subject = $subject;
             $this->mailer->Body    = $htmlBody;
             $this->mailer->AltBody = $plainBody ?: strip_tags($htmlBody);
+
+            if ($attachmentPath && file_exists($attachmentPath)) {
+                $this->mailer->addAttachment($attachmentPath, $attachmentName ?: basename($attachmentPath));
+            }
 
             return $this->mailer->send();
 
@@ -591,6 +602,50 @@ class EmailService
 
         $sent = $this->send($data['email'], $subject, $html);
         $this->logEmail($vehicleId, 'maintenance_due', $data['email'], $subject, $html, $sent ? 'sent' : 'failed');
+
+        return $sent;
+    }
+
+    /**
+     * Email a vehicle's full export (service history, fuel log, expenses,
+     * maintenance schedule, documents/photos) as a ZIP attachment — sent as
+     * a safety-net backup right before the vehicle is deleted.
+     */
+    public function sendVehicleExportEmail(int $vehicleId, int $userId, string $exportPath, string $exportFilename): bool
+    {
+        $stmt = $this->pdo->prepare("
+            SELECT v.make, v.model, v.year, u.email, u.first_name
+            FROM vehicles v
+            JOIN users u ON v.user_id = u.id
+            WHERE v.id = ? AND v.user_id = ?
+        ");
+        $stmt->execute([$vehicleId, $userId]);
+        $data = $stmt->fetch();
+
+        if (!$data) {
+            return false;
+        }
+
+        $vehicleName = $data['make'] . ' ' . $data['model'] . ' (' . $data['year'] . ')';
+
+        $content = sprintf('
+            <h2 style="margin: 0 0 20px; color: #ffffff; font-size: 20px;">Vehicle Deleted — Backup Attached</h2>
+            <p style="margin: 0 0 20px; line-height: 1.6;">Hi %s,</p>
+            <p style="margin: 0 0 20px; line-height: 1.6;">You deleted <strong>%s</strong> from your account. Before deleting it, we backed up its full history — service records, fuel log, expenses, maintenance schedule, and documents/photos — into the attached ZIP file.</p>
+
+            <div style="background: rgba(0,0,0,0.3); border-radius: 12px; padding: 20px; margin: 20px 0;">
+                <p style="margin: 0; color: #e5e5ea; line-height: 1.6;">Keep this file if you might need it later — for example, to hand it to a new owner, or to bring the vehicle back by importing it into your account again.</p>
+            </div>
+        ',
+            htmlspecialchars($data['first_name']),
+            htmlspecialchars($vehicleName)
+        );
+
+        $subject = "Backup: $vehicleName (deleted)";
+        $html = $this->getEmailTemplate($content, $subject);
+
+        $sent = $this->send($data['email'], $subject, $html, '', $exportPath, $exportFilename);
+        $this->logEmail($vehicleId, 'vehicle_export', $data['email'], $subject, $html, $sent ? 'sent' : 'failed');
 
         return $sent;
     }

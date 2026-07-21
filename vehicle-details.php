@@ -162,6 +162,9 @@ $recentDocuments = $stmt->fetchAll();
                 <a href="add-service?vehicle_id=<?php echo IdCodec::encode($vehicleId); ?>" class="btn btn-sm  btn-outline-success">
                     <i class="fas fa-wrench"></i> Add Service
                 </a>
+                <a href="export-vehicle?vehicle_id=<?php echo IdCodec::encode($vehicleId); ?>" class="btn btn-sm btn-outline-secondary" title="Download a ZIP with this vehicle's full history and files — useful when selling the car or as a backup">
+                    <i class="fas fa-file-export"></i> Export
+                </a>
             </div>
         </div>
     </div>
