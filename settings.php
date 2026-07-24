@@ -2,6 +2,7 @@
 $pageTitle = 'Settings';
 require_once 'includes/header.php';
 use App\Services\EmailService;
+use App\Services\SiteSettingsService;
 
 // Get current user settings
 $stmt = $pdo->prepare("SELECT * FROM users WHERE id = ?");
@@ -194,7 +195,76 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         redirect('settings');
     }
+
+    if ($action === 'update_login_background') {
+        if (!isset($_FILES['login_background']) || $_FILES['login_background']['error'] !== UPLOAD_ERR_OK) {
+            setFlashMessage('danger', 'Please choose an image to upload.');
+            redirect('settings');
+        }
+
+        $allowed_types = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+        $max_size = 5 * 1024 * 1024; // 5MB
+
+        $finfo = finfo_open(FILEINFO_MIME_TYPE);
+        $mime = finfo_file($finfo, $_FILES['login_background']['tmp_name']);
+        finfo_close($finfo);
+
+        if (!in_array($mime, $allowed_types)) {
+            setFlashMessage('danger', 'Invalid file type. Please upload a JPEG, PNG, GIF, or WebP image.');
+            redirect('settings');
+        }
+
+        if ($_FILES['login_background']['size'] > $max_size) {
+            setFlashMessage('danger', 'File too large. Maximum size is 5MB.');
+            redirect('settings');
+        }
+
+        // Confirm it's a genuine, readable raster image (defense against MIME spoofing)
+        if (@getimagesize($_FILES['login_background']['tmp_name']) === false) {
+            setFlashMessage('danger', "That file doesn't look like a valid image. Please try another.");
+            redirect('settings');
+        }
+
+        $upload_dir = UPLOAD_DIR . 'branding/';
+        if (!is_dir($upload_dir)) {
+            mkdir($upload_dir, 0755, true);
+        }
+
+        $extMap = ['image/jpeg' => 'jpg', 'image/png' => 'png', 'image/gif' => 'gif', 'image/webp' => 'webp'];
+        $filename = 'login_bg_' . time() . '_' . uniqid() . '.' . $extMap[$mime];
+        $dest = $upload_dir . $filename;
+
+        if (move_uploaded_file($_FILES['login_background']['tmp_name'], $dest)) {
+            $oldPath = SiteSettingsService::get($pdo, 'login_background');
+            SiteSettingsService::set($pdo, 'login_background', 'uploads/branding/' . $filename, $_SESSION['user_id']);
+
+            if ($oldPath && str_starts_with($oldPath, 'uploads/branding/')) {
+                @unlink(UPLOAD_DIR . 'branding/' . basename($oldPath));
+            }
+
+            setFlashMessage('success', 'Login background updated successfully!');
+        } else {
+            setFlashMessage('danger', 'Failed to upload image. Please try again.');
+        }
+
+        redirect('settings');
+    }
+
+    if ($action === 'reset_login_background') {
+        $oldPath = SiteSettingsService::get($pdo, 'login_background');
+        SiteSettingsService::delete($pdo, 'login_background');
+
+        if ($oldPath && str_starts_with($oldPath, 'uploads/branding/')) {
+            @unlink(UPLOAD_DIR . 'branding/' . basename($oldPath));
+        }
+
+        setFlashMessage('success', 'Login background reset to default.');
+        redirect('settings');
+    }
 }
+
+$loginBackground = SiteSettingsService::get($pdo, 'login_background');
+$loginBackgroundDisplay = $loginBackground ?: 'assets/img/generic/14.jpg';
 
 // Get email statistics
 $emailStats = $pdo->prepare("
@@ -359,6 +429,77 @@ foreach ($emailStatsRaw as $stat) {
                             <div class="d-flex justify-content-end">
                                 <button type="submit" class="btn btn-sm btn-primary" id="saveAvatarBtn" disabled>
                                     <i class="fas fa-save me-1"></i>Save Avatar
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Login Page Background -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">
+                            <i class="fas fa-image me-2"></i>Login Page Background
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <p class="text-muted small mb-4">Customize the background photo shown on the login page. This is a site-wide setting shown before anyone signs in, so it isn't tied to your account alone — whoever changes it here changes it for everyone.</p>
+
+                        <div class="d-flex align-items-center mb-4 gap-3">
+                            <img id="loginBgPreview"
+                                 src="<?php echo htmlspecialchars($loginBackgroundDisplay); ?>"
+                                 alt="Current login background"
+                                 class="rounded border shadow-sm"
+                                 style="width:120px;height:80px;object-fit:cover;">
+                            <div>
+                                <p class="mb-1 fw-semibold"><?php echo $loginBackground ? 'Custom Background' : 'Default Background'; ?></p>
+                                <?php if ($loginBackground): ?>
+                                    <form method="POST" class="d-inline" onsubmit="return confirm('Reset to the default login background?');">
+                                        <input type="hidden" name="action" value="reset_login_background">
+                                        <button type="submit" class="btn btn-link btn-sm text-danger p-0">
+                                            <i class="fas fa-undo me-1"></i>Reset to default
+                                        </button>
+                                    </form>
+                                <?php else: ?>
+                                    <p class="text-muted small mb-0">Using the built-in default photo</p>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+
+                        <form method="POST" enctype="multipart/form-data" id="loginBgForm">
+                            <input type="hidden" name="action" value="update_login_background">
+
+                            <div class="upload-zone rounded border-2 border-dashed p-3 text-center"
+                                 id="loginBgUploadZone"
+                                 style="border-style:dashed;border-color:#ced4da;cursor:pointer;transition:border-color .2s,background .2s;">
+                                <input type="file"
+                                       name="login_background"
+                                       id="loginBgInput"
+                                       accept="image/jpeg,image/png,image/gif,image/webp"
+                                       class="d-none">
+                                <div id="loginBgUploadPrompt">
+                                    <i class="fas fa-cloud-upload-alt fa-2x text-muted mb-2"></i>
+                                    <p class="mb-1 text-muted small">Drag &amp; drop or <span class="text-primary fw-semibold" style="cursor:pointer;" id="loginBgBrowseBtn">browse</span></p>
+                                    <p class="text-muted" style="font-size:.75rem;">JPEG, PNG, GIF, WebP · Max 5 MB</p>
+                                </div>
+                                <div id="loginBgPreviewWrap" class="d-none">
+                                    <img id="loginBgUploadPreviewImg" src="" alt="Preview"
+                                         class="rounded border shadow-sm mb-2"
+                                         style="width:120px;height:80px;object-fit:cover;">
+                                    <p class="mb-0 text-success small fw-semibold" id="loginBgFileName"></p>
+                                    <button type="button" class="btn btn-link btn-sm text-danger p-0 mt-1" id="loginBgClearUpload">
+                                        <i class="fas fa-times me-1"></i>Remove
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div class="form-text mt-2">
+                                <strong>Recommended specs:</strong> at least 1200×1600px, portrait orientation (it fills a tall, half-width panel on desktop), ideally under ~1&nbsp;MB after compression so the login page loads quickly. JPEG or WebP compress best for photos.
+                            </div>
+
+                            <div class="d-flex justify-content-end mt-3">
+                                <button type="submit" class="btn btn-sm btn-primary" id="saveLoginBgBtn" disabled>
+                                    <i class="fas fa-save me-1"></i>Save Background
                                 </button>
                             </div>
                         </form>
@@ -907,6 +1048,85 @@ foreach ($emailStatsRaw as $stat) {
                 uploadPrompt.classList.remove('d-none');
                 previewImg.src = '';
                 fileNameEl.textContent = '';
+            }
+        })();
+
+        // Login background upload zone
+        (function () {
+            const fileInput    = document.getElementById('loginBgInput');
+            const uploadZone   = document.getElementById('loginBgUploadZone');
+            const uploadPrompt = document.getElementById('loginBgUploadPrompt');
+            const previewWrap  = document.getElementById('loginBgPreviewWrap');
+            const previewImg   = document.getElementById('loginBgUploadPreviewImg');
+            const fileNameEl   = document.getElementById('loginBgFileName');
+            const clearBtn     = document.getElementById('loginBgClearUpload');
+            const browseBtn    = document.getElementById('loginBgBrowseBtn');
+            const saveBtn      = document.getElementById('saveLoginBgBtn');
+            const mainPreview  = document.getElementById('loginBgPreview');
+            const originalSrc  = mainPreview.src;
+
+            if (!fileInput) return;
+
+            browseBtn.addEventListener('click', () => fileInput.click());
+            uploadZone.addEventListener('click', (e) => {
+                if (e.target !== clearBtn && !clearBtn.contains(e.target)) {
+                    fileInput.click();
+                }
+            });
+
+            uploadZone.addEventListener('dragover', e => {
+                e.preventDefault();
+                uploadZone.classList.add('drag-over');
+            });
+            uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('drag-over'));
+            uploadZone.addEventListener('drop', e => {
+                e.preventDefault();
+                uploadZone.classList.remove('drag-over');
+                if (e.dataTransfer.files.length) {
+                    fileInput.files = e.dataTransfer.files;
+                    handleFile(e.dataTransfer.files[0]);
+                }
+            });
+
+            fileInput.addEventListener('change', () => {
+                if (fileInput.files.length) handleFile(fileInput.files[0]);
+            });
+
+            function handleFile(file) {
+                const allowed = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+                if (!allowed.includes(file.type)) {
+                    alert('Please select a JPEG, PNG, GIF, or WebP image.');
+                    return;
+                }
+                if (file.size > 5 * 1024 * 1024) {
+                    alert('File is too large. Maximum size is 5 MB.');
+                    return;
+                }
+
+                const reader = new FileReader();
+                reader.onload = e => {
+                    previewImg.src = e.target.result;
+                    mainPreview.src = e.target.result;
+                };
+                reader.readAsDataURL(file);
+
+                fileNameEl.textContent = file.name;
+                uploadPrompt.classList.add('d-none');
+                previewWrap.classList.remove('d-none');
+                saveBtn.disabled = false;
+            }
+
+            clearBtn.addEventListener('click', e => {
+                e.stopPropagation();
+                resetUpload();
+                saveBtn.disabled = true;
+            });
+
+            function resetUpload() {
+                fileInput.value = '';
+                previewWrap.classList.add('d-none');
+                uploadPrompt.classList.remove('d-none');
+                mainPreview.src = originalSrc;
             }
         })();
     </script>

@@ -6,6 +6,7 @@ require_once __DIR__ . '/../includes/bootstrap.php';
 
 use App\Middleware\AuthMiddleware;
 use App\Database\Database;
+use App\Services\SiteSettingsService;
 
 // Redirect if already logged in
 if (AuthMiddleware::isLoggedIn()) {
@@ -15,6 +16,9 @@ if (AuthMiddleware::isLoggedIn()) {
 $pdo = Database::getInstance()->getConnection();
 $errors = [];
 $email = '';
+
+$loginBackground = SiteSettingsService::get($pdo, 'login_background');
+$loginBackgroundUrl = $loginBackground ? '../' . $loginBackground : '../assets/img/generic/14.jpg';
 
 // Handle login form submission
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -179,7 +183,7 @@ if (!isLoggedIn() && isset($_COOKIE['remember_token'])) {
         </script>
         <div class="row min-vh-100 bg-100">
           <div class="col-6 d-none d-lg-block position-relative">
-            <div class="bg-holder" style="background-image:url(../assets/img/generic/14.jpg);background-position: 50% 20%;">
+            <div class="bg-holder" style="background-image:url(<?php echo htmlspecialchars($loginBackgroundUrl); ?>);background-position: 50% 20%;">
             </div>
             <!--/.bg-holder-->
 
