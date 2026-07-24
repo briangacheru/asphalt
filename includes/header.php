@@ -324,8 +324,8 @@ $currentPage = basename($_SERVER['PHP_SELF'], '.php');
             <ul class="navbar-nav align-items-center d-none d-lg-block">
               <li class="nav-item">
                 <div class="search-box" data-list='{"valueNames":["title"]}'>
-                  <form class="position-relative" data-bs-toggle="search" data-bs-display="static">
-                    <input class="form-control search-input fuzzy-search" type="search" placeholder="Search..." aria-label="Search" />
+                  <form class="position-relative" role="search" action="search" method="get" id="topbarSearchForm" autocomplete="off" data-bs-toggle="search" data-bs-display="static">
+                    <input class="form-control search-input fuzzy-search" type="search" name="q" id="topbarSearchInput" minlength="2" placeholder="Search vehicles, expenses, service, reports, emails..." aria-label="Search" />
                     <span class="fas fa-search search-box-icon"></span>
 
                   </form>
@@ -333,22 +333,8 @@ $currentPage = basename($_SERVER['PHP_SELF'], '.php');
                     <button class="btn btn-link btn-close-falcon p-0" aria-label="Close"></button>
                   </div>
                   <div class="dropdown-menu border font-base start-0 mt-2 py-0 overflow-hidden w-100">
-                    <div class="scrollbar list py-3" style="max-height: 24rem;">
-                      <h6 class="dropdown-header fw-medium text-uppercase px-x1 fs-11 pt-0 pb-2">Recently Browsed</h6><a class="dropdown-item fs-10 px-x1 py-1 hover-primary" href="app/events/event-detail.html">
-                        <!--<div class="d-flex align-items-center">
-                          <span class="fas fa-circle me-2 text-300 fs-11"></span>
-
-                          <div class="fw-normal title">Pages <span class="fas fa-chevron-right mx-1 text-500 fs-11" data-fa-transform="shrink-2"></span> Events</div>
-                        </div>-->
-                      </a>
-                      <!--<a class="dropdown-item fs-10 px-x1 py-1 hover-primary" href="app/e-commerce/customers.html">
-                        <div class="d-flex align-items-center">
-                          <span class="fas fa-circle me-2 text-300 fs-11"></span>
-
-                          <div class="fw-normal title">E-commerce <span class="fas fa-chevron-right mx-1 text-500 fs-11" data-fa-transform="shrink-2"></span> Customers</div>
-                        </div>
-                      </a>-->
-
+                    <div class="scrollbar list py-3" id="topbarSearchResults" style="max-height: 24rem;">
+                      <p class="text-center fs-10 text-muted mb-0 px-x1 py-2">Type at least 2 characters to search…</p>
                     </div>
                     <div class="text-center mt-n3">
                       <p class="fallback fw-bold fs-8 d-none">No Result Found.</p>
