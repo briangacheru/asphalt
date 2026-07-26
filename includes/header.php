@@ -4,6 +4,40 @@ require_once __DIR__ . '/bootstrap.php';
 \App\Middleware\AuthMiddleware::check();
 $pdo = \App\Database\Database::getInstance()->getConnection();
 
+// One-time schema migration: add role support to users (first registered
+// account becomes admin so there's always at least one; everyone else stays 'user')
+$roleMigrationFlag = __DIR__ . '/../uploads/.role_migration_done';
+if (!file_exists($roleMigrationFlag)) {
+    try {
+        $pdo->exec("ALTER TABLE users
+            ADD COLUMN IF NOT EXISTS role VARCHAR(20) NOT NULL DEFAULT 'user'");
+        $pdo->exec("UPDATE users SET role = 'admin' WHERE id = (SELECT id FROM (SELECT MIN(id) AS id FROM users) t) AND role != 'admin'");
+    } catch (PDOException $e) {
+        error_log('User role migration failed: ' . $e->getMessage());
+    }
+    @touch($roleMigrationFlag);
+}
+
+// One-time schema migration: add cron_job_log table (shared by all cron scripts
+// and read by the Admin Dashboard)
+$cronLogMigrationFlag = __DIR__ . '/../uploads/.cron_log_migration_done';
+if (!file_exists($cronLogMigrationFlag)) {
+    try {
+        $pdo->exec("CREATE TABLE IF NOT EXISTS cron_job_log (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            job_name VARCHAR(100) NOT NULL,
+            vehicles_processed INT NOT NULL DEFAULT 0,
+            emails_sent INT NOT NULL DEFAULT 0,
+            emails_failed INT NOT NULL DEFAULT 0,
+            details TEXT NULL,
+            run_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    } catch (PDOException $e) {
+        error_log('cron_job_log migration failed: ' . $e->getMessage());
+    }
+    @touch($cronLogMigrationFlag);
+}
+
 // One-time schema migration: add pin-to-dashboard support to vehicles table
 $pinMigrationFlag = __DIR__ . '/../uploads/.pinned_migration_done';
 if (!file_exists($pinMigrationFlag)) {
@@ -307,6 +341,12 @@ $currentPage = basename($_SERVER['PHP_SELF'], '.php');
                           <div class="d-flex align-items-center"><span class="nav-link-icon"><span class="fas fa-cog"></span></span><span class="nav-link-text ps-1">Settings</span>
                           </div>
                       </a>
+                      <?php if (\App\Middleware\AuthMiddleware::isAdmin()): ?>
+                      <!-- parent pages--><a class="nav-link <?php echo $currentPage === 'admin' ? 'reports' : ''; ?>" href="admin" role="button">
+                          <div class="d-flex align-items-center"><span class="nav-link-icon"><span class="fas fa-user-shield"></span></span><span class="nav-link-text ps-1">Admin Dashboard</span>
+                          </div>
+                      </a>
+                      <?php endif; ?>
 
                   </li>
               </ul>
@@ -429,6 +469,9 @@ $currentPage = basename($_SERVER['PHP_SELF'], '.php');
 
                     <div class="dropdown-divider"></div>
                     <a class="dropdown-item" href="settings">Settings</a>
+                    <?php if (\App\Middleware\AuthMiddleware::isAdmin()): ?>
+                    <a class="dropdown-item" href="admin"><span class="fas fa-user-shield me-1 text-warning"></span>Admin Dashboard</a>
+                    <?php endif; ?>
                     <a class="dropdown-item" href="auth/logout">Logout</a>
                   </div>
                 </div>

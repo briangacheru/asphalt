@@ -69,6 +69,46 @@ class AuthMiddleware
     }
 
     /**
+     * Check if the current user has the 'admin' role. Role is cached in the
+     * session at login (see auth/login.php); sessions started before roles
+     * existed fall back to a one-time DB lookup, cached here for the rest
+     * of the session.
+     */
+    public static function isAdmin(): bool
+    {
+        if (session_status() === PHP_SESSION_NONE) {
+            session_start();
+        }
+
+        if (!self::isLoggedIn()) {
+            return false;
+        }
+
+        if (!isset($_SESSION['user_role'])) {
+            $pdo = \App\Database\Database::getInstance()->getConnection();
+            $stmt = $pdo->prepare("SELECT role FROM users WHERE id = ?");
+            $stmt->execute([$_SESSION['user_id']]);
+            $_SESSION['user_role'] = $stmt->fetchColumn() ?: 'user';
+        }
+
+        return $_SESSION['user_role'] === 'admin';
+    }
+
+    /**
+     * Require the current user to be an admin; redirects home otherwise.
+     */
+    public static function requireAdmin(): void
+    {
+        self::check();
+
+        if (!self::isAdmin()) {
+            self::setFlashMessage('danger', 'You do not have permission to access that page.');
+            header('Location: ' . APP_URL . '/');
+            exit;
+        }
+    }
+
+    /**
      * Set flash message
      */
     private static function setFlashMessage(string $type, string $message): void

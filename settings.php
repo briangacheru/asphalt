@@ -3,6 +3,7 @@ $pageTitle = 'Settings';
 require_once 'includes/header.php';
 use App\Services\EmailService;
 use App\Services\SiteSettingsService;
+use App\Middleware\AuthMiddleware;
 
 // Get current user settings
 $stmt = $pdo->prepare("SELECT * FROM users WHERE id = ?");
@@ -197,6 +198,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if ($action === 'update_login_background') {
+        if (!AuthMiddleware::isAdmin()) {
+            setFlashMessage('danger', 'Only admins can change the login background.');
+            redirect('settings');
+        }
+
         if (!isset($_FILES['login_background']) || $_FILES['login_background']['error'] !== UPLOAD_ERR_OK) {
             setFlashMessage('danger', 'Please choose an image to upload.');
             redirect('settings');
@@ -251,6 +257,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if ($action === 'reset_login_background') {
+        if (!AuthMiddleware::isAdmin()) {
+            setFlashMessage('danger', 'Only admins can change the login background.');
+            redirect('settings');
+        }
+
         $oldPath = SiteSettingsService::get($pdo, 'login_background');
         SiteSettingsService::delete($pdo, 'login_background');
 
@@ -435,7 +446,8 @@ foreach ($emailStatsRaw as $stat) {
                     </div>
                 </div>
 
-                <!-- Login Page Background -->
+                <!-- Login Page Background (admins only) -->
+                <?php if (AuthMiddleware::isAdmin()): ?>
                 <div class="card mb-4">
                     <div class="card-header">
                         <h5 class="card-title mb-0">
@@ -505,6 +517,7 @@ foreach ($emailStatsRaw as $stat) {
                         </form>
                     </div>
                 </div>
+                <?php endif; ?>
 
                 <!-- Profile Settings -->
                 <div class="card mb-4">

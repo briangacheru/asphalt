@@ -55,6 +55,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $_SESSION['user_id'] = $user['id'];
                     $_SESSION['user_email'] = $user['email'];
                     $_SESSION['user_name'] = $user['first_name'];
+                    $_SESSION['user_role'] = $user['role'] ?? 'user';
                     
                     // Update last login
                     $pdo->prepare("UPDATE users SET last_login = NOW() WHERE id = ?")->execute([$user['id']]);
@@ -106,6 +107,7 @@ if (!isLoggedIn() && isset($_COOKIE['remember_token'])) {
         $_SESSION['user_id'] = $user['id'];
         $_SESSION['user_email'] = $user['email'];
         $_SESSION['user_name'] = $user['first_name'];
+        $_SESSION['user_role'] = $user['role'] ?? 'user';
         redirect(APP_URL . '/');
     }
 }

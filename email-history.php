@@ -33,7 +33,8 @@ $emailTypes = [
     'monthly_check' => ['label' => 'Monthly Check', 'icon' => 'fa-calendar', 'color' => 'info'],
     'service_details' => ['label' => 'Service Details', 'icon' => 'fa-wrench', 'color' => 'success'],
     'low_mileage_warning' => ['label' => 'Low Mileage Warning', 'icon' => 'fa-tachometer-alt', 'color' => 'danger'],
-    'test_email' => ['label' => 'Test Email', 'icon' => 'fa-envelope', 'color' => 'primary']
+    'test_email' => ['label' => 'Test Email', 'icon' => 'fa-envelope', 'color' => 'primary'],
+    'database_backup' => ['label' => 'Database Backup', 'icon' => 'fa-database', 'color' => 'dark'],
 ];
 ?>
 

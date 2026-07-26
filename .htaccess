@@ -23,6 +23,10 @@ RewriteRule ^\.git/ - [F,L]
 # Block direct access to SQL files
 RewriteRule \.sql$ - [F,L]
 
+# Block direct access to database backups (contain password hashes — served
+# only through admin.php's authenticated download handler)
+RewriteRule ^uploads/backups/ - [F,L]
+
 # ---------------------------------------------------------
 # ERROR LOGGING CONFIGURATION
 # ---------------------------------------------------------

@@ -684,4 +684,53 @@ class EmailService
 
         return $sent;
     }
+
+    /**
+     * Notify the admin that the database backup cron ran. Doesn't attach the
+     * dump itself — SMTP servers routinely cap attachments at 10-25MB and a
+     * growing production dump would eventually blow past that silently.
+     */
+    public function sendDatabaseBackupEmail(bool $success, array $details): bool
+    {
+        if ($success) {
+            $sizeMb = number_format($details['size_bytes'] / 1024 / 1024, 2);
+            $content = sprintf('
+                <h2 style="margin: 0 0 20px; color: #ffffff; font-size: 20px;">Database Backup Completed</h2>
+                <p style="margin: 0 0 20px; line-height: 1.6;">The scheduled database backup finished successfully.</p>
+                <div style="background: rgba(0,0,0,0.3); border-radius: 12px; padding: 20px; margin: 20px 0;">
+                    <p style="margin: 0 0 8px; color: #e5e5ea; line-height: 1.6;"><strong>File:</strong> %s</p>
+                    <p style="margin: 0 0 8px; color: #e5e5ea; line-height: 1.6;"><strong>Size:</strong> %s MB</p>
+                    <p style="margin: 0 0 8px; color: #e5e5ea; line-height: 1.6;"><strong>Tables:</strong> %d</p>
+                    <p style="margin: 0 0 8px; color: #e5e5ea; line-height: 1.6;"><strong>Rows:</strong> %s</p>
+                    <p style="margin: 0; color: #e5e5ea; line-height: 1.6;"><strong>Duration:</strong> %s sec</p>
+                </div>
+                <p style="margin: 0; line-height: 1.6; color: #86868b; font-size: 14px;">Stored on the server at: %s</p>
+            ',
+                htmlspecialchars($details['filename']),
+                $sizeMb,
+                $details['tables'],
+                number_format($details['rows']),
+                $details['duration_seconds'],
+                htmlspecialchars($details['path'])
+            );
+            $subject = 'Database Backup Completed - iVehicle';
+        } else {
+            $content = sprintf('
+                <h2 style="margin: 0 0 20px; color: #ffffff; font-size: 20px;">Database Backup Failed</h2>
+                <p style="margin: 0 0 20px; line-height: 1.6;">The scheduled database backup did not complete.</p>
+                <div style="background: rgba(220,53,69,0.15); border-radius: 12px; padding: 20px; margin: 20px 0;">
+                    <p style="margin: 0; color: #e5e5ea; line-height: 1.6;"><strong>Error:</strong> %s</p>
+                </div>
+            ',
+                htmlspecialchars($details['error'] ?? 'Unknown error')
+            );
+            $subject = 'ALERT: Database Backup Failed - iVehicle';
+        }
+
+        $html = $this->getEmailTemplate($content, $subject);
+        $sent = $this->send(ADMIN_EMAIL, $subject, $html);
+        $this->logEmail(0, 'database_backup', ADMIN_EMAIL, $subject, $html, $sent ? 'sent' : 'failed');
+
+        return $sent;
+    }
 }
