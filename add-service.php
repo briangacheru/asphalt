@@ -4,6 +4,7 @@ require_once 'includes/bootstrap.php';
 use App\Database\Database;
 use App\Models\Vehicle;
 use App\Services\EmailService;
+use App\Services\SiteSettingsService;
 use App\Helpers\IdCodec;
 
 $pdo = Database::getInstance()->getConnection();
@@ -26,8 +27,9 @@ if ($selectedVehicleId) {
     }
 }
 
-// Oil intervals
-$oilIntervals = unserialize(OIL_INTERVALS);
+// Oil intervals — admin-configurable (Admin Dashboard > Reminder & Maintenance Settings)
+$oilIntervalsRaw = SiteSettingsService::get($pdo, 'oil_intervals_km');
+$oilIntervals = $oilIntervalsRaw ? (json_decode($oilIntervalsRaw, true) ?: unserialize(OIL_INTERVALS)) : unserialize(OIL_INTERVALS);
 
 // Handle form submission
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {

@@ -20,6 +20,8 @@ $email = '';
 $loginBackground = SiteSettingsService::get($pdo, 'login_background');
 $loginBackgroundUrl = $loginBackground ? '../' . $loginBackground : '../assets/img/generic/14.jpg';
 
+$maintenanceMode = SiteSettingsService::get($pdo, 'maintenance_mode') === '1';
+
 // Handle login form submission
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // Verify CSRF token
@@ -48,6 +50,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 // Check if verified
                 if (!$user['is_verified']) {
                     $errors[] = 'Please verify your email address first. <a href="resend-verification?email=' . urlencode($email) . '">Resend verification email</a>';
+                } elseif ($maintenanceMode && ($user['role'] ?? 'user') !== 'admin') {
+                    $errors[] = 'The site is currently under maintenance. Please try again later.';
                 } else {
                     // Login successful - regenerate session ID to prevent session fixation
                     session_regenerate_id(true);
@@ -103,7 +107,7 @@ if (!isLoggedIn() && isset($_COOKIE['remember_token'])) {
     $stmt->execute([$token]);
     $user = $stmt->fetch();
     
-    if ($user) {
+    if ($user && !($maintenanceMode && ($user['role'] ?? 'user') !== 'admin')) {
         $_SESSION['user_id'] = $user['id'];
         $_SESSION['user_email'] = $user['email'];
         $_SESSION['user_name'] = $user['first_name'];
@@ -202,6 +206,12 @@ if (!isLoggedIn() && isset($_COOKIE['remember_token'])) {
                       </div>
                       <div class="col-auto fs-10 text-600"><span class="mb-0 fw-semi-bold">New User?</span> <span><a href="../auth/register">Create account</a></span></div>
                     </div>
+                    <?php if ($maintenanceMode): ?>
+                      <div class="alert alert-warning">
+                          <i class="fas fa-tools"></i>
+                          <span>The site is currently under maintenance. Only admin accounts can sign in right now.</span>
+                      </div>
+                    <?php endif; ?>
                     <?php if (!empty($errors)): ?>
                       <div class="alert alert-danger">
                           <i class="fas fa-exclamation-circle"></i>

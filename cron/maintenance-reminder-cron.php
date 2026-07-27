@@ -14,6 +14,7 @@
 require_once __DIR__ . '/../vendor/autoload.php';
 use App\Database\Database;
 use App\Services\EmailService;
+use App\Services\SiteSettingsService;
 
 $pdo = Database::getInstance()->getConnection();
 $emailService = new EmailService($pdo);
@@ -31,9 +32,13 @@ $stats = [
     'emails_failed' => 0,
 ];
 
-// km/days thresholds that define "almost due"
-const DUE_SOON_KM_WINDOW = 1000;
-const DUE_SOON_DAYS_WINDOW = 30;
+// km/days thresholds that define "almost due" — admin-configurable
+// (Admin Dashboard > Reminder & Maintenance Settings)
+$defaultThresholds = ['maintenance_due_soon_km' => 1000, 'maintenance_due_soon_days' => 30];
+$thresholdsRaw = SiteSettingsService::get($pdo, 'reminder_thresholds');
+$thresholds = array_merge($defaultThresholds, $thresholdsRaw ? (json_decode($thresholdsRaw, true) ?: []) : []);
+$dueSoonKmWindow = (int) $thresholds['maintenance_due_soon_km'];
+$dueSoonDaysWindow = (int) $thresholds['maintenance_due_soon_days'];
 
 $stmt = $pdo->query("
     SELECT ms.*, v.make, v.model, v.year, v.current_mileage,
@@ -54,8 +59,8 @@ foreach ($schedules as $item) {
 
     $isOverdue = ($kmOverdue !== null && $kmOverdue > 0) || ($daysUntilDue !== null && $daysUntilDue < 0);
     $isDueSoon = !$isOverdue && (
-        ($kmOverdue !== null && $kmOverdue > -DUE_SOON_KM_WINDOW) ||
-        ($daysUntilDue !== null && $daysUntilDue <= DUE_SOON_DAYS_WINDOW)
+        ($kmOverdue !== null && $kmOverdue > -$dueSoonKmWindow) ||
+        ($daysUntilDue !== null && $daysUntilDue <= $dueSoonDaysWindow)
     );
 
     if (!$isOverdue && !$isDueSoon) {

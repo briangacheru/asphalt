@@ -7,6 +7,7 @@ require_once __DIR__ . '/../includes/bootstrap.php';
 use App\Middleware\AuthMiddleware;
 use App\Database\Database;
 use App\Services\EmailService;
+use App\Services\SiteSettingsService;
 
 // Redirect if already logged in
 if (AuthMiddleware::isLoggedIn()) {
@@ -14,6 +15,14 @@ if (AuthMiddleware::isLoggedIn()) {
 }
 
 $pdo = Database::getInstance()->getConnection();
+
+$maintenanceMode = SiteSettingsService::get($pdo, 'maintenance_mode') === '1';
+$registrationsEnabled = SiteSettingsService::get($pdo, 'registrations_enabled') !== '0';
+$registrationBlocked = $maintenanceMode || !$registrationsEnabled;
+$registrationBlockedMessage = $maintenanceMode
+    ? 'The site is currently under maintenance. New accounts cannot be created right now — please check back later.'
+    : 'New registrations are currently closed. Please check back later.';
+
 $errors = [];
 $formData = [
     'first_name' => '',
@@ -23,7 +32,7 @@ $formData = [
 ];
 
 // Handle registration form submission
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$registrationBlocked) {
     // Verify CSRF token
     if (!verifyCSRFToken($_POST['csrf_token'] ?? null)) {
         $errors[] = 'Invalid security token. Please try again.';
@@ -194,6 +203,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                       </div>
                       <div class="col-auto fs-10 text-600"><span class="mb-0 fw-semi-bold">Already User?</span> <span><a href="../auth/login">Login</a></span></div>
                     </div>
+                    <?php if ($registrationBlocked): ?>
+                      <div class="alert alert-warning">
+                          <i class="fas fa-tools"></i>
+                          <span><?php echo $registrationBlockedMessage; ?></span>
+                      </div>
+                      <a class="btn btn-primary d-block w-100" href="../auth/login">Back to Login</a>
+                    <?php else: ?>
                     <?php if (!empty($errors)): ?>
                       <div class="alert alert-danger">
                           <i class="fas fa-exclamation-circle"></i>
@@ -251,6 +267,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                       <div class="col-sm-6"><a class="btn btn-outline-google-plus btn-sm d-block w-100" href="#"><span class="fab fa-google-plus-g me-2" data-fa-transform="grow-8"></span> google</a></div>
                       <div class="col-sm-6"><a class="btn btn-outline-facebook btn-sm d-block w-100" href="#"><span class="fab fa-facebook-square me-2" data-fa-transform="grow-8"></span> facebook</a></div>
                     </div>
+                    <?php endif; ?>
                   </div>
                 </div>
               </div>

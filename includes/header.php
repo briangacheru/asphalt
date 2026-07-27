@@ -4,6 +4,38 @@ require_once __DIR__ . '/bootstrap.php';
 \App\Middleware\AuthMiddleware::check();
 $pdo = \App\Database\Database::getInstance()->getConnection();
 
+// Maintenance mode: block everyone except admins from using the app itself.
+// (auth/login.php and auth/register.php enforce this separately for pre-auth visitors.)
+$maintenanceModeActive = \App\Services\SiteSettingsService::get($pdo, 'maintenance_mode') === '1';
+if ($maintenanceModeActive && !\App\Middleware\AuthMiddleware::isAdmin()) {
+    http_response_code(503);
+    ?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Under Maintenance - <?php echo APP_NAME; ?></title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background:#0b1727; color:#fff; display:flex; align-items:center; justify-content:center; min-height:100vh; margin:0; text-align:center; }
+        .box { max-width: 420px; padding: 2rem; }
+        .box h2 { margin-bottom: .5rem; }
+        .box p { color: #b9c2cf; }
+        .box a { color:#2a7be4; }
+    </style>
+</head>
+<body>
+    <div class="box">
+        <h2>We'll be right back</h2>
+        <p><?php echo htmlspecialchars(APP_NAME); ?> is currently undergoing maintenance. Please check back shortly.</p>
+        <p><a href="auth/logout">Log out</a></p>
+    </div>
+</body>
+</html>
+    <?php
+    exit;
+}
+
 $currentUser = getCurrentUser();
 $userId = \App\Middleware\AuthMiddleware::getCurrentUserId();
 
@@ -378,6 +410,14 @@ $currentPage = basename($_SERVER['PHP_SELF'], '.php');
               </li>
             </ul>
           </nav>
+
+          <?php if ($maintenanceModeActive): ?>
+            <div class="alert alert-warning rounded-0 mb-0 text-center">
+              <i class="fas fa-tools me-1"></i>
+              Maintenance mode is <strong>ON</strong> — only admins can access the site right now.
+              <a href="admin" class="alert-link">Turn it off in the Admin Dashboard</a>.
+            </div>
+          <?php endif; ?>
 
 
           <!-- ===============================================-->

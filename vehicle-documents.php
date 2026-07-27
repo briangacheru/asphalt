@@ -15,10 +15,8 @@ if (!$vehicle) {
     redirect('vehicles');
 }
 
-// Badge colors supported by the theme's badge-subtle-* classes
-$allowedCategoryColors = ['primary', 'secondary', 'success', 'danger', 'warning', 'info', 'light', 'dark'];
-
-// Document categories: user-manageable, shared across all users (same as expense_categories)
+// Document categories are shared across all users and managed by admins only
+// (Admin Dashboard > Document Categories) — this page only reads them.
 function loadDocumentCategories(PDO $pdo): array
 {
     $rows = $pdo->query("SELECT id, slug, label, icon, color FROM vehicle_document_categories ORDER BY label")->fetchAll();
@@ -32,13 +30,6 @@ function loadDocumentCategories(PDO $pdo): array
         ];
     }
     return $categories;
-}
-
-function slugifyCategory(string $label): string
-{
-    $slug = strtolower(trim($label));
-    $slug = preg_replace('/[^a-z0-9]+/', '_', $slug);
-    return trim($slug, '_') ?: 'category';
 }
 
 $documentCategories = loadDocumentCategories($pdo);
@@ -131,73 +122,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 setFlashMessage('success', 'Document deleted.');
             }
         }
-    } elseif ($action === 'add_category') {
-        $label = sanitize($_POST['label'] ?? '');
-        $icon = trim($_POST['icon'] ?? '') ?: 'fa-file';
-        $color = $_POST['color'] ?? 'dark';
-        if (!in_array($color, $allowedCategoryColors, true)) {
-            $color = 'dark';
-        }
-        // Icon must be a bare Font Awesome class name (e.g. "fa-shield-alt"), never raw markup
-        $icon = preg_match('/^fa-[a-z0-9-]+$/', $icon) ? $icon : 'fa-file';
-
-        if ($label === '') {
-            setFlashMessage('danger', 'Category name is required.');
-        } else {
-            $slug = slugifyCategory($label);
-            $existsStmt = $pdo->prepare("SELECT id FROM vehicle_document_categories WHERE slug = ?");
-            $existsStmt->execute([$slug]);
-            $suffix = 2;
-            $baseSlug = $slug;
-            while ($existsStmt->fetch()) {
-                $slug = $baseSlug . '_' . $suffix++;
-                $existsStmt->execute([$slug]);
-            }
-
-            $pdo->prepare("INSERT INTO vehicle_document_categories (slug, label, icon, color) VALUES (?, ?, ?, ?)")
-                ->execute([$slug, $label, $icon, $color]);
-            setFlashMessage('success', 'Category added successfully!');
-        }
-    } elseif ($action === 'edit_category') {
-        $categoryId = (int)($_POST['category_id'] ?? 0);
-        $label = sanitize($_POST['label'] ?? '');
-        $icon = trim($_POST['icon'] ?? '') ?: 'fa-file';
-        $color = $_POST['color'] ?? 'dark';
-        if (!in_array($color, $allowedCategoryColors, true)) {
-            $color = 'dark';
-        }
-        $icon = preg_match('/^fa-[a-z0-9-]+$/', $icon) ? $icon : 'fa-file';
-
-        if ($categoryId && $label !== '') {
-            $pdo->prepare("UPDATE vehicle_document_categories SET label = ?, icon = ?, color = ? WHERE id = ?")
-                ->execute([$label, $icon, $color, $categoryId]);
-            setFlashMessage('success', 'Category updated successfully!');
-        } else {
-            setFlashMessage('danger', 'Category name is required.');
-        }
-    } elseif ($action === 'delete_category') {
-        $categoryId = (int)($_POST['category_id'] ?? 0);
-        $slugStmt = $pdo->prepare("SELECT slug FROM vehicle_document_categories WHERE id = ?");
-        $slugStmt->execute([$categoryId]);
-        $slugRow = $slugStmt->fetch();
-
-        if (!$slugRow) {
-            setFlashMessage('danger', 'Category not found.');
-        } else {
-            $countStmt = $pdo->prepare("SELECT COUNT(*) FROM vehicle_documents WHERE category = ?");
-            $countStmt->execute([$slugRow['slug']]);
-            $inUseCount = (int) $countStmt->fetchColumn();
-            $totalCategories = (int) $pdo->query("SELECT COUNT(*) FROM vehicle_document_categories")->fetchColumn();
-
-            if ($inUseCount > 0) {
-                setFlashMessage('danger', "Can't delete: {$inUseCount} document(s) still use this category.");
-            } elseif ($totalCategories <= 1) {
-                setFlashMessage('danger', "Can't delete the last remaining category.");
-            } else {
-                $pdo->prepare("DELETE FROM vehicle_document_categories WHERE id = ?")->execute([$categoryId]);
-                setFlashMessage('success', 'Category deleted.');
-            }
-        }
     }
 
     redirect('vehicle-documents?vehicle_id=' . IdCodec::encode($vehicleId));
@@ -229,9 +153,6 @@ $documents = $stmt->fetchAll();
                 <a href="vehicle-details?id=<?php echo IdCodec::encode($vehicleId); ?>" class="btn btn-sm btn-outline-secondary">
                     <i class="fas fa-arrow-left"></i> Back to Vehicle
                 </a>
-                <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#manage-categories-modal">
-                    <i class="fas fa-tags"></i> Manage Categories
-                </button>
                 <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#upload-document-modal">
                     <i class="fas fa-upload"></i> Upload Document
                 </button>
@@ -423,139 +344,6 @@ if ($flash): ?>
     </div>
 </div>
 
-<!-- Delete Category Modal -->
-<div class="modal fade" id="delete-category-modal" tabindex="-1" aria-labelledby="deleteCategoryModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content">
-            <div class="modal-header bg-danger text-white">
-                <h5 class="modal-title" id="deleteCategoryModalLabel">
-                    <i class="fas fa-exclamation-triangle"></i> Delete Category
-                </h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <form method="POST" id="delete-category-form">
-                <?php echo csrfField(); ?>
-                <input type="hidden" name="action" value="delete_category">
-                <input type="hidden" name="category_id" id="delete-category-id">
-                <div class="modal-body">
-                    <div class="alert alert-warning">
-                        <i class="fas fa-exclamation-circle"></i>
-                        <strong>Warning:</strong> This action cannot be undone.
-                    </div>
-                    <p class="mb-0">
-                        Are you sure you want to delete the category <strong id="delete-category-name-display"></strong>?
-                        This is only possible if no documents currently use it.
-                    </p>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-danger btn-sm">
-                        <i class="fas fa-trash"></i> Delete Category
-                    </button>
-                </div>
-            </form>
-        </div>
-    </div>
-</div>
-
-<!-- Manage Categories Modal -->
-<div class="modal fade" id="manage-categories-modal" tabindex="-1" aria-labelledby="manageCategoriesModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-lg modal-dialog-scrollable">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="manageCategoriesModalLabel"><i class="fas fa-tags me-1"></i>Manage Categories</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body">
-                <div class="table-responsive mb-4">
-                    <table class="table table-sm align-middle mb-0">
-                        <thead>
-                        <tr>
-                            <th>Category</th>
-                            <th class="text-end">Actions</th>
-                        </tr>
-                        </thead>
-                        <tbody>
-                        <?php foreach ($documentCategories as $cat): ?>
-                            <tr>
-                                <td>
-                                    <span class="badge badge-subtle-<?php echo sanitize($cat['color']); ?>">
-                                        <i class="fas <?php echo sanitize($cat['icon']); ?> me-1"></i><?php echo sanitize($cat['label']); ?>
-                                    </span>
-                                </td>
-                                <td class="text-end">
-                                    <button type="button" class="btn btn-sm btn-outline-secondary category-edit-btn"
-                                            data-id="<?php echo (int) $cat['id']; ?>"
-                                            data-label="<?php echo sanitize($cat['label']); ?>"
-                                            data-icon="<?php echo sanitize($cat['icon']); ?>"
-                                            data-color="<?php echo sanitize($cat['color']); ?>"
-                                            title="Edit">
-                                        <i class="fas fa-edit"></i>
-                                    </button>
-                                    <button type="button" class="btn btn-sm btn-outline-danger" title="Delete"
-                                            onclick='confirmDeleteCategory(<?php echo (int) $cat['id']; ?>, <?php echo json_encode($cat['label'], JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_HEX_TAG); ?>)'>
-                                        <i class="fas fa-trash"></i>
-                                    </button>
-                                </td>
-                            </tr>
-                        <?php endforeach; ?>
-                        </tbody>
-                    </table>
-                </div>
-
-                <hr>
-
-                <h6 class="mb-3" id="category-form-heading"><i class="fas fa-plus-circle me-1"></i>Add New Category</h6>
-                <form method="POST" id="category-form">
-                    <?php echo csrfField(); ?>
-                    <input type="hidden" name="action" value="add_category" id="category-form-action">
-                    <input type="hidden" name="category_id" id="category-form-id" value="">
-                    <div class="row g-3">
-                        <div class="col-md-6">
-                            <label class="form-label">Name <span class="text-danger">*</span></label>
-                            <input type="text" name="label" id="category-form-label" class="form-control" placeholder="e.g. Warranty" required>
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label">Color</label>
-                            <select name="color" id="category-form-color" class="form-select">
-                                <?php foreach ($allowedCategoryColors as $color): ?>
-                                    <option value="<?php echo $color; ?>"><?php echo ucfirst($color); ?></option>
-                                <?php endforeach; ?>
-                            </select>
-                        </div>
-                        <div class="col-12">
-                            <label class="form-label">Icon</label>
-                            <div class="input-group">
-                                <span class="input-group-text" id="category-icon-preview"><i class="fas fa-file"></i></span>
-                                <input type="text" name="icon" id="category-form-icon" class="form-control" value="fa-file" placeholder="e.g. fa-shield-alt">
-                            </div>
-                            <small class="text-muted">Font Awesome solid icon class — pick one below, or browse more at fontawesome.com/icons</small>
-                            <div class="d-flex flex-wrap gap-1 mt-2" id="icon-quick-pick">
-                                <?php foreach ([
-                                    'fa-shield-alt', 'fa-ship', 'fa-gas-pump', 'fa-id-card', 'fa-clipboard-check',
-                                    'fa-file', 'fa-file-invoice', 'fa-receipt', 'fa-car', 'fa-wrench',
-                                    'fa-key', 'fa-passport', 'fa-credit-card', 'fa-camera', 'fa-folder', 'fa-file-contract',
-                                ] as $iconOption): ?>
-                                    <button type="button" class="btn btn-sm btn-outline-secondary icon-pick-btn" data-icon="<?php echo $iconOption; ?>" title="<?php echo $iconOption; ?>">
-                                        <i class="fas <?php echo $iconOption; ?>"></i>
-                                    </button>
-                                <?php endforeach; ?>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="mt-3 d-flex gap-2">
-                        <button type="submit" class="btn btn-primary btn-sm" id="category-form-submit"><i class="fas fa-plus me-1"></i>Add Category</button>
-                        <button type="button" class="btn btn-outline-secondary btn-sm d-none" id="category-form-cancel">Cancel</button>
-                    </div>
-                </form>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Close</button>
-            </div>
-        </div>
-    </div>
-</div>
-
 <script>
     document.addEventListener('DOMContentLoaded', function () {
         // Image previews use GLightbox
@@ -642,64 +430,6 @@ if ($flash): ?>
             });
         }
 
-        // Manage Categories: live icon preview
-        var iconInput = document.getElementById('category-form-icon');
-        var iconPreview = document.getElementById('category-icon-preview');
-
-        function updateIconPreview() {
-            var iconClass = (iconInput.value || 'fa-file').trim();
-            iconPreview.innerHTML = '<i class="fas ' + iconClass.replace(/[^a-z0-9-]/g, '') + '"></i>';
-        }
-        if (iconInput) {
-            iconInput.addEventListener('input', updateIconPreview);
-        }
-
-        document.querySelectorAll('.icon-pick-btn').forEach(function (btn) {
-            btn.addEventListener('click', function () {
-                iconInput.value = this.dataset.icon;
-                updateIconPreview();
-            });
-        });
-
-        // Manage Categories: switch the shared form into "edit" mode
-        var categoryForm = document.getElementById('category-form');
-        var categoryFormAction = document.getElementById('category-form-action');
-        var categoryFormId = document.getElementById('category-form-id');
-        var categoryFormLabel = document.getElementById('category-form-label');
-        var categoryFormColor = document.getElementById('category-form-color');
-        var categoryFormHeading = document.getElementById('category-form-heading');
-        var categoryFormSubmit = document.getElementById('category-form-submit');
-        var categoryFormCancel = document.getElementById('category-form-cancel');
-
-        function resetCategoryForm() {
-            categoryForm.reset();
-            categoryFormAction.value = 'add_category';
-            categoryFormId.value = '';
-            iconInput.value = 'fa-file';
-            updateIconPreview();
-            categoryFormHeading.innerHTML = '<i class="fas fa-plus-circle me-1"></i>Add New Category';
-            categoryFormSubmit.innerHTML = '<i class="fas fa-plus me-1"></i>Add Category';
-            categoryFormCancel.classList.add('d-none');
-        }
-
-        document.querySelectorAll('.category-edit-btn').forEach(function (btn) {
-            btn.addEventListener('click', function () {
-                categoryFormAction.value = 'edit_category';
-                categoryFormId.value = this.dataset.id;
-                categoryFormLabel.value = this.dataset.label;
-                categoryFormColor.value = this.dataset.color;
-                iconInput.value = this.dataset.icon;
-                updateIconPreview();
-                categoryFormHeading.innerHTML = '<i class="fas fa-edit me-1"></i>Edit Category';
-                categoryFormSubmit.innerHTML = '<i class="fas fa-save me-1"></i>Update Category';
-                categoryFormCancel.classList.remove('d-none');
-                categoryFormLabel.focus();
-            });
-        });
-
-        if (categoryFormCancel) {
-            categoryFormCancel.addEventListener('click', resetCategoryForm);
-        }
     });
 
     // Called via inline onclick from each document tile's delete button
@@ -709,13 +439,6 @@ if ($flash): ?>
         document.getElementById('delete-document-name-input').value = '';
         document.getElementById('delete-document-form').dataset.expectedName = name;
         new bootstrap.Modal(document.getElementById('delete-document-modal')).show();
-    }
-
-    // Called via inline onclick from each category row's delete button
-    function confirmDeleteCategory(id, label) {
-        document.getElementById('delete-category-id').value = id;
-        document.getElementById('delete-category-name-display').textContent = label;
-        new bootstrap.Modal(document.getElementById('delete-category-modal')).show();
     }
 </script>
 

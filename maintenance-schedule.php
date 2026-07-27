@@ -3,14 +3,16 @@ $pageTitle = 'Maintenance Schedule';
 require_once 'includes/header.php';
 
 use App\Helpers\IdCodec;
+use App\Services\SiteSettingsService;
 
 $vehiclesStmt = $pdo->prepare("SELECT id, make, model, year FROM vehicles WHERE is_active = 1 AND user_id = ? ORDER BY make, model");
 $vehiclesStmt->execute([$userId]);
 $vehicles = $vehiclesStmt->fetchAll();
 $vehicleFilter = IdCodec::decode($_GET['vehicle_id'] ?? null);
 
-// Default maintenance items with recommended intervals
-$defaultItems = [
+// Default maintenance items with recommended intervals — admin-configurable
+// (Admin Dashboard > Reminder & Maintenance Settings), falls back to these defaults
+$fallbackDefaultItems = [
     'Engine Oil & Filter' => ['km' => 10000, 'months' => 12],
     'Air Filter' => ['km' => 20000, 'months' => 24],
     'Cabin Filter' => ['km' => 15000, 'months' => 12],
@@ -27,6 +29,8 @@ $defaultItems = [
     'Tires' => ['km' => 50000, 'months' => 48],
     'Wiper Blades' => ['km' => null, 'months' => 12],
 ];
+$presetsRaw = SiteSettingsService::get($pdo, 'maintenance_presets');
+$defaultItems = $presetsRaw ? (json_decode($presetsRaw, true) ?: $fallbackDefaultItems) : $fallbackDefaultItems;
 
 // Handle form submissions
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {

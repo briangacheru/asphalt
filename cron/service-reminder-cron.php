@@ -9,17 +9,34 @@
  *
  * Sends emails for:
  * - Overdue services (past due date)
- * - Urgent services (< 500 km remaining)
- * - Upcoming services (500-1500 km remaining)
+ * - Urgent services (km remaining <= urgent_km)
+ * - Upcoming services (km remaining <= upcoming_km)
  * - Low mileage warnings (vehicle hasn't been driven much)
+ *
+ * Thresholds and resend cadence are admin-configurable via
+ * Admin Dashboard > Reminder & Maintenance Settings (stored in app_settings
+ * under the 'reminder_thresholds' key); see $defaultThresholds below for
+ * the fallback values used until an admin sets their own.
  */
 
 require_once __DIR__ . '/../vendor/autoload.php';
 use App\Database\Database;
 use App\Services\EmailService;
+use App\Services\SiteSettingsService;
 
 $pdo = Database::getInstance()->getConnection();
 $emailService = new EmailService($pdo);
+
+// Reminder thresholds — admin-configurable (Admin Dashboard > Reminder & Maintenance Settings)
+$defaultThresholds = [
+    'urgent_km' => 500,
+    'upcoming_km' => 1500,
+    'urgent_resend_days' => 3,
+    'upcoming_resend_days' => 7,
+    'overdue_resend_days' => 1,
+];
+$thresholdsRaw = SiteSettingsService::get($pdo, 'reminder_thresholds');
+$thresholds = array_merge($defaultThresholds, $thresholdsRaw ? (json_decode($thresholdsRaw, true) ?: []) : []);
 
 echo "╔══════════════════════════════════════════════════════════╗\n";
 echo "║     Service Reminder Email Job - " . date('Y-m-d H:i:s') . "     ║\n";
@@ -85,7 +102,7 @@ foreach ($vehicles as $vehicle) {
     echo "Remaining: " . number_format($vehicle['km_remaining']) . " km\n";
 
     // Check if we should send reminder based on user's email frequency preference
-    $shouldSend = shouldSendReminder($pdo, $vehicle['id'], $vehicle['km_remaining'], $vehicle['email_frequency']);
+    $shouldSend = shouldSendReminder($pdo, $vehicle['id'], $vehicle['km_remaining'], $vehicle['email_frequency'], $thresholds);
 
     if (!$shouldSend) {
         echo "Status: ℹ Reminder already sent recently - Skipping\n";
@@ -116,8 +133,8 @@ foreach ($vehicles as $vehicle) {
         }
     }
 
-    // 2. URGENT - Less than 500 km remaining
-    elseif ($vehicle['km_remaining'] <= 500) {
+    // 2. URGENT - Less than $thresholds['urgent_km'] km remaining
+    elseif ($vehicle['km_remaining'] <= $thresholds['urgent_km']) {
         $stats['urgent']++;
         echo "Status: ⚠ URGENT - Only " . number_format($vehicle['km_remaining']) . " km left\n";
 
@@ -137,8 +154,8 @@ foreach ($vehicles as $vehicle) {
         }
     }
 
-    // 3. UPCOMING - Between 500-1500 km remaining
-    elseif ($vehicle['km_remaining'] <= 1500) {
+    // 3. UPCOMING - Between urgent_km and upcoming_km remaining
+    elseif ($vehicle['km_remaining'] <= $thresholds['upcoming_km']) {
         $stats['upcoming']++;
         echo "Status: 📅 Upcoming - " . number_format($vehicle['km_remaining']) . " km remaining\n";
 
@@ -196,15 +213,15 @@ logJobRun($pdo, $stats);
 /**
  * Check if we should send a reminder based on last sent time and frequency
  */
-function shouldSendReminder($pdo, $vehicleId, $kmRemaining, $emailFrequency) {
+function shouldSendReminder($pdo, $vehicleId, $kmRemaining, $emailFrequency, array $thresholds) {
     // Get last reminder sent for this vehicle
     $stmt = $pdo->prepare("
-        SELECT created_at, email_type 
-        FROM email_log 
-        WHERE vehicle_id = ? 
+        SELECT created_at, email_type
+        FROM email_log
+        WHERE vehicle_id = ?
         AND email_type = 'service_reminder'
         AND status = 'sent'
-        ORDER BY created_at DESC 
+        ORDER BY created_at DESC
         LIMIT 1
     ");
     $stmt->execute([$vehicleId]);
@@ -217,19 +234,19 @@ function shouldSendReminder($pdo, $vehicleId, $kmRemaining, $emailFrequency) {
 
     $daysSinceLastReminder = (time() - strtotime($lastReminder['created_at'])) / (60 * 60 * 24);
 
-    // Overdue: Send daily
+    // Overdue: resend every overdue_resend_days
     if ($kmRemaining < 0) {
-        return $daysSinceLastReminder >= 1;
+        return $daysSinceLastReminder >= $thresholds['overdue_resend_days'];
     }
 
-    // Urgent (< 500 km): Send every 3 days
-    if ($kmRemaining <= 500) {
-        return $daysSinceLastReminder >= 3;
+    // Urgent: resend every urgent_resend_days
+    if ($kmRemaining <= $thresholds['urgent_km']) {
+        return $daysSinceLastReminder >= $thresholds['urgent_resend_days'];
     }
 
-    // Upcoming (500-1500 km): Send weekly
-    if ($kmRemaining <= 1500) {
-        return $daysSinceLastReminder >= 7;
+    // Upcoming: resend every upcoming_resend_days
+    if ($kmRemaining <= $thresholds['upcoming_km']) {
+        return $daysSinceLastReminder >= $thresholds['upcoming_resend_days'];
     }
 
     return false;
