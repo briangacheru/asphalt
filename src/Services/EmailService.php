@@ -208,7 +208,7 @@ class EmailService
      */
     public function sendWelcomeEmail(string $email, string $token, string $firstName): bool
     {
-        $verifyLink = APP_URL . '/auth/verify.php?token=' . $token;
+        $verifyLink = APP_URL . '/auth/verify?token=' . $token;
 
         $content = sprintf('
             <h2 style="margin: 0 0 20px; color: #ffffff; font-size: 20px;">Welcome to iVehicle!</h2>

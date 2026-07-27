@@ -257,6 +257,15 @@ if (!isLoggedIn() && isset($_COOKIE['remember_token'])) {
                         <button class="btn btn-primary d-block w-100 mt-3" type="submit" name="submit">Log in</button>
                       </div>
                     </form>
+                    <?php if (defined('GOOGLE_CLIENT_ID') && GOOGLE_CLIENT_ID !== ''): ?>
+                    <div class="position-relative mt-4">
+                      <hr />
+                      <div class="divider-content-center">or sign in with</div>
+                    </div>
+                    <div class="row g-2 mt-2">
+                      <div class="col-12"><a class="btn btn-outline-google-plus btn-sm d-block w-100" href="google-login"><span class="fab fa-google-plus-g me-2" data-fa-transform="grow-8"></span> Google</a></div>
+                    </div>
+                    <?php endif; ?>
                   </div>
                 </div>
               </div>

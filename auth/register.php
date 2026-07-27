@@ -50,7 +50,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$registrationBlocked) {
         if (empty($formData['first_name'])) {
             $errors[] = 'First name is required';
         }
-        
+
+        if (empty($formData['last_name'])) {
+            $errors[] = 'Last name is required';
+        }
+
         if (empty($formData['email'])) {
             $errors[] = 'Email is required';
         } elseif (!isValidEmail($formData['email'])) {
@@ -259,14 +263,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$registrationBlocked) {
                         <button class="btn btn-primary d-block w-100 mt-3" type="submit" name="submit">Register</button>
                       </div>
                     </form>
+                    <?php if (defined('GOOGLE_CLIENT_ID') && GOOGLE_CLIENT_ID !== ''): ?>
                     <div class="position-relative mt-4">
                       <hr />
                       <div class="divider-content-center">or register with</div>
                     </div>
                     <div class="row g-2 mt-2">
-                      <div class="col-sm-6"><a class="btn btn-outline-google-plus btn-sm d-block w-100" href="#"><span class="fab fa-google-plus-g me-2" data-fa-transform="grow-8"></span> google</a></div>
-                      <div class="col-sm-6"><a class="btn btn-outline-facebook btn-sm d-block w-100" href="#"><span class="fab fa-facebook-square me-2" data-fa-transform="grow-8"></span> facebook</a></div>
+                      <div class="col-12"><a class="btn btn-outline-google-plus btn-sm d-block w-100" href="google-login"><span class="fab fa-google-plus-g me-2" data-fa-transform="grow-8"></span> Google</a></div>
                     </div>
+                    <?php endif; ?>
                     <?php endif; ?>
                   </div>
                 </div>

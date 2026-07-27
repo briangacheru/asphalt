@@ -59,6 +59,14 @@ class Config
             define('FROM_NAME', Environment::get('FROM_NAME', 'iVehicle'));
         }
 
+        // Google OAuth ("Sign in with Google") — leave unset to disable the button
+        if (!defined('GOOGLE_CLIENT_ID')) {
+            define('GOOGLE_CLIENT_ID', Environment::get('GOOGLE_CLIENT_ID', ''));
+        }
+        if (!defined('GOOGLE_CLIENT_SECRET')) {
+            define('GOOGLE_CLIENT_SECRET', Environment::get('GOOGLE_CLIENT_SECRET', ''));
+        }
+
         // Application Settings
         if (!defined('APP_NAME')) {
             define('APP_NAME', Environment::get('APP_NAME', 'iVehicle'));
