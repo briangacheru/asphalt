@@ -2,31 +2,30 @@
 $pageTitle = 'Email History';
 require_once 'includes/header.php';
 
-$typeFilter = $_GET['type'] ?? '';
-$statusFilter = $_GET['status'] ?? '';
-
-$where = [];
-if ($typeFilter) $where[] = "el.email_type = '" . $pdo->quote($typeFilter) . "'";
-if ($statusFilter) $where[] = "el.status = '" . $pdo->quote($statusFilter) . "'";
-$whereClause = $where ? 'WHERE ' . implode(' AND ', str_replace("'", "", $where)) : '';
-
-$emails = $pdo->query("
+// Scoped to the current user: only emails where they are the recipient.
+// (Previously unscoped — any logged-in user could see every user's emails.)
+$emailsStmt = $pdo->prepare("
     SELECT el.*, v.make, v.model, v.year
     FROM email_log el
     LEFT JOIN vehicles v ON el.vehicle_id = v.id
-    $whereClause
+    WHERE el.recipient_email = ?
     ORDER BY el.id DESC
     LIMIT 100
-")->fetchAll();
+");
+$emailsStmt->execute([$currentUser['email']]);
+$emails = $emailsStmt->fetchAll();
 
-$stats = $pdo->query("
-    SELECT 
+$statsStmt = $pdo->prepare("
+    SELECT
         COUNT(*) as total,
         SUM(CASE WHEN status = 'sent' THEN 1 ELSE 0 END) as sent,
         SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) as failed,
         SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) as pending
     FROM email_log
-")->fetch();
+    WHERE recipient_email = ?
+");
+$statsStmt->execute([$currentUser['email']]);
+$stats = $statsStmt->fetch();
 
 $emailTypes = [
     'service_reminder' => ['label' => 'Service Reminder', 'icon' => 'fa-bell', 'color' => 'warning'],
@@ -46,11 +45,6 @@ $emailTypes = [
             <div class="col">
                 <h1 class="h3 mb-1">Email History</h1>
                 <p class="text-muted">View all sent email notifications</p>
-            </div>
-            <div class="col-auto">
-                <a href="settings" class="btn btn-secondary">
-                    <i class="fas fa-cog"></i> Email Settings
-                </a>
             </div>
         </div>
 
@@ -126,44 +120,6 @@ $emailTypes = [
                         </div>
                     </div>
                 </div>
-            </div>
-        </div>
-
-        <!-- Filters -->
-        <div class="card mb-4">
-            <div class="card-body">
-                <form method="GET" class="row g-3 align-items-end">
-                    <div class="col-md-4">
-                        <label class="form-label">Email Type</label>
-                        <select name="type" class="form-select">
-                            <option value="">All Types</option>
-                            <?php foreach ($emailTypes as $key => $type): ?>
-                                <option value="<?php echo $key; ?>" <?php echo $typeFilter === $key ? 'selected' : ''; ?>>
-                                    <?php echo $type['label']; ?>
-                                </option>
-                            <?php endforeach; ?>
-                        </select>
-                    </div>
-                    <div class="col-md-3">
-                        <label class="form-label">Status</label>
-                        <select name="status" class="form-select">
-                            <option value="">All Statuses</option>
-                            <option value="sent" <?php echo $statusFilter === 'sent' ? 'selected' : ''; ?>>Sent</option>
-                            <option value="failed" <?php echo $statusFilter === 'failed' ? 'selected' : ''; ?>>Failed</option>
-                            <option value="pending" <?php echo $statusFilter === 'pending' ? 'selected' : ''; ?>>Pending</option>
-                        </select>
-                    </div>
-                    <div class="col-md-5">
-                        <button type="submit" class="btn btn-primary">
-                            <i class="fas fa-filter"></i> Apply Filters
-                        </button>
-                        <?php if ($typeFilter || $statusFilter): ?>
-                            <a href="email-history" class="btn btn-outline-secondary">
-                                <i class="fas fa-times"></i> Clear Filters
-                            </a>
-                        <?php endif; ?>
-                    </div>
-                </form>
             </div>
         </div>
 
@@ -245,7 +201,7 @@ $emailTypes = [
 
                     <?php if (count($emails) >= 100): ?>
                         <div class="alert alert-info m-3 mb-2">
-                            <i class="fas fa-info-circle"></i> Showing the most recent 100 emails. Use filters to narrow your search.
+                            <i class="fas fa-info-circle"></i> Showing the most recent 100 emails. Use the search box above the table to narrow it down.
                         </div>
                     <?php endif; ?>
                 <?php endif; ?>

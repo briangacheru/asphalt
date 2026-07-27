@@ -113,11 +113,18 @@ if ($flash): ?>
 <?php endif; ?>
 
 <?php if (empty($vehicles)): ?>
-    <div class="card"><div class="card-body"><div class="empty-state">
-                <i class="fas fa-car empty-state-icon"></i>
-                <h3 class="empty-state-title">No Vehicles Found</h3>
-                <a href="add-vehicle" class="btn btn-primary"><i class="fas fa-plus"></i> Add Vehicle</a>
-            </div></div></div>
+    <div class="card">
+        <div class="card-body">
+            <div class="empty-state text-center py-5">
+                <i class="fas fa-car empty-state-icon fs-1 text-muted mb-3"></i>
+                <h6 class="fs-9 mb-1">No vehicles added!</h6>
+                <p class="fs-10 mb-3">Add your first vehicle to start tracking services.</p>
+                <a href="add-vehicle" class="btn btn-outline-success">
+                    <i class="fas fa-plus"></i> Add Vehicle
+                </a>
+            </div>
+        </div>
+    </div>
 <?php else: ?>
 <div class="row g-0">
     <div class="col-lg-6 ps-lg-2 mb-3">

@@ -243,6 +243,7 @@ $currentPage = basename($_SERVER['PHP_SELF'], '.php');
                   
                 </li>
                   <!-- My Vehicles Quick Access -->
+                <?php if (!empty($sidebarVehicles)): ?>
                 <li class="nav-item">
                       <!-- label-->
                       <div class="row navbar-vertical-label-wrapper mt-3 mb-2">
@@ -260,6 +261,7 @@ $currentPage = basename($_SERVER['PHP_SELF'], '.php');
                       </a>
                     <?php endforeach; ?>
                   </li>
+                <?php endif; ?>
                 <li class="nav-item">
                       <!-- label-->
                       <div class="row navbar-vertical-label-wrapper mt-3 mb-2">

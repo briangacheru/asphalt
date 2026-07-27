@@ -336,11 +336,6 @@ foreach ($emailStatsRaw as $stat) {
                 <h1 class="h3 mb-1">Settings</h1>
                 <p class="text-muted">Manage your account settings and preferences</p>
             </div>
-            <div class="col-auto">
-                <a href="email-history" class="btn btn-outline-primary">
-                    <i class="fas fa-envelope"></i> Email History
-                </a>
-            </div>
         </div>
 
         <?php
