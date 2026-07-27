@@ -15,7 +15,7 @@ $emails = $pdo->query("
     FROM email_log el
     LEFT JOIN vehicles v ON el.vehicle_id = v.id
     $whereClause
-    ORDER BY el.created_at DESC
+    ORDER BY el.id DESC
     LIMIT 100
 ")->fetchAll();
 
@@ -33,8 +33,10 @@ $emailTypes = [
     'monthly_check' => ['label' => 'Monthly Check', 'icon' => 'fa-calendar', 'color' => 'info'],
     'service_details' => ['label' => 'Service Details', 'icon' => 'fa-wrench', 'color' => 'success'],
     'low_mileage_warning' => ['label' => 'Low Mileage Warning', 'icon' => 'fa-tachometer-alt', 'color' => 'danger'],
+    'maintenance_due' => ['label' => 'Maintenance Due', 'icon' => 'fa-tools', 'color' => 'warning'],
     'test_email' => ['label' => 'Test Email', 'icon' => 'fa-envelope', 'color' => 'primary'],
     'database_backup' => ['label' => 'Database Backup', 'icon' => 'fa-database', 'color' => 'dark'],
+    'vehicle_export' => ['label' => 'Export File', 'icon' => 'fa-file-archive', 'color' => 'success'],
 ];
 ?>
 
@@ -176,7 +178,7 @@ $emailTypes = [
                     </div>
                 <?php else: ?>
                     <div class="table-responsive">
-                        <table class="table table-hover table-sm align-middle mb-0">
+                        <table id="emailHistoryTable" class="table table-hover table-sm align-middle mb-0">
                             <thead class="table-light">
                             <tr>
                                 <th class="ps-3">Date</th>
@@ -184,8 +186,7 @@ $emailTypes = [
                                 <th>Vehicle</th>
                                 <th>Subject</th>
                                 <th>Recipient</th>
-                                <th>Status</th>
-                                <th class="pe-3"></th>
+                                <th class="pe-3">Status</th>
                             </tr>
                             </thead>
                             <tbody>
@@ -227,7 +228,7 @@ $emailTypes = [
                                         </span>
                                     </td>
                                     <td class="small text-muted text-nowrap"><?php echo sanitize($email['recipient_email']); ?></td>
-                                    <td>
+                                    <td class="pe-3">
                                         <?php if ($email['status'] === 'sent'): ?>
                                             <span class="badge bg-success"><i class="fas fa-check"></i> Sent</span>
                                         <?php elseif ($email['status'] === 'failed'): ?>
@@ -235,11 +236,6 @@ $emailTypes = [
                                         <?php else: ?>
                                             <span class="badge bg-warning"><i class="fas fa-clock"></i> Pending</span>
                                         <?php endif; ?>
-                                    </td>
-                                    <td class="pe-3 text-end">
-                                        <button class="btn btn-sm btn-outline-primary" title="View">
-                                            <i class="fas fa-eye"></i>
-                                        </button>
                                     </td>
                                 </tr>
                             <?php endforeach; ?>
@@ -267,8 +263,8 @@ $emailTypes = [
             </div>
             <div class="modal-body">
                 <div class="d-flex gap-2 mb-3">
-                    <span id="modalTypeBadge" class="badge fs-6"></span>
-                    <span id="modalStatusBadge" class="badge fs-6"></span>
+                    <span id="modalTypeBadge" class="badge"></span>
+                    <span id="modalStatusBadge" class="badge"></span>
                 </div>
                 <div class="row mb-3">
                     <div class="col-md-6">
@@ -305,12 +301,12 @@ document.querySelectorAll('.view-email-row').forEach(row => {
     row.addEventListener('click', function () {
         const d = this.dataset;
 
-        document.getElementById('modalTypeBadge').className = `badge fs-6 bg-${d.typeColor}`;
+        document.getElementById('modalTypeBadge').className = `badge bg-${d.typeColor}`;
         document.getElementById('modalTypeBadge').innerHTML = `<i class="fas ${d.typeIcon}"></i> ${d.typeLabel}`;
 
         const statusMap = { sent: ['bg-success','fa-check','Sent'], failed: ['bg-danger','fa-times','Failed'], pending: ['bg-warning','fa-clock','Pending'] };
         const [sc, si, sl] = statusMap[d.status] ?? ['bg-secondary','fa-question', d.status];
-        document.getElementById('modalStatusBadge').className = `badge fs-6 ${sc}`;
+        document.getElementById('modalStatusBadge').className = `badge ${sc}`;
         document.getElementById('modalStatusBadge').innerHTML = `<i class="fas ${si}"></i> ${sl}`;
 
         document.getElementById('modalRecipient').textContent = d.recipient;
@@ -329,6 +325,16 @@ document.querySelectorAll('.view-email-row').forEach(row => {
 
         new bootstrap.Modal(document.getElementById('emailDetailModal')).show();
     });
+});
+
+jQuery(function ($) {
+    if ($.fn.DataTable && $('#emailHistoryTable tbody tr').length) {
+        $('#emailHistoryTable').DataTable({
+            order: [],
+            pageLength: 25,
+            lengthMenu: [10, 25, 50, 100]
+        });
+    }
 });
 </script>
 

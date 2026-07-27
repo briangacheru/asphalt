@@ -555,10 +555,26 @@ $monthNames = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep'
                     }
                 },
                 tooltip: {
-                    y: {
-                        formatter: function (val) {
-                            return 'Ksh' + val.toFixed(2);
-                        }
+                    shared: true,
+                    intersect: false,
+                    custom: function ({ series, dataPointIndex, w }) {
+                        let total = 0;
+                        let rows = '';
+
+                        series.forEach(function (s, i) {
+                            const val = s[dataPointIndex];
+                            total += val;
+                            rows += '<div class="apexcharts-tooltip-series-group" style="display:flex;align-items:center;padding:3px 0;">' +
+                                '<span style="width:10px;height:10px;border-radius:50%;background:' + w.globals.colors[i] + ';display:inline-block;margin-right:6px;"></span>' +
+                                '<span>' + w.globals.seriesNames[i] + ': Ksh' + val.toFixed(2) + '</span>' +
+                                '</div>';
+                        });
+
+                        return '<div style="padding:8px 12px;">' +
+                            '<div style="font-weight:600;margin-bottom:4px;">' + w.globals.labels[dataPointIndex] + '</div>' +
+                            rows +
+                            '<div style="border-top:1px solid #e7e7e7;margin-top:4px;padding-top:4px;font-weight:700;">Total: Ksh' + total.toFixed(2) + '</div>' +
+                            '</div>';
                     }
                 },
                 grid: {

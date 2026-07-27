@@ -115,7 +115,7 @@ usort($backupFiles, fn($a, $b) => $b['modified'] <=> $a['modified']);
 
 $cronLogs = [];
 try {
-    $cronLogs = $pdo->query("SELECT * FROM cron_job_log ORDER BY run_at DESC LIMIT 20")->fetchAll();
+    $cronLogs = $pdo->query("SELECT * FROM cron_job_log WHERE emails_failed > 0 ORDER BY run_at DESC LIMIT 20")->fetchAll();
 } catch (PDOException $e) {
     // No cron has run yet — table may not exist. Nothing to show.
 }
@@ -299,11 +299,11 @@ try {
         <!-- Cron Job Log -->
         <div class="card mb-4">
             <div class="card-header">
-                <h5 class="card-title mb-0"><i class="fas fa-clock me-2"></i>Recent Scheduled Job Runs</h5>
+                <h5 class="card-title mb-0"><i class="fas fa-clock me-2"></i>Scheduled Job Runs With Failed Emails</h5>
             </div>
             <div class="card-body p-0">
                 <?php if (empty($cronLogs)): ?>
-                    <div class="text-center py-4 text-muted">No cron jobs have run yet.</div>
+                    <div class="text-center py-4 text-muted">No failed job runs — everything's healthy.</div>
                 <?php else: ?>
                     <div class="table-responsive">
                         <table class="table table-hover table-sm align-middle mb-0">
