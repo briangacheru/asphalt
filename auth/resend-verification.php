@@ -1,26 +1,35 @@
 <?php
 require_once __DIR__ . '/../includes/bootstrap.php';
 
+use App\Services\EmailVerificationService;
+use App\Services\RateLimiterService;
+
 $pdo = \App\Database\Database::getInstance()->getConnection();
 $email = $_GET['email'] ?? '';
 $success = false;
+$rateLimited = false;
 
 if (!empty($email)) {
-    // Find unverified user
-    $stmt = $pdo->prepare("SELECT id, first_name, email FROM users WHERE email = ? AND is_verified = 0");
-    $stmt->execute([$email]);
-    $user = $stmt->fetch();
+    $rateLimitKey = 'resend-verification:' . RateLimiterService::clientIp() . ':' . strtolower($email);
 
-    if ($user) {
-        // Generate new token
-        $token = generateToken();
-        $pdo->prepare("UPDATE users SET verification_token = ? WHERE id = ?")->execute([$token, $user['id']]);
+    if (RateLimiterService::tooManyAttempts($pdo, $rateLimitKey, 3, 3600)) {
+        $rateLimited = true;
+    } else {
+        RateLimiterService::recordAttempt($pdo, $rateLimitKey);
 
-        // Send email
-        $emailService = new \App\Services\EmailService($pdo);
-        $emailService->sendWelcomeEmail($user['email'], $token, $user['first_name']);
+        // Find unverified user
+        $stmt = $pdo->prepare("SELECT id, first_name, email FROM users WHERE email = ? AND is_verified = 0");
+        $stmt->execute([$email]);
+        $user = $stmt->fetch();
 
-        $success = true;
+        if ($user) {
+            $token = EmailVerificationService::issue($pdo, $user['id']);
+
+            $emailService = new \App\Services\EmailService($pdo);
+            $emailService->sendWelcomeEmail($user['email'], $token, $user['first_name']);
+
+            $success = true;
+        }
     }
 }
 ?>
@@ -115,6 +124,12 @@ if (!empty($email)) {
                             <i class="fas fa-paper-plane fs-4"></i>
                             <h4 class="alert-heading fw-semi-bold">Verification Email Sent</h4>
                                 <span >We've sent a new verification link to <strong><?php echo htmlspecialchars($email); ?></strong>. Please check your inbox.</span>
+                            </div>
+                        <?php elseif ($rateLimited): ?>
+                            <div class="alert alert-warning" role="alert">
+                            <i class="fas fa-clock fs-4"></i>
+                            <h4 class="alert-heading fw-semi-bold">Please Wait</h4>
+                                <span class="fs-10">Too many resend requests for this address. Please wait a while before trying again.</span>
                             </div>
                         <?php else: ?>
                             <div class="alert alert-danger" role="alert">

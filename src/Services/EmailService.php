@@ -175,7 +175,7 @@ class EmailService
      */
     public function sendPasswordResetEmail(string $email, string $token, string $firstName): bool
     {
-        $resetLink = APP_URL . '/auth/reset-password.php?token=' . $token;
+        $resetLink = APP_URL . '/auth/reset-password?token=' . $token;
 
         $content = sprintf('
             <h2 style="margin: 0 0 20px; color: #ffffff; font-size: 20px;">Password Reset Request</h2>

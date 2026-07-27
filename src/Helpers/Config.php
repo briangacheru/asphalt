@@ -85,6 +85,9 @@ class Config
         if (!defined('PASSWORD_RESET_EXPIRY')) {
             define('PASSWORD_RESET_EXPIRY', 3600); // 1 hour
         }
+        if (!defined('EMAIL_VERIFICATION_EXPIRY')) {
+            define('EMAIL_VERIFICATION_EXPIRY', 24 * 3600); // 24 hours
+        }
         if (!defined('REMEMBER_ME_EXPIRY')) {
             define('REMEMBER_ME_EXPIRY', 30 * 24 * 3600); // 30 days
         }

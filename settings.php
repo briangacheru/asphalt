@@ -5,6 +5,18 @@ use App\Services\EmailService;
 use App\Services\SiteSettingsService;
 use App\Middleware\AuthMiddleware;
 
+// Auth pages with an admin-configurable hero background
+$authBackgroundKeys = [
+    'login_background' => 'Login Page',
+    'register_background' => 'Register Page',
+    'forgot_password_background' => 'Forgot Password Page',
+];
+$authBackgroundDefaults = [
+    'login_background' => 'assets/img/generic/14.jpg',
+    'register_background' => 'assets/img/generic/19.jpg',
+    'forgot_password_background' => 'assets/img/generic/17.jpg',
+];
+
 // Get current user settings
 $stmt = $pdo->prepare("SELECT * FROM users WHERE id = ?");
 $stmt->execute([$_SESSION['user_id']]);
@@ -197,13 +209,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         redirect('settings');
     }
 
-    if ($action === 'update_login_background') {
+    if ($action === 'update_auth_background') {
         if (!AuthMiddleware::isAdmin()) {
-            setFlashMessage('danger', 'Only admins can change the login background.');
+            setFlashMessage('danger', 'Only admins can change auth page backgrounds.');
             redirect('settings');
         }
 
-        if (!isset($_FILES['login_background']) || $_FILES['login_background']['error'] !== UPLOAD_ERR_OK) {
+        $bgKey = $_POST['background_key'] ?? '';
+        if (!array_key_exists($bgKey, $authBackgroundKeys)) {
+            setFlashMessage('danger', 'Invalid background target.');
+            redirect('settings');
+        }
+
+        if (!isset($_FILES['background_file']) || $_FILES['background_file']['error'] !== UPLOAD_ERR_OK) {
             setFlashMessage('danger', 'Please choose an image to upload.');
             redirect('settings');
         }
@@ -212,7 +230,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $max_size = 5 * 1024 * 1024; // 5MB
 
         $finfo = finfo_open(FILEINFO_MIME_TYPE);
-        $mime = finfo_file($finfo, $_FILES['login_background']['tmp_name']);
+        $mime = finfo_file($finfo, $_FILES['background_file']['tmp_name']);
         finfo_close($finfo);
 
         if (!in_array($mime, $allowed_types)) {
@@ -220,13 +238,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             redirect('settings');
         }
 
-        if ($_FILES['login_background']['size'] > $max_size) {
+        if ($_FILES['background_file']['size'] > $max_size) {
             setFlashMessage('danger', 'File too large. Maximum size is 5MB.');
             redirect('settings');
         }
 
         // Confirm it's a genuine, readable raster image (defense against MIME spoofing)
-        if (@getimagesize($_FILES['login_background']['tmp_name']) === false) {
+        if (@getimagesize($_FILES['background_file']['tmp_name']) === false) {
             setFlashMessage('danger', "That file doesn't look like a valid image. Please try another.");
             redirect('settings');
         }
@@ -237,18 +255,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         $extMap = ['image/jpeg' => 'jpg', 'image/png' => 'png', 'image/gif' => 'gif', 'image/webp' => 'webp'];
-        $filename = 'login_bg_' . time() . '_' . uniqid() . '.' . $extMap[$mime];
+        $filename = $bgKey . '_' . time() . '_' . uniqid() . '.' . $extMap[$mime];
         $dest = $upload_dir . $filename;
 
-        if (move_uploaded_file($_FILES['login_background']['tmp_name'], $dest)) {
-            $oldPath = SiteSettingsService::get($pdo, 'login_background');
-            SiteSettingsService::set($pdo, 'login_background', 'uploads/branding/' . $filename, $_SESSION['user_id']);
+        if (move_uploaded_file($_FILES['background_file']['tmp_name'], $dest)) {
+            $oldPath = SiteSettingsService::get($pdo, $bgKey);
+            SiteSettingsService::set($pdo, $bgKey, 'uploads/branding/' . $filename, $_SESSION['user_id']);
 
             if ($oldPath && str_starts_with($oldPath, 'uploads/branding/')) {
                 @unlink(UPLOAD_DIR . 'branding/' . basename($oldPath));
             }
 
-            setFlashMessage('success', 'Login background updated successfully!');
+            setFlashMessage('success', $authBackgroundKeys[$bgKey] . ' background updated successfully!');
         } else {
             setFlashMessage('danger', 'Failed to upload image. Please try again.');
         }
@@ -256,26 +274,39 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         redirect('settings');
     }
 
-    if ($action === 'reset_login_background') {
+    if ($action === 'reset_auth_background') {
         if (!AuthMiddleware::isAdmin()) {
-            setFlashMessage('danger', 'Only admins can change the login background.');
+            setFlashMessage('danger', 'Only admins can change auth page backgrounds.');
             redirect('settings');
         }
 
-        $oldPath = SiteSettingsService::get($pdo, 'login_background');
-        SiteSettingsService::delete($pdo, 'login_background');
+        $bgKey = $_POST['background_key'] ?? '';
+        if (!array_key_exists($bgKey, $authBackgroundKeys)) {
+            setFlashMessage('danger', 'Invalid background target.');
+            redirect('settings');
+        }
+
+        $oldPath = SiteSettingsService::get($pdo, $bgKey);
+        SiteSettingsService::delete($pdo, $bgKey);
 
         if ($oldPath && str_starts_with($oldPath, 'uploads/branding/')) {
             @unlink(UPLOAD_DIR . 'branding/' . basename($oldPath));
         }
 
-        setFlashMessage('success', 'Login background reset to default.');
+        setFlashMessage('success', $authBackgroundKeys[$bgKey] . ' background reset to default.');
         redirect('settings');
     }
 }
 
-$loginBackground = SiteSettingsService::get($pdo, 'login_background');
-$loginBackgroundDisplay = $loginBackground ?: 'assets/img/generic/14.jpg';
+$authBackgrounds = [];
+foreach ($authBackgroundKeys as $bgKey => $bgLabel) {
+    $current = SiteSettingsService::get($pdo, $bgKey);
+    $authBackgrounds[$bgKey] = [
+        'label' => $bgLabel,
+        'custom' => $current,
+        'display' => $current ?: $authBackgroundDefaults[$bgKey],
+    ];
+}
 
 // Get email statistics
 $emailStats = $pdo->prepare("
@@ -446,75 +477,82 @@ foreach ($emailStatsRaw as $stat) {
                     </div>
                 </div>
 
-                <!-- Login Page Background (admins only) -->
+                <!-- Auth Page Backgrounds (admins only) -->
                 <?php if (AuthMiddleware::isAdmin()): ?>
                 <div class="card mb-4">
                     <div class="card-header">
                         <h5 class="card-title mb-0">
-                            <i class="fas fa-image me-2"></i>Login Page Background
+                            <i class="fas fa-image me-2"></i>Auth Page Backgrounds
                         </h5>
                     </div>
                     <div class="card-body">
-                        <p class="text-muted small mb-4">Customize the background photo shown on the login page. This is a site-wide setting shown before anyone signs in, so it isn't tied to your account alone — whoever changes it here changes it for everyone.</p>
+                        <p class="text-muted small mb-4">Customize the background photo shown on the login, register, and forgot-password pages. These are site-wide settings shown before anyone signs in, so they aren't tied to your account alone — whoever changes them here changes them for everyone.</p>
 
-                        <div class="d-flex align-items-center mb-4 gap-3">
-                            <img id="loginBgPreview"
-                                 src="<?php echo htmlspecialchars($loginBackgroundDisplay); ?>"
-                                 alt="Current login background"
-                                 class="rounded border shadow-sm"
-                                 style="width:120px;height:80px;object-fit:cover;">
-                            <div>
-                                <p class="mb-1 fw-semibold"><?php echo $loginBackground ? 'Custom Background' : 'Default Background'; ?></p>
-                                <?php if ($loginBackground): ?>
-                                    <form method="POST" class="d-inline" onsubmit="return confirm('Reset to the default login background?');">
-                                        <input type="hidden" name="action" value="reset_login_background">
-                                        <button type="submit" class="btn btn-link btn-sm text-danger p-0">
-                                            <i class="fas fa-undo me-1"></i>Reset to default
-                                        </button>
-                                    </form>
-                                <?php else: ?>
-                                    <p class="text-muted small mb-0">Using the built-in default photo</p>
-                                <?php endif; ?>
-                            </div>
-                        </div>
-
-                        <form method="POST" enctype="multipart/form-data" id="loginBgForm">
-                            <input type="hidden" name="action" value="update_login_background">
-
-                            <div class="upload-zone rounded border-2 border-dashed p-3 text-center"
-                                 id="loginBgUploadZone"
-                                 style="border-style:dashed;border-color:#ced4da;cursor:pointer;transition:border-color .2s,background .2s;">
-                                <input type="file"
-                                       name="login_background"
-                                       id="loginBgInput"
-                                       accept="image/jpeg,image/png,image/gif,image/webp"
-                                       class="d-none">
-                                <div id="loginBgUploadPrompt">
-                                    <i class="fas fa-cloud-upload-alt fa-2x text-muted mb-2"></i>
-                                    <p class="mb-1 text-muted small">Drag &amp; drop or <span class="text-primary fw-semibold" style="cursor:pointer;" id="loginBgBrowseBtn">browse</span></p>
-                                    <p class="text-muted" style="font-size:.75rem;">JPEG, PNG, GIF, WebP · Max 5 MB</p>
+                        <?php foreach ($authBackgrounds as $bgKey => $bg): $domId = str_replace('_', '-', $bgKey); ?>
+                        <div class="<?php echo $bgKey !== array_key_last($authBackgrounds) ? 'mb-4 pb-4 border-bottom' : ''; ?>">
+                            <h6 class="mb-3"><?php echo sanitize($bg['label']); ?></h6>
+                            <div class="d-flex align-items-center mb-3 gap-3">
+                                <img id="bg-<?php echo $domId; ?>-preview"
+                                     src="<?php echo htmlspecialchars($bg['display']); ?>"
+                                     alt="Current <?php echo sanitize($bg['label']); ?> background"
+                                     class="rounded border shadow-sm"
+                                     style="width:120px;height:80px;object-fit:cover;">
+                                <div>
+                                    <p class="mb-1 fw-semibold"><?php echo $bg['custom'] ? 'Custom Background' : 'Default Background'; ?></p>
+                                    <?php if ($bg['custom']): ?>
+                                        <form method="POST" class="d-inline" onsubmit="return confirm('Reset to the default background?');">
+                                            <input type="hidden" name="action" value="reset_auth_background">
+                                            <input type="hidden" name="background_key" value="<?php echo htmlspecialchars($bgKey); ?>">
+                                            <button type="submit" class="btn btn-link btn-sm text-danger p-0">
+                                                <i class="fas fa-undo me-1"></i>Reset to default
+                                            </button>
+                                        </form>
+                                    <?php else: ?>
+                                        <p class="text-muted small mb-0">Using the built-in default photo</p>
+                                    <?php endif; ?>
                                 </div>
-                                <div id="loginBgPreviewWrap" class="d-none">
-                                    <img id="loginBgUploadPreviewImg" src="" alt="Preview"
-                                         class="rounded border shadow-sm mb-2"
-                                         style="width:120px;height:80px;object-fit:cover;">
-                                    <p class="mb-0 text-success small fw-semibold" id="loginBgFileName"></p>
-                                    <button type="button" class="btn btn-link btn-sm text-danger p-0 mt-1" id="loginBgClearUpload">
-                                        <i class="fas fa-times me-1"></i>Remove
+                            </div>
+
+                            <form method="POST" enctype="multipart/form-data" id="bg-<?php echo $domId; ?>-form" class="auth-bg-form">
+                                <input type="hidden" name="action" value="update_auth_background">
+                                <input type="hidden" name="background_key" value="<?php echo htmlspecialchars($bgKey); ?>">
+
+                                <div class="upload-zone rounded border-2 border-dashed p-3 text-center"
+                                     id="bg-<?php echo $domId; ?>-zone"
+                                     style="border-style:dashed;border-color:#ced4da;cursor:pointer;transition:border-color .2s,background .2s;">
+                                    <input type="file"
+                                           name="background_file"
+                                           id="bg-<?php echo $domId; ?>-input"
+                                           accept="image/jpeg,image/png,image/gif,image/webp"
+                                           class="d-none">
+                                    <div id="bg-<?php echo $domId; ?>-prompt">
+                                        <i class="fas fa-cloud-upload-alt fa-2x text-muted mb-2"></i>
+                                        <p class="mb-1 text-muted small">Drag &amp; drop or <span class="text-primary fw-semibold" style="cursor:pointer;" id="bg-<?php echo $domId; ?>-browse">browse</span></p>
+                                        <p class="text-muted" style="font-size:.75rem;">JPEG, PNG, GIF, WebP · Max 5 MB</p>
+                                    </div>
+                                    <div id="bg-<?php echo $domId; ?>-preview-wrap" class="d-none">
+                                        <img id="bg-<?php echo $domId; ?>-upload-preview" src="" alt="Preview"
+                                             class="rounded border shadow-sm mb-2"
+                                             style="width:120px;height:80px;object-fit:cover;">
+                                        <p class="mb-0 text-success small fw-semibold" id="bg-<?php echo $domId; ?>-filename"></p>
+                                        <button type="button" class="btn btn-link btn-sm text-danger p-0 mt-1 bg-clear-upload"><i class="fas fa-times me-1"></i>Remove</button>
+                                    </div>
+                                </div>
+
+                                <?php if ($bgKey === 'login_background'): ?>
+                                <div class="form-text mt-2">
+                                    <strong>Recommended specs:</strong> at least 1200×1600px, portrait orientation (it fills a tall, half-width panel on desktop), ideally under ~1&nbsp;MB after compression. JPEG or WebP compress best for photos.
+                                </div>
+                                <?php endif; ?>
+
+                                <div class="d-flex justify-content-end mt-3">
+                                    <button type="submit" class="btn btn-sm btn-primary bg-save-btn" disabled>
+                                        <i class="fas fa-save me-1"></i>Save Background
                                     </button>
                                 </div>
-                            </div>
-
-                            <div class="form-text mt-2">
-                                <strong>Recommended specs:</strong> at least 1200×1600px, portrait orientation (it fills a tall, half-width panel on desktop), ideally under ~1&nbsp;MB after compression so the login page loads quickly. JPEG or WebP compress best for photos.
-                            </div>
-
-                            <div class="d-flex justify-content-end mt-3">
-                                <button type="submit" class="btn btn-sm btn-primary" id="saveLoginBgBtn" disabled>
-                                    <i class="fas fa-save me-1"></i>Save Background
-                                </button>
-                            </div>
-                        </form>
+                            </form>
+                        </div>
+                        <?php endforeach; ?>
                     </div>
                 </div>
                 <?php endif; ?>
@@ -1064,18 +1102,20 @@ foreach ($emailStatsRaw as $stat) {
             }
         })();
 
-        // Login background upload zone
-        (function () {
-            const fileInput    = document.getElementById('loginBgInput');
-            const uploadZone   = document.getElementById('loginBgUploadZone');
-            const uploadPrompt = document.getElementById('loginBgUploadPrompt');
-            const previewWrap  = document.getElementById('loginBgPreviewWrap');
-            const previewImg   = document.getElementById('loginBgUploadPreviewImg');
-            const fileNameEl   = document.getElementById('loginBgFileName');
-            const clearBtn     = document.getElementById('loginBgClearUpload');
-            const browseBtn    = document.getElementById('loginBgBrowseBtn');
-            const saveBtn      = document.getElementById('saveLoginBgBtn');
-            const mainPreview  = document.getElementById('loginBgPreview');
+        // Auth page background upload zones (login / register / forgot-password)
+        document.querySelectorAll('.auth-bg-form').forEach(function (form) {
+            const domId = form.id.replace(/^bg-/, '').replace(/-form$/, '');
+
+            const fileInput    = document.getElementById('bg-' + domId + '-input');
+            const uploadZone   = document.getElementById('bg-' + domId + '-zone');
+            const uploadPrompt = document.getElementById('bg-' + domId + '-prompt');
+            const previewWrap  = document.getElementById('bg-' + domId + '-preview-wrap');
+            const previewImg   = document.getElementById('bg-' + domId + '-upload-preview');
+            const fileNameEl   = document.getElementById('bg-' + domId + '-filename');
+            const clearBtn     = form.querySelector('.bg-clear-upload');
+            const browseBtn    = document.getElementById('bg-' + domId + '-browse');
+            const saveBtn      = form.querySelector('.bg-save-btn');
+            const mainPreview  = document.getElementById('bg-' + domId + '-preview');
             const originalSrc  = mainPreview.src;
 
             if (!fileInput) return;
@@ -1141,7 +1181,7 @@ foreach ($emailStatsRaw as $stat) {
                 uploadPrompt.classList.remove('d-none');
                 mainPreview.src = originalSrc;
             }
-        })();
+        });
     </script>
 
 <?php require_once 'includes/footer.php'; ?>

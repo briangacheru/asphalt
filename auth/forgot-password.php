@@ -6,6 +6,8 @@ require_once __DIR__ . '/../includes/bootstrap.php';
 
 use App\Middleware\AuthMiddleware;
 use App\Database\Database;
+use App\Services\SiteSettingsService;
+use App\Services\RateLimiterService;
 
 // Redirect if already logged in
 if (AuthMiddleware::isLoggedIn()) {
@@ -16,6 +18,9 @@ $pdo = Database::getInstance()->getConnection();
 $errors = [];
 $success = false;
 $email = '';
+
+$forgotPasswordBackground = SiteSettingsService::get($pdo, 'forgot_password_background');
+$forgotPasswordBackgroundUrl = $forgotPasswordBackground ? '../' . $forgotPasswordBackground : '../assets/img/generic/17.jpg';
 
 // Handle form submission
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -32,30 +37,38 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         if (empty($errors)) {
-            // Find user
-            $stmt = $pdo->prepare("SELECT id, first_name, email FROM users WHERE email = ? AND is_active = 1");
-            $stmt->execute([$email]);
-            $user = $stmt->fetch();
+            $rateLimitKey = 'forgot-password:' . RateLimiterService::clientIp() . ':' . strtolower($email);
 
-            if ($user) {
-                // Delete any existing reset tokens for this user
-                $pdo->prepare("DELETE FROM password_resets WHERE user_id = ?")->execute([$user['id']]);
+            if (RateLimiterService::tooManyAttempts($pdo, $rateLimitKey, 3, 3600)) {
+                $errors[] = 'Too many reset requests for this email. Please try again later.';
+            } else {
+                RateLimiterService::recordAttempt($pdo, $rateLimitKey);
 
-                // Generate new token and hash it for storage
-                $token = generateToken();
-                $tokenHash = password_hash($token, PASSWORD_DEFAULT);
-                $expires = date('Y-m-d H:i:s', time() + PASSWORD_RESET_EXPIRY);
+                // Find user
+                $stmt = $pdo->prepare("SELECT id, first_name, email FROM users WHERE email = ? AND is_active = 1");
+                $stmt->execute([$email]);
+                $user = $stmt->fetch();
 
-                $stmt = $pdo->prepare("INSERT INTO password_resets (user_id, token, expires_at) VALUES (?, ?, ?)");
-                $stmt->execute([$user['id'], $tokenHash, $expires]);
+                if ($user) {
+                    // Delete any existing reset tokens for this user
+                    $pdo->prepare("DELETE FROM password_resets WHERE user_id = ?")->execute([$user['id']]);
 
-                // Send reset email with plain token (user needs the plain token)
-                $emailService = new \App\Services\EmailService($pdo);
-                $emailService->sendPasswordResetEmail($user['email'], $token, $user['first_name']);
+                    // Generate new token and hash it for storage
+                    $token = generateToken();
+                    $tokenHash = password_hash($token, PASSWORD_DEFAULT);
+                    $expires = date('Y-m-d H:i:s', time() + PASSWORD_RESET_EXPIRY);
+
+                    $stmt = $pdo->prepare("INSERT INTO password_resets (user_id, token, expires_at) VALUES (?, ?, ?)");
+                    $stmt->execute([$user['id'], $tokenHash, $expires]);
+
+                    // Send reset email with plain token (user needs the plain token)
+                    $emailService = new \App\Services\EmailService($pdo);
+                    $emailService->sendPasswordResetEmail($user['email'], $token, $user['first_name']);
+                }
+
+                // Always show success message to prevent email enumeration
+                $success = true;
             }
-
-            // Always show success message to prevent email enumeration
-            $success = true;
         }
     }
 }
@@ -134,7 +147,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         </script>
         <div class="row min-vh-100 bg-100">
           <div class="col-6 d-none d-lg-block position-relative">
-            <div class="bg-holder overlay" style="background-image:url(../assets/img/generic/17.jpg);background-position: 50% 76%;">
+            <div class="bg-holder overlay" style="background-image:url(<?php echo htmlspecialchars($forgotPasswordBackgroundUrl); ?>);background-position: 50% 76%;">
             </div>
             <!--/.bg-holder-->
 

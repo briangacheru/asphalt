@@ -8,6 +8,8 @@ use App\Middleware\AuthMiddleware;
 use App\Database\Database;
 use App\Services\EmailService;
 use App\Services\SiteSettingsService;
+use App\Services\EmailVerificationService;
+use App\Services\RateLimiterService;
 
 // Redirect if already logged in
 if (AuthMiddleware::isLoggedIn()) {
@@ -23,6 +25,9 @@ $registrationBlockedMessage = $maintenanceMode
     ? 'The site is currently under maintenance. New accounts cannot be created right now — please check back later.'
     : 'New registrations are currently closed. Please check back later.';
 
+$registerBackground = SiteSettingsService::get($pdo, 'register_background');
+$registerBackgroundUrl = $registerBackground ? '../' . $registerBackground : '../assets/img/generic/19.jpg';
+
 $errors = [];
 $formData = [
     'first_name' => '',
@@ -32,11 +37,17 @@ $formData = [
 ];
 
 // Handle registration form submission
+$registerRateLimitKey = 'register:' . RateLimiterService::clientIp();
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$registrationBlocked) {
     // Verify CSRF token
     if (!verifyCSRFToken($_POST['csrf_token'] ?? null)) {
         $errors[] = 'Invalid security token. Please try again.';
+    } elseif (RateLimiterService::tooManyAttempts($pdo, $registerRateLimitKey, 5, 3600)) {
+        $errors[] = 'Too many registration attempts from this connection. Please try again in a while.';
     } else {
+        RateLimiterService::recordAttempt($pdo, $registerRateLimitKey);
+
         $formData = [
             'first_name' => sanitize($_POST['first_name'] ?? ''),
             'last_name' => sanitize($_POST['last_name'] ?? ''),
@@ -81,11 +92,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$registrationBlocked) {
         // Create account
         if (empty($errors)) {
             try {
-                $verificationToken = generateToken();
-                
                 $stmt = $pdo->prepare("
-                    INSERT INTO users (email, password, first_name, last_name, phone, verification_token, is_verified)
-                    VALUES (?, ?, ?, ?, ?, ?, 0)
+                    INSERT INTO users (email, password, first_name, last_name, phone, is_verified)
+                    VALUES (?, ?, ?, ?, ?, 0)
                 ");
                 $stmt->execute([
                     $formData['email'],
@@ -93,9 +102,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$registrationBlocked) {
                     $formData['first_name'],
                     $formData['last_name'],
                     $formData['phone'],
-                    $verificationToken
                 ]);
-                
+                $newUserId = (int) $pdo->lastInsertId();
+
+                // Issue an expiring verification token (see EmailVerificationService)
+                $verificationToken = EmailVerificationService::issue($pdo, $newUserId);
+
                 // Send verification email
                 $emailService = new EmailService($pdo);
                 $emailSent = $emailService->sendWelcomeEmail($formData['email'], $verificationToken, $formData['first_name']);
@@ -190,7 +202,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$registrationBlocked) {
         </script>
         <div class="row min-vh-100 bg-100">
           <div class="col-6 d-none d-lg-block position-relative">
-            <div class="bg-holder" style="background-image:url(../assets/img/generic/19.jpg);">
+            <div class="bg-holder" style="background-image:url(<?php echo htmlspecialchars($registerBackgroundUrl); ?>);">
             </div>
             <!--/.bg-holder-->
 

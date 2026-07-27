@@ -7,6 +7,7 @@ require_once __DIR__ . '/../includes/bootstrap.php';
 use App\Middleware\AuthMiddleware;
 use App\Database\Database;
 use App\Services\SiteSettingsService;
+use App\Services\RateLimiterService;
 
 // Redirect if already logged in
 if (AuthMiddleware::isLoggedIn()) {
@@ -31,66 +32,75 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $email = sanitize($_POST['email'] ?? '');
         $password = $_POST['password'] ?? '';
         $remember = isset($_POST['remember']);
-        
-        // Validation
-        if (empty($email)) {
-            $errors[] = 'Email is required';
-        }
-        if (empty($password)) {
-            $errors[] = 'Password is required';
-        }
-        
-        if (empty($errors)) {
-            // Find user
-            $stmt = $pdo->prepare("SELECT * FROM users WHERE email = ? AND is_active = 1");
-            $stmt->execute([$email]);
-            $user = $stmt->fetch();
-            
-            if ($user && verifyPassword($password, $user['password'])) {
-                // Check if verified
-                if (!$user['is_verified']) {
-                    $errors[] = 'Please verify your email address first. <a href="resend-verification?email=' . urlencode($email) . '">Resend verification email</a>';
-                } elseif ($maintenanceMode && ($user['role'] ?? 'user') !== 'admin') {
-                    $errors[] = 'The site is currently under maintenance. Please try again later.';
-                } else {
-                    // Login successful - regenerate session ID to prevent session fixation
-                    session_regenerate_id(true);
-                    
-                    $_SESSION['user_id'] = $user['id'];
-                    $_SESSION['user_email'] = $user['email'];
-                    $_SESSION['user_name'] = $user['first_name'];
-                    $_SESSION['user_role'] = $user['role'] ?? 'user';
-                    
-                    // Update last login
-                    $pdo->prepare("UPDATE users SET last_login = NOW() WHERE id = ?")->execute([$user['id']]);
-                    
-                    // Handle remember me with secure cookie
-                    if ($remember) {
-                        $token = generateToken();
-                        $expires = date('Y-m-d H:i:s', time() + REMEMBER_ME_EXPIRY);
-                        
-                        $pdo->prepare("INSERT INTO remember_tokens (user_id, token, expires_at) VALUES (?, ?, ?)")
-                            ->execute([$user['id'], $token, $expires]);
-                        
-                        setcookie('remember_token', $token, [
-                            'expires' => time() + REMEMBER_ME_EXPIRY,
-                            'path' => '/',
-                            'domain' => '',
-                            'secure' => true,
-                            'httponly' => true,
-                            'samesite' => 'Strict'
-                        ]);
+
+        $loginRateLimitKey = 'login:' . RateLimiterService::clientIp() . ':' . strtolower($email);
+
+        if (RateLimiterService::tooManyAttempts($pdo, $loginRateLimitKey, 5, 900)) {
+            $errors[] = 'Too many failed login attempts. Please wait 15 minutes and try again.';
+        } else {
+            // Validation
+            if (empty($email)) {
+                $errors[] = 'Email is required';
+            }
+            if (empty($password)) {
+                $errors[] = 'Password is required';
+            }
+
+            if (empty($errors)) {
+                // Find user
+                $stmt = $pdo->prepare("SELECT * FROM users WHERE email = ? AND is_active = 1");
+                $stmt->execute([$email]);
+                $user = $stmt->fetch();
+
+                if ($user && verifyPassword($password, $user['password'])) {
+                    RateLimiterService::clearAttempts($pdo, $loginRateLimitKey);
+
+                    // Check if verified
+                    if (!$user['is_verified']) {
+                        $errors[] = 'Please verify your email address first. <a href="resend-verification?email=' . urlencode($email) . '">Resend verification email</a>';
+                    } elseif ($maintenanceMode && ($user['role'] ?? 'user') !== 'admin') {
+                        $errors[] = 'The site is currently under maintenance. Please try again later.';
+                    } else {
+                        // Login successful - regenerate session ID to prevent session fixation
+                        session_regenerate_id(true);
+
+                        $_SESSION['user_id'] = $user['id'];
+                        $_SESSION['user_email'] = $user['email'];
+                        $_SESSION['user_name'] = $user['first_name'];
+                        $_SESSION['user_role'] = $user['role'] ?? 'user';
+
+                        // Update last login
+                        $pdo->prepare("UPDATE users SET last_login = NOW() WHERE id = ?")->execute([$user['id']]);
+
+                        // Handle remember me with secure cookie
+                        if ($remember) {
+                            $token = generateToken();
+                            $expires = date('Y-m-d H:i:s', time() + REMEMBER_ME_EXPIRY);
+
+                            $pdo->prepare("INSERT INTO remember_tokens (user_id, token, expires_at) VALUES (?, ?, ?)")
+                                ->execute([$user['id'], $token, $expires]);
+
+                            setcookie('remember_token', $token, [
+                                'expires' => time() + REMEMBER_ME_EXPIRY,
+                                'path' => '/',
+                                'domain' => '',
+                                'secure' => true,
+                                'httponly' => true,
+                                'samesite' => 'Strict'
+                            ]);
+                        }
+
+                        // Redirect
+                        $redirectTo = $_SESSION['redirect_after_login'] ?? APP_URL . '/';
+                        unset($_SESSION['redirect_after_login']);
+
+                        setFlashMessage('success', 'Welcome back, ' . $user['first_name'] . '!');
+                        redirect($redirectTo);
                     }
-                    
-                    // Redirect
-                    $redirectTo = $_SESSION['redirect_after_login'] ?? APP_URL . '/';
-                    unset($_SESSION['redirect_after_login']);
-                    
-                    setFlashMessage('success', 'Welcome back, ' . $user['first_name'] . '!');
-                    redirect($redirectTo);
+                } else {
+                    RateLimiterService::recordAttempt($pdo, $loginRateLimitKey);
+                    $errors[] = 'Invalid email or password';
                 }
-            } else {
-                $errors[] = 'Invalid email or password';
             }
         }
     }

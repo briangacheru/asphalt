@@ -9,28 +9,17 @@
 require_once __DIR__ . '/../includes/bootstrap.php';
 
 use App\Database\Database;
+use App\Services\EmailVerificationService;
 
 $pdo = Database::getInstance()->getConnection();
 
 $token = $_GET['token'] ?? '';
-$success = false;
-$alreadyVerified = false;
+$result = EmailVerificationService::verify($pdo, $token);
 
-if ($token !== '') {
-    $stmt = $pdo->prepare("SELECT id, is_verified FROM users WHERE verification_token = ?");
-    $stmt->execute([$token]);
-    $user = $stmt->fetch();
-
-    if ($user) {
-        if ($user['is_verified']) {
-            $alreadyVerified = true;
-        } else {
-            $pdo->prepare("UPDATE users SET is_verified = 1, verification_token = NULL WHERE id = ?")
-                ->execute([$user['id']]);
-            $success = true;
-        }
-    }
-}
+$success = $result['status'] === 'success';
+$alreadyVerified = $result['status'] === 'already_verified';
+$expired = $result['status'] === 'expired';
+$resendEmail = $result['email'] ?? '';
 ?>
 <!DOCTYPE html>
 <html data-bs-theme="light" lang="en-US" dir="ltr">
@@ -110,14 +99,26 @@ if ($token !== '') {
                                 <h4 class="alert-heading fw-semi-bold">Already Verified</h4>
                                 <span>This account was already verified. You can sign in below.</span>
                             </div>
+                        <?php elseif ($expired): ?>
+                            <div class="alert alert-warning" role="alert">
+                                <i class="fas fa-clock fs-4"></i>
+                                <h4 class="alert-heading fw-semi-bold">Link Expired</h4>
+                                <span class="fs-10">This verification link has expired. Request a fresh one below.</span>
+                            </div>
                         <?php else: ?>
                             <div class="alert alert-danger" role="alert">
                                 <i class="fas fa-exclamation-circle fs-4"></i>
-                                <h4 class="alert-heading fw-semi-bold">Invalid or Expired Link</h4>
-                                <span class="fs-10">This verification link isn't valid. It may have already been used, or the account may need a fresh one.</span>
+                                <h4 class="alert-heading fw-semi-bold">Invalid Link</h4>
+                                <span class="fs-10">This verification link isn't valid. It may have already been used.</span>
                             </div>
                         <?php endif; ?>
-                        <a class="btn btn-primary btn-sm mt-3" href="login">
+
+                        <?php if ($expired && $resendEmail !== ''): ?>
+                            <a class="btn btn-primary btn-sm mt-3" href="resend-verification?email=<?php echo urlencode($resendEmail); ?>">
+                                <i class="fas fa-paper-plane me-1"></i>Send a New Verification Link
+                            </a>
+                        <?php endif; ?>
+                        <a class="btn btn-<?php echo $expired ? 'outline-secondary' : 'primary'; ?> btn-sm mt-3" href="login">
                             <span class="fas fa-chevron-left me-1" data-fa-transform="shrink-4 down-1"></span>Go to Login
                         </a>
                     </div>
