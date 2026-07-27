@@ -191,6 +191,41 @@ $fillTrend = monthTrend($monthStats['this_count'], $monthStats['last_count']);
 $literTrend = monthTrend($monthStats['this_liters'], $monthStats['last_liters']);
 $spentTrend = monthTrend($monthStats['this_spent'], $monthStats['last_spent']);
 $priceTrend = monthTrend($monthStats['this_avg_price'], $monthStats['last_avg_price']);
+
+// Fuel economy (km/L): km driven this/last month (from consecutive fuel_log
+// odometer readings, summed per vehicle) divided by liters used in that month.
+$firstDayThisMonth = date('Y-m-01');
+$firstDayNextMonth = date('Y-m-01', strtotime($firstDayThisMonth . ' +1 month'));
+$firstDayLastMonth = date('Y-m-01', strtotime($firstDayThisMonth . ' -1 month'));
+
+function fuelMileageAsOf(PDO $pdo, int $vehicleId, string $beforeDate): ?int
+{
+    $stmt = $pdo->prepare("SELECT mileage FROM fuel_log WHERE vehicle_id = ? AND fill_date < ? ORDER BY fill_date DESC, id DESC LIMIT 1");
+    $stmt->execute([$vehicleId, $beforeDate]);
+    $val = $stmt->fetchColumn();
+    return $val !== false ? (int) $val : null;
+}
+
+$vehicleIdsInView = $vehicleFilter ? [$vehicleFilter] : array_column($vehicles, 'id');
+$kmThisMonthTotal = 0;
+$kmLastMonthTotal = 0;
+
+foreach ($vehicleIdsInView as $vid) {
+    $mileageNow = fuelMileageAsOf($pdo, $vid, $firstDayNextMonth);
+    $mileageStartOfThisMonth = fuelMileageAsOf($pdo, $vid, $firstDayThisMonth);
+    $mileageStartOfLastMonth = fuelMileageAsOf($pdo, $vid, $firstDayLastMonth);
+
+    if ($mileageNow !== null && $mileageStartOfThisMonth !== null) {
+        $kmThisMonthTotal += max(0, $mileageNow - $mileageStartOfThisMonth);
+    }
+    if ($mileageStartOfThisMonth !== null && $mileageStartOfLastMonth !== null) {
+        $kmLastMonthTotal += max(0, $mileageStartOfThisMonth - $mileageStartOfLastMonth);
+    }
+}
+
+$thisEconomy = $monthStats['this_liters'] > 0 ? $kmThisMonthTotal / $monthStats['this_liters'] : 0;
+$lastEconomy = $monthStats['last_liters'] > 0 ? $kmLastMonthTotal / $monthStats['last_liters'] : 0;
+$economyTrend = monthTrend($thisEconomy, $lastEconomy);
 ?>
 
 <?php
@@ -245,9 +280,9 @@ if ($flash): ?>
         </div>
     </div>
 
-    <div class="row g-3 mb-3">
-        <div class="col-sm-6 col-lg-3">
-            <div class="card h-100 border-0 shadow-sm hover-lift" data-bs-toggle="tooltip" title="<?php echo $lastMonthLabel; ?>: <?php echo (int)$monthStats['last_count']; ?> fill-up(s)">
+    <div class="row g-3 mb-3 row-cols-1 row-cols-sm-2 row-cols-lg-3 row-cols-xl-5">
+        <div class="col">
+            <div class="card h-100 border-0 shadow-sm hover-lift">
                 <div class="card-body p-3">
                     <div class="d-flex align-items-center justify-content-between mb-2">
                         <div class="icon-box bg-warning bg-opacity-10 rounded-3 p-2">
@@ -261,8 +296,8 @@ if ($flash): ?>
                 </div>
             </div>
         </div>
-        <div class="col-sm-6 col-lg-3">
-            <div class="card h-100 border-0 shadow-sm hover-lift" data-bs-toggle="tooltip" title="<?php echo $lastMonthLabel; ?>: <?php echo number_format($monthStats['last_liters'], 1); ?>L">
+        <div class="col">
+            <div class="card h-100 border-0 shadow-sm hover-lift">
                 <div class="card-body p-3">
                     <div class="d-flex align-items-center justify-content-between mb-2">
                         <div class="icon-box bg-info bg-opacity-10 rounded-3 p-2">
@@ -276,8 +311,8 @@ if ($flash): ?>
                 </div>
             </div>
         </div>
-        <div class="col-sm-6 col-lg-3">
-            <div class="card h-100 border-0 shadow-sm hover-lift" data-bs-toggle="tooltip" title="<?php echo $lastMonthLabel; ?>: Ksh. <?php echo number_format($monthStats['last_spent'], 2); ?>">
+        <div class="col">
+            <div class="card h-100 border-0 shadow-sm hover-lift">
                 <div class="card-body p-3">
                     <div class="d-flex align-items-center justify-content-between mb-2">
                         <div class="icon-box bg-success bg-opacity-10 rounded-3 p-2">
@@ -291,8 +326,8 @@ if ($flash): ?>
                 </div>
             </div>
         </div>
-        <div class="col-sm-6 col-lg-3">
-            <div class="card h-100 border-0 shadow-sm hover-lift" data-bs-toggle="tooltip" title="<?php echo $lastMonthLabel; ?>: Ksh. <?php echo number_format($monthStats['last_avg_price'], 2); ?>">
+        <div class="col">
+            <div class="card h-100 border-0 shadow-sm hover-lift">
                 <div class="card-body p-3">
                     <div class="d-flex align-items-center justify-content-between mb-2">
                         <div class="icon-box bg-primary bg-opacity-10 rounded-3 p-2">
@@ -306,10 +341,24 @@ if ($flash): ?>
                 </div>
             </div>
         </div>
+        <div class="col">
+            <div class="card h-100 border-0 shadow-sm hover-lift">
+                <div class="card-body p-3">
+                    <div class="d-flex align-items-center justify-content-between mb-2">
+                        <div class="icon-box bg-secondary bg-opacity-10 rounded-3 p-2">
+                            <i class="fas fa-leaf text-secondary"></i>
+                        </div>
+                        <?php echo renderTrendBadge($economyTrend, 'up'); ?>
+                    </div>
+                    <h6 class="text-muted mb-1 fw-normal fs-10">Fuel Economy &bull; <?php echo $thisMonthLabel; ?></h6>
+                    <h4 class="fs-6 fw-bold mb-1"><?php echo number_format($thisEconomy, 1); ?> <small class="fs-11 text-muted">km/L</small></h4>
+                    <p class="fs-11 text-muted mb-0">vs <?php echo $lastMonthLabel; ?>: <?php echo number_format($lastEconomy, 1); ?> km/L</p>
+                </div>
+            </div>
+        </div>
     </div>
 
-    <div class="row g-0">
-        <div class="card">
+    <div class="card">
             <div class="card-body">
                 <?php if (empty($logs)): ?>
                     <div class="empty-state text-center py-4">
@@ -365,7 +414,6 @@ if ($flash): ?>
                     </div>
                 <?php endif; ?>
             </div>
-        </div>
     </div>
 
     <!-- Add Fuel Modal -->

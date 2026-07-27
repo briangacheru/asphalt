@@ -55,9 +55,110 @@ $services = $stmt->fetchAll();
 // Get statistics
 $stats = [
     'total_services' => count($services),
-    'total_spent' => array_sum(array_column($services, 'service_cost')),
-    'total_km_driven' => $vehicle['current_mileage'] - $vehicle['purchase_mileage'],
 ];
+
+// --- Month-over-month comparisons: KM driven and total spend ---
+$firstDayThisMonth = date('Y-m-01');
+$firstDayNextMonth = date('Y-m-01', strtotime($firstDayThisMonth . ' +1 month'));
+$firstDayLastMonth = date('Y-m-01', strtotime($firstDayThisMonth . ' -1 month'));
+
+/**
+ * Km driven within [$start, $end): the latest recorded mileage in that
+ * window minus the earliest, pooling every source that records an odometer
+ * reading — manual mileage updates, service records, and fuel log fill-ups.
+ * Null when the vehicle has no mileage record at all in that window.
+ */
+function kmDrivenInRange(PDO $pdo, int $vehicleId, string $start, string $end): ?int
+{
+    $stmt = $pdo->prepare("
+        SELECT mileage FROM (
+            SELECT log_date AS record_date, mileage FROM mileage_log WHERE vehicle_id = ? AND log_date >= ? AND log_date < ?
+            UNION ALL
+            SELECT service_date AS record_date, mileage FROM service_records WHERE vehicle_id = ? AND service_date >= ? AND service_date < ? AND mileage IS NOT NULL
+            UNION ALL
+            SELECT fill_date AS record_date, mileage FROM fuel_log WHERE vehicle_id = ? AND fill_date >= ? AND fill_date < ?
+        ) combined
+        ORDER BY record_date ASC, mileage ASC
+    ");
+    $stmt->execute([$vehicleId, $start, $end, $vehicleId, $start, $end, $vehicleId, $start, $end]);
+    $rows = $stmt->fetchAll(PDO::FETCH_COLUMN);
+
+    if (empty($rows)) {
+        return null;
+    }
+
+    return max(0, (int) end($rows) - (int) $rows[0]);
+}
+
+$kmThisMonth = kmDrivenInRange($pdo, $vehicleId, $firstDayThisMonth, $firstDayNextMonth);
+$kmLastMonth = kmDrivenInRange($pdo, $vehicleId, $firstDayLastMonth, $firstDayThisMonth);
+
+/**
+ * Every cost incurred for this vehicle within [$start, $end): services + other
+ * expenses + fuel.
+ */
+function monthlyTotalSpent(PDO $pdo, int $vehicleId, string $start, string $end): float
+{
+    $stmt = $pdo->prepare("
+        SELECT
+            (SELECT COALESCE(SUM(service_cost), 0) FROM service_records WHERE vehicle_id = ? AND service_date >= ? AND service_date < ?) +
+            (SELECT COALESCE(SUM(amount), 0) FROM expenses WHERE vehicle_id = ? AND expense_date >= ? AND expense_date < ?) +
+            (SELECT COALESCE(SUM(total_cost), 0) FROM fuel_log WHERE vehicle_id = ? AND fill_date >= ? AND fill_date < ?)
+        AS total
+    ");
+    $stmt->execute([$vehicleId, $start, $end, $vehicleId, $start, $end, $vehicleId, $start, $end]);
+    return (float) $stmt->fetchColumn();
+}
+
+$spentThisMonth = monthlyTotalSpent($pdo, $vehicleId, $firstDayThisMonth, $firstDayNextMonth);
+$spentLastMonth = monthlyTotalSpent($pdo, $vehicleId, $firstDayLastMonth, $firstDayThisMonth);
+
+/**
+ * Builds "vs last month" badge data. Returns null when there isn't enough
+ * data on both sides to compare.
+ */
+function monthComparisonBadge(?float $current, ?float $previous): ?array
+{
+    if ($current === null || $previous === null) {
+        return null;
+    }
+
+    $diff = $current - $previous;
+    $direction = $diff > 0 ? 'up' : ($diff < 0 ? 'down' : 'flat');
+
+    if ($direction === 'flat') {
+        $text = 'No change';
+    } elseif ((float) $previous === 0.0) {
+        $text = ($direction === 'up' ? '+' : '-') . formatNumber(abs($diff));
+    } else {
+        $pct = ($diff / $previous) * 100;
+        $text = ($direction === 'up' ? '+' : '-') . number_format(abs($pct), 0) . '%';
+    }
+
+    return ['direction' => $direction, 'text' => $text];
+}
+
+$kmBadge = monthComparisonBadge($kmThisMonth, $kmLastMonth);
+$spentBadge = monthComparisonBadge($spentThisMonth, $spentLastMonth);
+
+// Service count this/last month — gives Total Services the same "vs last
+// month" treatment the other three stat cards already have.
+function monthlyServiceCount(PDO $pdo, int $vehicleId, string $start, string $end): int
+{
+    $stmt = $pdo->prepare("SELECT COUNT(*) FROM service_records WHERE vehicle_id = ? AND service_date >= ? AND service_date < ?");
+    $stmt->execute([$vehicleId, $start, $end]);
+    return (int) $stmt->fetchColumn();
+}
+
+$servicesThisMonth = monthlyServiceCount($pdo, $vehicleId, $firstDayThisMonth, $firstDayNextMonth);
+$servicesLastMonth = monthlyServiceCount($pdo, $vehicleId, $firstDayLastMonth, $firstDayThisMonth);
+$servicesBadge = monthComparisonBadge((float) $servicesThisMonth, (float) $servicesLastMonth);
+
+// Cost per km this/last month — ties the spend and distance cards together
+// into a single cost-of-ownership figure.
+$costPerKmThisMonth = ($kmThisMonth !== null && $kmThisMonth > 0) ? $spentThisMonth / $kmThisMonth : null;
+$costPerKmLastMonth = ($kmLastMonth !== null && $kmLastMonth > 0) ? $spentLastMonth / $kmLastMonth : null;
+$costPerKmBadge = monthComparisonBadge($costPerKmThisMonth, $costPerKmLastMonth);
 
 // Last service info
 $lastService = $services[0] ?? null;
@@ -93,12 +194,6 @@ $maintenanceDueSoonCount = count(array_filter($maintenanceItems, fn($i) => $i['s
 
 // Extra info for stat cards
 $daysSinceLastService = $lastService ? round((time() - strtotime($lastService['service_date'])) / 86400) : null;
-$avgKmPerMonth = null;
-if ($vehicle['purchase_date']) {
-    $monthsOwned = max(1, (time() - strtotime($vehicle['purchase_date'])) / (86400 * 30));
-    $avgKmPerMonth = $stats['total_km_driven'] / $monthsOwned;
-}
-$avgCostPerService = $stats['total_services'] > 0 ? $stats['total_spent'] / $stats['total_services'] : 0;
 
 // Get recent fuel logs
 $stmt = $pdo->prepare("SELECT * FROM fuel_log WHERE vehicle_id = ? ORDER BY fill_date DESC, id DESC LIMIT 5");
@@ -247,8 +342,8 @@ if ($flash): ?>
         </div>
     </div>
     <div class="col-lg-8 col-xl-8">
-        <div class="row g-3">
-            <div class="col-md-6">
+        <div class="row g-3 row-cols-1 row-cols-sm-2 row-cols-xl-3">
+            <div class="col">
                 <div class="card h-100 border-0 shadow-sm hover-lift">
                     <div class="card-body p-3">
                         <div class="d-flex align-items-center justify-content-between mb-2">
@@ -268,19 +363,24 @@ if ($flash): ?>
                     </div>
                 </div>
             </div>
-            <div class="col-md-6">
+            <div class="col">
                 <div class="card h-100 border-0 shadow-sm hover-lift">
                     <div class="card-body p-3">
                         <div class="d-flex align-items-center justify-content-between mb-2">
                             <div class="icon-box bg-info bg-opacity-10 rounded-3 p-2">
                                 <i class="fas fa-road text-info"></i>
                             </div>
+                            <?php if ($kmBadge): ?>
+                                <span class="badge badge-subtle-secondary fs-11">
+                                    <i class="fas fa-<?php echo $kmBadge['direction'] === 'up' ? 'arrow-up' : ($kmBadge['direction'] === 'down' ? 'arrow-down' : 'minus'); ?> me-1"></i><?php echo $kmBadge['text']; ?> vs last month
+                                </span>
+                            <?php endif; ?>
                         </div>
-                        <h6 class="text-muted mb-1 fw-normal fs-10">Total KM Driven</h6>
-                        <h4 class="fs-6 fw-bold mb-1"><?php echo formatNumber($stats['total_km_driven']); ?> <small class="fs-11 text-muted">km</small></h4>
+                        <h6 class="text-muted mb-1 fw-normal fs-10">KM Driven This Month</h6>
+                        <h4 class="fs-6 fw-bold mb-1"><?php echo $kmThisMonth !== null ? formatNumber($kmThisMonth) : '—'; ?> <small class="fs-11 text-muted">km</small></h4>
                         <p class="fs-11 text-muted mb-0">
-                            <?php if ($avgKmPerMonth !== null): ?>
-                                &asymp; <?php echo formatNumber(round($avgKmPerMonth)); ?> km/month
+                            <?php if ($kmLastMonth !== null): ?>
+                                Last month: <?php echo formatNumber($kmLastMonth); ?> km
                             <?php else: ?>
                                 &nbsp;
                             <?php endif; ?>
@@ -288,13 +388,18 @@ if ($flash): ?>
                     </div>
                 </div>
             </div>
-            <div class="col-md-6">
+            <div class="col">
                 <div class="card h-100 border-0 shadow-sm hover-lift">
                     <div class="card-body p-3">
                         <div class="d-flex align-items-center justify-content-between mb-2">
                             <div class="icon-box bg-success bg-opacity-10 rounded-3 p-2">
                                 <i class="fas fa-wrench text-success"></i>
                             </div>
+                            <?php if ($servicesBadge): ?>
+                                <span class="badge badge-subtle-secondary fs-11">
+                                    <i class="fas fa-<?php echo $servicesBadge['direction'] === 'up' ? 'arrow-up' : ($servicesBadge['direction'] === 'down' ? 'arrow-down' : 'minus'); ?> me-1"></i><?php echo $servicesBadge['text']; ?> vs last month
+                                </span>
+                            <?php endif; ?>
                         </div>
                         <h6 class="text-muted mb-1 fw-normal fs-10">Total Services</h6>
                         <h4 class="fs-6 fw-bold mb-1"><?php echo $stats['total_services']; ?></h4>
@@ -308,19 +413,45 @@ if ($flash): ?>
                     </div>
                 </div>
             </div>
-            <div class="col-md-6">
+            <div class="col">
                 <div class="card h-100 border-0 shadow-sm hover-lift">
                     <div class="card-body p-3">
                         <div class="d-flex align-items-center justify-content-between mb-2">
                             <div class="icon-box bg-warning bg-opacity-10 rounded-3 p-2">
                                 <i class="fas fa-money-bill-wave text-warning"></i>
                             </div>
+                            <?php if ($spentBadge): ?>
+                                <span class="badge <?php echo $spentBadge['direction'] === 'up' ? 'badge-subtle-danger' : ($spentBadge['direction'] === 'down' ? 'badge-subtle-success' : 'badge-subtle-secondary'); ?> fs-11">
+                                    <i class="fas fa-<?php echo $spentBadge['direction'] === 'up' ? 'arrow-up' : ($spentBadge['direction'] === 'down' ? 'arrow-down' : 'minus'); ?> me-1"></i><?php echo $spentBadge['text']; ?> vs last month
+                                </span>
+                            <?php endif; ?>
                         </div>
-                        <h6 class="text-muted mb-1 fw-normal fs-10">Total Spent</h6>
-                        <h4 class="fs-6 fw-bold mb-1">Ksh. <?php echo formatNumber($stats['total_spent']); ?></h4>
+                        <h6 class="text-muted mb-1 fw-normal fs-10">Total Spent This Month</h6>
+                        <h4 class="fs-6 fw-bold mb-1">Ksh. <?php echo formatNumber($spentThisMonth); ?></h4>
                         <p class="fs-11 text-muted mb-0">
-                            <?php if ($stats['total_services'] > 0): ?>
-                                Ksh. <?php echo formatNumber(round($avgCostPerService)); ?> avg/service
+                            Last month: Ksh. <?php echo formatNumber($spentLastMonth); ?>
+                        </p>
+                    </div>
+                </div>
+            </div>
+            <div class="col">
+                <div class="card h-100 border-0 shadow-sm hover-lift">
+                    <div class="card-body p-3">
+                        <div class="d-flex align-items-center justify-content-between mb-2">
+                            <div class="icon-box bg-dark bg-opacity-10 rounded-3 p-2">
+                                <i class="fas fa-coins text-dark"></i>
+                            </div>
+                            <?php if ($costPerKmBadge): ?>
+                                <span class="badge <?php echo $costPerKmBadge['direction'] === 'up' ? 'badge-subtle-danger' : ($costPerKmBadge['direction'] === 'down' ? 'badge-subtle-success' : 'badge-subtle-secondary'); ?> fs-11">
+                                    <i class="fas fa-<?php echo $costPerKmBadge['direction'] === 'up' ? 'arrow-up' : ($costPerKmBadge['direction'] === 'down' ? 'arrow-down' : 'minus'); ?> me-1"></i><?php echo $costPerKmBadge['text']; ?> vs last month
+                                </span>
+                            <?php endif; ?>
+                        </div>
+                        <h6 class="text-muted mb-1 fw-normal fs-10">Cost per KM This Month</h6>
+                        <h4 class="fs-6 fw-bold mb-1"><?php echo $costPerKmThisMonth !== null ? 'Ksh. ' . number_format($costPerKmThisMonth, 2) : '—'; ?></h4>
+                        <p class="fs-11 text-muted mb-0">
+                            <?php if ($costPerKmLastMonth !== null): ?>
+                                Last month: Ksh. <?php echo number_format($costPerKmLastMonth, 2); ?>
                             <?php else: ?>
                                 &nbsp;
                             <?php endif; ?>
@@ -328,35 +459,34 @@ if ($flash): ?>
                     </div>
                 </div>
             </div>
-            <?php if ($maintenanceOverdueCount + $maintenanceDueSoonCount > 0): ?>
-                <div class="col-12">
-                    <a href="#maintenance-schedule-section" class="text-decoration-none">
-                        <div class="card h-100 border-0 shadow-sm hover-lift <?php echo $maintenanceOverdueCount > 0 ? 'border-start border-danger border-4' : 'border-start border-warning border-4'; ?>">
-                            <div class="card-body p-3 d-flex align-items-center justify-content-between">
-                                <div class="d-flex align-items-center">
-                                    <div class="icon-box <?php echo $maintenanceOverdueCount > 0 ? 'bg-danger' : 'bg-warning'; ?> bg-opacity-10 rounded-3 p-2 me-3">
-                                        <i class="fas fa-exclamation-triangle <?php echo $maintenanceOverdueCount > 0 ? 'text-danger' : 'text-warning'; ?>"></i>
-                                    </div>
-                                    <div>
-                                        <h6 class="text-muted mb-1 fw-normal fs-10">Maintenance Alerts</h6>
-                                        <p class="fs-11 mb-0 text-800">
-                                            <?php if ($maintenanceOverdueCount > 0): ?>
-                                                <strong class="text-danger"><?php echo $maintenanceOverdueCount; ?> overdue</strong>
-                                            <?php endif; ?>
-                                            <?php if ($maintenanceOverdueCount > 0 && $maintenanceDueSoonCount > 0): ?> &bull; <?php endif; ?>
-                                            <?php if ($maintenanceDueSoonCount > 0): ?>
-                                                <strong class="text-warning"><?php echo $maintenanceDueSoonCount; ?> due soon</strong>
-                                            <?php endif; ?>
-                                        </p>
-                                    </div>
-                                </div>
-                                <i class="fas fa-chevron-down text-muted"></i>
+        </div>
+
+        <?php if ($maintenanceOverdueCount + $maintenanceDueSoonCount > 0): ?>
+            <a href="#maintenance-schedule-section" class="text-decoration-none">
+                <div class="card mt-3 border-0 shadow-sm hover-lift <?php echo $maintenanceOverdueCount > 0 ? 'border-start border-danger border-4' : 'border-start border-warning border-4'; ?>">
+                    <div class="card-body p-3 d-flex align-items-center justify-content-between">
+                        <div class="d-flex align-items-center">
+                            <div class="icon-box <?php echo $maintenanceOverdueCount > 0 ? 'bg-danger' : 'bg-warning'; ?> bg-opacity-10 rounded-3 p-2 me-3">
+                                <i class="fas fa-exclamation-triangle <?php echo $maintenanceOverdueCount > 0 ? 'text-danger' : 'text-warning'; ?>"></i>
+                            </div>
+                            <div>
+                                <h6 class="text-muted mb-1 fw-normal fs-10">Maintenance Alerts</h6>
+                                <p class="fs-11 mb-0 text-800">
+                                    <?php if ($maintenanceOverdueCount > 0): ?>
+                                        <strong class="text-danger"><?php echo $maintenanceOverdueCount; ?> overdue</strong>
+                                    <?php endif; ?>
+                                    <?php if ($maintenanceOverdueCount > 0 && $maintenanceDueSoonCount > 0): ?> &bull; <?php endif; ?>
+                                    <?php if ($maintenanceDueSoonCount > 0): ?>
+                                        <strong class="text-warning"><?php echo $maintenanceDueSoonCount; ?> due soon</strong>
+                                    <?php endif; ?>
+                                </p>
                             </div>
                         </div>
-                    </a>
+                        <i class="fas fa-chevron-down text-muted"></i>
+                    </div>
                 </div>
-            <?php endif; ?>
-        </div>
+            </a>
+        <?php endif; ?>
 
         <!-- Service Status -->
         <?php if ($lastService): ?>
