@@ -282,11 +282,13 @@ class VehicleImportService
             }
 
             $categoryId = $this->resolveExpenseCategoryId($expense['category_name'] ?? '');
+            // Accept exports from before the item-type rework (raw 'item_type' string) too
+            $itemTypeId = $this->resolveItemTypeId($expense['item_type_name'] ?? $expense['item_type'] ?? '');
             $receiptPath = $this->importReceipt($expense['receipt_zip_path'] ?? null);
 
             $stmt = $this->pdo->prepare("
-                INSERT INTO expenses (vehicle_id, category_id, expense_date, amount, description, item_type, item_name, brand, part_number, quantity, cost_per_unit, item_notes, receipt_path)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO expenses (vehicle_id, category_id, expense_date, amount, description, mileage, item_type_id, item_name, brand, part_number, quantity, cost_per_unit, item_notes, receipt_path)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ");
             $stmt->execute([
                 $vehicleId,
@@ -294,7 +296,8 @@ class VehicleImportService
                 $expense['expense_date'] ?? date('Y-m-d'),
                 (float) ($expense['amount'] ?? 0),
                 $expense['description'] ?? null,
-                $expense['item_type'] ? sanitize($expense['item_type']) : null,
+                isset($expense['mileage']) && $expense['mileage'] !== '' ? (int) $expense['mileage'] : null,
+                $itemTypeId,
                 $expense['item_name'] ? sanitize($expense['item_name']) : null,
                 $expense['brand'] ? sanitize($expense['brand']) : null,
                 $expense['part_number'] ? sanitize($expense['part_number']) : null,
@@ -480,6 +483,30 @@ class VehicleImportService
         }
 
         return (int) $this->pdo->query("SELECT id FROM expense_categories ORDER BY id LIMIT 1")->fetchColumn();
+    }
+
+    private function resolveItemTypeId(string $itemTypeName): ?int
+    {
+        $itemTypeName = trim($itemTypeName);
+        if ($itemTypeName === '') {
+            return null;
+        }
+
+        ItemTypeService::ensureTable($this->pdo);
+
+        $stmt = $this->pdo->prepare("SELECT id FROM item_types WHERE LOWER(name) = LOWER(?) LIMIT 1");
+        $stmt->execute([$itemTypeName]);
+        $id = $stmt->fetchColumn();
+        if ($id) {
+            return (int) $id;
+        }
+
+        try {
+            $this->pdo->prepare("INSERT INTO item_types (name) VALUES (?)")->execute([sanitize($itemTypeName)]);
+            return (int) $this->pdo->lastInsertId();
+        } catch (\PDOException $e) {
+            return null;
+        }
     }
 
     private function resolveDocumentCategorySlug(string $slug, string $label, string $icon, string $color): string

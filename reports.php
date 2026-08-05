@@ -113,6 +113,69 @@ $vehicleStats = $pdo->query("
 ")->fetchAll();
 
 $monthNames = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+// Parts Longevity — most recent replacement per item type, across every expense
+// category except Mechanic. Not scoped to $yearFilter since this reflects current
+// car state, not a period.
+$partsWhereVehicle = "v.user_id = " . (int)$userId . " AND v.is_active = 1";
+if ($vehicleFilter) {
+    $partsWhereVehicle .= " AND e.vehicle_id = " . (int)$vehicleFilter;
+}
+
+try {
+    $partsLongevity = $pdo->query("
+        SELECT e.item_type_id, e.expense_date, e.mileage, ec.name AS category_name,
+               it.name AS item_type_name, it.km_interval, it.months_interval,
+               v.id as vehicle_id, v.make, v.model, v.current_mileage
+        FROM expenses e
+        JOIN vehicles v ON e.vehicle_id = v.id
+        JOIN expense_categories ec ON e.category_id = ec.id
+        JOIN item_types it ON e.item_type_id = it.id
+        WHERE $partsWhereVehicle
+          AND e.item_type_id IS NOT NULL
+          AND TRIM(LOWER(ec.name)) <> 'mechanic'
+          AND e.id = (
+              SELECT e2.id FROM expenses e2
+              JOIN expense_categories ec2 ON e2.category_id = ec2.id
+              WHERE e2.vehicle_id = e.vehicle_id AND e2.item_type_id = e.item_type_id
+                AND TRIM(LOWER(ec2.name)) <> 'mechanic'
+              ORDER BY e2.expense_date DESC, e2.id DESC
+              LIMIT 1
+          )
+        ORDER BY e.expense_date DESC
+    ")->fetchAll();
+} catch (PDOException $e) {
+    // expenses.mileage/item_type_id may not exist yet on environments that haven't picked up the schema change
+    $partsLongevity = [];
+}
+
+$today = new DateTime();
+foreach ($partsLongevity as &$p) {
+    $p['label'] = $p['item_type_name'];
+
+    $milesSince = $p['mileage'] !== null ? max(0, $p['current_mileage'] - $p['mileage']) : null;
+    $daysSince = (new DateTime($p['expense_date']))->diff($today)->days;
+
+    $pctKm = ($p['km_interval'] && $milesSince !== null) ? $milesSince / $p['km_interval'] : null;
+    $pctTime = $p['months_interval'] ? $daysSince / ($p['months_interval'] * 30.44) : null;
+    $candidates = array_filter([$pctKm, $pctTime], fn($v) => $v !== null);
+    $pct = !empty($candidates) ? max($candidates) : null;
+
+    if ($pct === null) {
+        $status = 'unknown';
+    } elseif ($pct >= 1) {
+        $status = 'overdue';
+    } elseif ($pct >= 0.8) {
+        $status = 'due_soon';
+    } else {
+        $status = 'ok';
+    }
+
+    $p['miles_since'] = $milesSince;
+    $p['days_since'] = $daysSince;
+    $p['status'] = $status;
+}
+unset($p);
 ?>
 
     <!-- ApexCharts CDN -->
@@ -407,6 +470,78 @@ $monthNames = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep'
                         <?php endif; ?>
                     </div>
                 </div>
+            </div>
+        </div>
+
+        <!-- Parts Longevity -->
+        <div class="card mb-4">
+            <div class="card-header bg-body-tertiary d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-tools me-2"></i>Parts Longevity
+                </h5>
+                <small class="text-muted">Excludes Mechanic expenses</small>
+            </div>
+            <div class="card-body">
+                <?php if (empty($partsLongevity)): ?>
+                    <div class="text-center py-5">
+                        <i class="fas fa-cog fa-3x text-muted mb-3"></i>
+                        <p class="text-muted mb-0">No tracked part replacements yet.</p>
+                        <p class="text-muted small">Log an expense with an Item Type (e.g. Tires, Brake Pads) to start tracking.</p>
+                    </div>
+                <?php else: ?>
+                    <?php $installedColIndex = $vehicleFilter ? 1 : 2; ?>
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0 data-table fs-10" data-datatables='<?php echo htmlspecialchars(json_encode(['order' => [[$installedColIndex, 'desc']]])); ?>'>
+                            <thead class="table-light">
+                            <tr>
+                                <th>Part</th>
+                                <?php if (!$vehicleFilter): ?><th>Vehicle</th><?php endif; ?>
+                                <th>Installed</th>
+                                <th>Elapsed</th>
+                                <th>Status</th>
+                            </tr>
+                            </thead>
+                            <tbody>
+                            <?php
+                            $statusBadges = [
+                                'overdue'  => '<span class="badge bg-danger">Overdue</span>',
+                                'due_soon' => '<span class="badge bg-warning text-dark">Due Soon</span>',
+                                'ok'       => '<span class="badge bg-success">OK</span>',
+                                'unknown'  => '<span class="badge bg-secondary">No interval set</span>',
+                            ];
+                            ?>
+                            <?php foreach ($partsLongevity as $p): ?>
+                                <tr>
+                                    <td>
+                                        <i class="fas fa-cog text-muted me-2"></i><?php echo htmlspecialchars($p['label']); ?>
+                                        <div class="mt-1">
+                                            <span class="badge rounded-pill" style="background:rgba(var(--falcon-primary-rgb),.1);color:var(--falcon-primary)">
+                                                <?php echo htmlspecialchars($p['category_name']); ?>
+                                            </span>
+                                        </div>
+                                    </td>
+                                    <?php if (!$vehicleFilter): ?><td><?php echo sanitize($p['make'] . ' ' . $p['model']); ?></td><?php endif; ?>
+                                    <td data-order="<?php echo strtotime($p['expense_date']); ?>">
+                                        <?php echo formatDate($p['expense_date']); ?>
+                                        <?php if ($p['mileage'] !== null): ?>
+                                            <div class="text-muted" style="font-size:.75rem;">@ <?php echo formatNumber($p['mileage']); ?> km</div>
+                                        <?php endif; ?>
+                                    </td>
+                                    <td>
+                                        <?php if ($p['miles_since'] !== null): ?>
+                                            <?php echo formatNumber($p['miles_since']); ?> km
+                                            <div class="text-muted" style="font-size:.75rem;"><?php echo $p['days_since']; ?> days</div>
+                                        <?php else: ?>
+                                            <?php echo $p['days_since']; ?> days
+                                        <?php endif; ?>
+                                    </td>
+                                    <td><?php echo $statusBadges[$p['status']]; ?></td>
+                                </tr>
+                            <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                <?php endif; ?>
             </div>
         </div>
 

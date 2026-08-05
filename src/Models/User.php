@@ -35,7 +35,8 @@ class User extends Model
             'is_verified' => 0,
             'created_at' => date('Y-m-d H:i:s'),
             'email_notifications_enabled' => 1,
-            'email_frequency' => 'weekly'
+            'email_frequency' => 'weekly',
+            'mileage_reminder_enabled' => 1
         ];
 
         $userData = array_merge($defaults, $data);

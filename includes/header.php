@@ -39,6 +39,12 @@ if ($maintenanceModeActive && !\App\Middleware\AuthMiddleware::isAdmin()) {
 $currentUser = getCurrentUser();
 $userId = \App\Middleware\AuthMiddleware::getCurrentUserId();
 
+// Vehicles whose mileage hasn't been updated this month, once we're near month-end —
+// stays flagged across the month boundary until a fresh reading lands.
+$vehiclesNeedingMileageUpdate = ($currentUser['mileage_reminder_enabled'] ?? 1)
+    ? \App\Services\MileageReminderService::vehiclesNeedingUpdate($pdo, $userId)
+    : [];
+
 // Get all active vehicles for current user
 $vehiclesStmt = $pdo->prepare("SELECT id, make, model, year, current_mileage FROM vehicles WHERE user_id = ? AND is_active = 1 ORDER BY make, model");
 $vehiclesStmt->execute([$userId]);
@@ -418,6 +424,15 @@ $currentPage = basename($_SERVER['PHP_SELF'], '.php');
               <i class="fas fa-tools me-1"></i>
               Maintenance mode is <strong>ON</strong> — only admins can access the site right now.
               <a href="admin" class="alert-link">Turn it off in the Admin Dashboard</a>.
+            </div>
+          <?php endif; ?>
+
+          <?php if (!empty($vehiclesNeedingMileageUpdate)): ?>
+            <div class="alert alert-warning alert-sticky rounded-0 mb-0 text-center">
+              <i class="fas fa-tachometer-alt me-1"></i>
+              Update mileage for
+              <strong><?php echo implode(', ', array_map(fn($v) => sanitize($v['make'] . ' ' . $v['model']), $vehiclesNeedingMileageUpdate)); ?></strong>
+              before this month wraps up — <a href="update-mileage" class="alert-link">update now</a>.
             </div>
           <?php endif; ?>
 

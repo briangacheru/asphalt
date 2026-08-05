@@ -138,11 +138,12 @@ class VehicleExportService
             ];
         }
 
-        // Expenses (category referenced by name, not id — ids aren't portable across installs)
+        // Expenses (category & item type referenced by name, not id — ids aren't portable across installs)
         $stmt = $this->pdo->prepare("
-            SELECT e.*, ec.name AS category_name
+            SELECT e.*, ec.name AS category_name, it.name AS item_type_name
             FROM expenses e
             JOIN expense_categories ec ON e.category_id = ec.id
+            LEFT JOIN item_types it ON e.item_type_id = it.id
             WHERE e.vehicle_id = ?
             ORDER BY e.id
         ");
@@ -165,7 +166,8 @@ class VehicleExportService
                 'expense_date'   => $expense['expense_date'],
                 'amount'         => (float) $expense['amount'],
                 'description'    => $expense['description'],
-                'item_type'      => $expense['item_type'],
+                'mileage'        => $expense['mileage'] !== null ? (int) $expense['mileage'] : null,
+                'item_type_name' => $expense['item_type_name'],
                 'item_name'      => $expense['item_name'],
                 'brand'          => $expense['brand'],
                 'part_number'    => $expense['part_number'],

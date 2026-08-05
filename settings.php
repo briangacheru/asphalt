@@ -63,6 +63,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         redirect('settings');
     }
 
+    if ($action === 'update_mileage_reminder') {
+        $mileage_reminder_enabled = isset($_POST['mileage_reminder_enabled']) ? 1 : 0;
+
+        try {
+            $stmt = $pdo->prepare("UPDATE users SET mileage_reminder_enabled = ? WHERE id = ?");
+            $stmt->execute([$mileage_reminder_enabled, $_SESSION['user_id']]);
+            setFlashMessage('success', 'Mileage reminder preference updated!');
+        } catch (PDOException $e) {
+            setFlashMessage('danger', 'Error updating preference: ' . $e->getMessage());
+        }
+        redirect('settings');
+    }
+
     if ($action === 'update_profile') {
         $first_name = sanitize($_POST['first_name']);
         $last_name = sanitize($_POST['last_name']);
@@ -684,6 +697,39 @@ foreach ($emailStatsRaw as $stat) {
                             <div class="d-flex justify-content-end">
                                 <button type="submit" class="btn btn-sm btn-outline-primary">
                                     <i class="fas fa-save"></i> Save Email Settings
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Mileage Update Reminders -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">
+                            <i class="fas fa-tachometer-alt me-2"></i>Mileage Update Reminders
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <form method="POST">
+                            <input type="hidden" name="action" value="update_mileage_reminder">
+
+                            <div class="form-check form-switch mb-2">
+                                <input class="form-check-input" type="checkbox" role="switch" id="mileageReminder"
+                                       name="mileage_reminder_enabled"
+                                    <?php echo ($user['mileage_reminder_enabled'] ?? 1) ? 'checked' : ''; ?>>
+                                <label class="form-check-label" for="mileageReminder">
+                                    <strong>Remind me to update mileage</strong>
+                                </label>
+                            </div>
+                            <div class="form-text ms-5 mb-3">
+                                Shows a banner near the end of each month if a vehicle's mileage hasn't been updated yet —
+                                manually, via a fuel log, an expense, or a service record.
+                            </div>
+
+                            <div class="d-flex justify-content-end">
+                                <button type="submit" class="btn btn-sm btn-outline-primary">
+                                    <i class="fas fa-save"></i> Save
                                 </button>
                             </div>
                         </form>

@@ -3,32 +3,20 @@ $pageTitle = 'Expenses';
 require_once 'includes/header.php';
 
 use App\Helpers\IdCodec;
+use App\Services\ItemTypeService;
 
-$vehiclesStmt = $pdo->prepare("SELECT id, make, model, year FROM vehicles WHERE is_active = 1 AND user_id = ? ORDER BY make, model");
+$vehiclesStmt = $pdo->prepare("SELECT id, make, model, year, current_mileage FROM vehicles WHERE is_active = 1 AND user_id = ? ORDER BY make, model");
 $vehiclesStmt->execute([$userId]);
 $vehicles = $vehiclesStmt->fetchAll();
 $categories = $pdo->query("SELECT DISTINCT id, name, icon FROM expense_categories ORDER BY name")->fetchAll();
 $vehicleFilter = IdCodec::decode($_GET['vehicle_id'] ?? null);
 
-// Item types for repair/service categories
-$itemTypes = [
-    'oil_filter'           => 'Oil Filter',
-    'cabin_filter'         => 'Cabin Filter',
-    'air_filter'           => 'Air Filter',
-    'front_brake_pads'     => 'Front Brake Pads',
-    'rear_brake_pads'      => 'Rear Brake Pads',
-    'spark_plugs'          => 'Spark Plugs',
-    'coolant'              => 'Coolant',
-    'transmission_fluid'   => 'Transmission Fluid',
-    'brake_fluid'          => 'Brake Fluid',
-    'power_steering_fluid' => 'Power Steering Fluid',
-    'timing_belt'          => 'Timing Belt',
-    'serpentine_belt'      => 'Serpentine Belt',
-    'battery'              => 'Battery',
-    'tires'                => 'Tires',
-    'wipers'               => 'Wipers',
-    'other'                => 'Other',
-];
+// Admin-managed item types, for the Item Details section (shown for every category except Mechanic)
+$itemTypes = ItemTypeService::all($pdo);
+$itemTypesById = [];
+foreach ($itemTypes as $it) {
+    $itemTypesById[$it['id']] = $it['name'];
+}
 
 // Helper: get category name by id
 function getCategoryName($categories, $id) {
@@ -85,9 +73,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     $expense_date = $_POST['expense_date'] ?? date('Y-m-d');
     $amount = (float)($_POST['amount'] ?? 0);
     $description = sanitize($_POST['description'] ?? '');
+    $mileage = isset($_POST['mileage']) && $_POST['mileage'] !== '' ? (int)$_POST['mileage'] : null;
 
-    // Item detail fields (for repair/service)
-    $item_type    = sanitize($_POST['item_type'] ?? '');
+    // Item detail fields (shown for every category except Mechanic)
+    $item_type_id = (int)($_POST['item_type_id'] ?? 0) ?: null;
     $item_name    = sanitize($_POST['item_name'] ?? '');
     $brand        = sanitize($_POST['brand'] ?? '');
     $part_number  = sanitize($_POST['part_number'] ?? '');
@@ -98,7 +87,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 
     // Auto-calculate amount from quantity × cost if item fields are filled
     $catName = getCategoryName($categories, $category_id);
-    $isItemCategory = strpos($catName, 'repair') !== false || strpos($catName, 'service') !== false || strpos($catName, 'maintenance') !== false;
+    $isItemCategory = trim($catName) !== 'mechanic';
     if ($isItemCategory && $quantity > 0 && $cost_per_unit > 0) {
         $amount = $quantity * $cost_per_unit;
     }
@@ -118,8 +107,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 
     if ($vehicle_id && $category_id && $amount > 0 && $ownsVehicle) {
         try {
-            $stmt = $pdo->prepare("INSERT INTO expenses (vehicle_id, category_id, expense_date, amount, description, item_type, item_name, brand, part_number, quantity, cost_per_unit, item_notes, receipt_path) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-            $stmt->execute([$vehicle_id, $category_id, $expense_date, $amount, $description, $item_type ?: null, $item_name ?: null, $brand ?: null, $part_number ?: null, $quantity ?: null, $cost_per_unit ?: null, $item_notes ?: null, $receipt_path]);
+            $stmt = $pdo->prepare("INSERT INTO expenses (vehicle_id, category_id, expense_date, amount, description, item_type_id, item_name, brand, part_number, quantity, cost_per_unit, item_notes, receipt_path, mileage) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+            $stmt->execute([$vehicle_id, $category_id, $expense_date, $amount, $description, $item_type_id, $item_name ?: null, $brand ?: null, $part_number ?: null, $quantity ?: null, $cost_per_unit ?: null, $item_notes ?: null, $receipt_path, $mileage]);
+
+            if ($mileage !== null) {
+                $pdo->prepare("UPDATE vehicles SET current_mileage = GREATEST(current_mileage, ?) WHERE id = ? AND user_id = ?")->execute([$mileage, $vehicle_id, $userId]);
+                $pdo->prepare("INSERT INTO mileage_log (vehicle_id, mileage, log_date, source) VALUES (?, ?, ?, 'expense')")->execute([$vehicle_id, $mileage, $expense_date]);
+            }
+
             setFlashMessage('success', 'Expense added!');
             redirect('expenses' . ($vehicleFilter ? '?vehicle_id=' . IdCodec::encode($vehicleFilter) : ''));
         } catch (PDOException $e) {
@@ -150,9 +145,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     $expense_date  = $_POST['expense_date'] ?? date('Y-m-d');
     $amount        = (float)($_POST['amount'] ?? 0);
     $description   = sanitize($_POST['description'] ?? '');
+    $mileage       = isset($_POST['mileage']) && $_POST['mileage'] !== '' ? (int)$_POST['mileage'] : null;
 
     // Item detail fields
-    $item_type     = sanitize($_POST['item_type'] ?? '');
+    $item_type_id  = (int)($_POST['item_type_id'] ?? 0) ?: null;
     $item_name     = sanitize($_POST['item_name'] ?? '');
     $brand         = sanitize($_POST['brand'] ?? '');
     $part_number   = sanitize($_POST['part_number'] ?? '');
@@ -162,7 +158,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 
     // Auto-calculate amount from qty × cost if item fields are filled
     $catName = getCategoryName($categories, $category_id);
-    $isItemCategory = strpos($catName, 'repair') !== false || strpos($catName, 'service') !== false || strpos($catName, 'maintenance') !== false;
+    $isItemCategory = trim($catName) !== 'mechanic';
     if ($isItemCategory && $quantity > 0 && $cost_per_unit > 0) {
         $amount = $quantity * $cost_per_unit;
     }
@@ -195,8 +191,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 
     if ($expense_id && $vehicle_id && $category_id && $amount > 0 && $ownsExpense && $ownsNewVehicle) {
         try {
-            $stmt = $pdo->prepare("UPDATE expenses SET vehicle_id=?, category_id=?, expense_date=?, amount=?, description=?, item_type=?, item_name=?, brand=?, part_number=?, quantity=?, cost_per_unit=?, item_notes=?, receipt_path=? WHERE id=?");
-            $stmt->execute([$vehicle_id, $category_id, $expense_date, $amount, $description, $item_type ?: null, $item_name ?: null, $brand ?: null, $part_number ?: null, $quantity ?: null, $cost_per_unit ?: null, $item_notes ?: null, $receipt_path ?: null, $expense_id]);
+            $stmt = $pdo->prepare("UPDATE expenses SET vehicle_id=?, category_id=?, expense_date=?, amount=?, description=?, item_type_id=?, item_name=?, brand=?, part_number=?, quantity=?, cost_per_unit=?, item_notes=?, receipt_path=?, mileage=? WHERE id=?");
+            $stmt->execute([$vehicle_id, $category_id, $expense_date, $amount, $description, $item_type_id, $item_name ?: null, $brand ?: null, $part_number ?: null, $quantity ?: null, $cost_per_unit ?: null, $item_notes ?: null, $receipt_path ?: null, $mileage, $expense_id]);
+
+            if ($mileage !== null) {
+                $pdo->prepare("UPDATE vehicles SET current_mileage = GREATEST(current_mileage, ?) WHERE id = ? AND user_id = ?")->execute([$mileage, $vehicle_id, $userId]);
+                $pdo->prepare("INSERT INTO mileage_log (vehicle_id, mileage, log_date, source) VALUES (?, ?, ?, 'expense')")->execute([$vehicle_id, $mileage, $expense_date]);
+            }
+
             setFlashMessage('success', 'Expense updated!');
             redirect('expenses' . ($vehicleFilter ? '?vehicle_id=' . IdCodec::encode($vehicleFilter) : ''));
         } catch (PDOException $e) {
@@ -412,8 +414,8 @@ if ($flash): ?>
                                 <tbody>
                                 <?php foreach ($expenses as $e):
                                     $catLower = strtolower($e['category_name']);
-                                    $isItemCat = strpos($catLower,'repair') !== false || strpos($catLower,'service') !== false || strpos($catLower,'maintenance') !== false;
-                                    $itemLabel = !empty($e['item_type']) && isset($itemTypes[$e['item_type']]) ? $itemTypes[$e['item_type']] : null;
+                                    $isItemCat = trim($catLower) !== 'mechanic';
+                                    $itemLabel = !empty($e['item_type_id']) && isset($itemTypesById[$e['item_type_id']]) ? $itemTypesById[$e['item_type_id']] : null;
                                     ?>
                                     <tr class="hover-actions-trigger btn-reveal-trigger hover-bg-100 cursor-pointer" onclick="viewExpense(<?php echo htmlspecialchars(json_encode($e)); ?>)">
                                         <td class="ps-3 align-middle white-space-nowrap">
@@ -604,7 +606,7 @@ if ($flash): ?>
                         <div class="row">
                             <div class="col-md-6 mb-3">
                                 <label class="form-label">Vehicle <span class="text-danger">*</span></label>
-                                <select name="vehicle_id" class="form-select" required>
+                                <select name="vehicle_id" id="add_vehicle_id" class="form-select" required>
                                     <option value="">Select...</option>
                                     <?php foreach ($vehicles as $v): ?>
                                         <option value="<?php echo $v['id']; ?>"><?php echo sanitize($v['make'] . ' ' . $v['model']); ?></option>
@@ -622,14 +624,19 @@ if ($flash): ?>
                             </div>
                         </div>
                         <div class="row">
-                            <div class="col-md-6 mb-3">
+                            <div class="col-md-4 mb-3">
                                 <label class="form-label">Date</label>
                                 <input type="date" name="expense_date" class="form-control" value="<?php echo date('Y-m-d'); ?>">
                             </div>
-                            <div class="col-md-6 mb-3" id="add_amount_group">
+                            <div class="col-md-4 mb-3" id="add_amount_group">
                                 <label class="form-label">Amount (Ksh) <span class="text-danger">*</span></label>
                                 <input type="number" name="amount" id="add_amount" step="1" class="form-control" placeholder="0.00">
                                 <small class="text-muted d-none" id="add_amount_note">Auto-calculated from Qty × Cost/unit</small>
+                            </div>
+                            <div class="col-md-4 mb-3">
+                                <label class="form-label">Current Mileage (km)</label>
+                                <input type="number" name="mileage" id="add_mileage" min="0" class="form-control" placeholder="Select a vehicle first">
+                                <small class="text-muted">Auto-filled from the vehicle; edit if needed</small>
                             </div>
                         </div>
                         <div class="mb-3">
@@ -644,10 +651,10 @@ if ($flash): ?>
                             <div class="row">
                                 <div class="col-md-6 mb-3">
                                     <label class="form-label">Item Type <span class="text-danger">*</span></label>
-                                    <select name="item_type" id="add_item_type" class="form-select">
+                                    <select name="item_type_id" id="add_item_type" class="form-select">
                                         <option value="">Select type...</option>
-                                        <?php foreach ($itemTypes as $key => $label): ?>
-                                            <option value="<?php echo $key; ?>"><?php echo $label; ?></option>
+                                        <?php foreach ($itemTypes as $it): ?>
+                                            <option value="<?php echo $it['id']; ?>"><?php echo sanitize($it['name']); ?></option>
                                         <?php endforeach; ?>
                                     </select>
                                 </div>
@@ -745,14 +752,18 @@ if ($flash): ?>
                             </div>
                         </div>
                         <div class="row">
-                            <div class="col-md-6 mb-3">
+                            <div class="col-md-4 mb-3">
                                 <label class="form-label">Date</label>
                                 <input type="date" name="expense_date" id="edit_expense_date" class="form-control">
                             </div>
-                            <div class="col-md-6 mb-3">
+                            <div class="col-md-4 mb-3">
                                 <label class="form-label">Amount (Ksh) <span class="text-danger">*</span></label>
                                 <input type="number" name="amount" id="edit_amount" step="1" class="form-control" required>
                                 <small class="text-muted d-none" id="edit_amount_note">Auto-calculated from Qty × Cost/unit</small>
+                            </div>
+                            <div class="col-md-4 mb-3">
+                                <label class="form-label">Current Mileage (km)</label>
+                                <input type="number" name="mileage" id="edit_mileage" min="0" class="form-control">
                             </div>
                         </div>
                         <div class="mb-3">
@@ -767,10 +778,10 @@ if ($flash): ?>
                             <div class="row">
                                 <div class="col-md-6 mb-3">
                                     <label class="form-label">Item Type</label>
-                                    <select name="item_type" id="edit_item_type" class="form-select">
+                                    <select name="item_type_id" id="edit_item_type" class="form-select">
                                         <option value="">Select type...</option>
-                                        <?php foreach ($itemTypes as $key => $label): ?>
-                                            <option value="<?php echo $key; ?>"><?php echo $label; ?></option>
+                                        <?php foreach ($itemTypes as $it): ?>
+                                            <option value="<?php echo $it['id']; ?>"><?php echo sanitize($it['name']); ?></option>
                                         <?php endforeach; ?>
                                     </select>
                                 </div>
@@ -879,11 +890,20 @@ if ($flash): ?>
     </div>
 
     <script>
-        // Category names that trigger item detail fields
-        const ITEM_CATEGORIES = ['repair', 'service', 'maintenance'];
+        // Item Details section shows for every category except Mechanic
+        function isItemCategory(catName) {
+            return (catName || '').trim().toLowerCase() !== 'mechanic';
+        }
 
-        // Item type labels from PHP
-        const ITEM_TYPES = <?php echo json_encode($itemTypes); ?>;
+        // Item type labels from PHP, keyed by id
+        const ITEM_TYPES = <?php echo json_encode($itemTypesById); ?>;
+
+        // Current mileage per vehicle, for auto-filling the mileage field
+        const VEHICLE_MILEAGE = {
+            <?php foreach ($vehicles as $v): ?>
+            <?php echo $v['id']; ?>: <?php echo (int) $v['current_mileage']; ?>,
+            <?php endforeach; ?>
+        };
 
         document.addEventListener('DOMContentLoaded', function() {
             // ── Add modal: reset on close ──────────────────────────────────────
@@ -894,6 +914,31 @@ if ($flash): ?>
                     toggleItemDetails('add_category_id', 'add_item_details', 'add_amount', 'add_amount_note');
                     document.getElementById('add_receipt_preview').classList.add('d-none');
                     document.getElementById('add_item_total').value = '';
+                    document.getElementById('add_mileage').placeholder = 'Select a vehicle first';
+                });
+            }
+
+            // ── Add modal: vehicle change auto-fills current mileage ──────────
+            const addVehicleSelect = document.getElementById('add_vehicle_id');
+            const addMileageInput  = document.getElementById('add_mileage');
+            if (addVehicleSelect && addMileageInput) {
+                addVehicleSelect.addEventListener('change', function() {
+                    if (this.value && VEHICLE_MILEAGE[this.value] !== undefined) {
+                        addMileageInput.value = VEHICLE_MILEAGE[this.value];
+                    } else {
+                        addMileageInput.value = '';
+                    }
+                });
+            }
+
+            // ── Edit modal: vehicle change auto-fills current mileage ─────────
+            const editVehicleSelect = document.getElementById('edit_vehicle_id');
+            const editMileageInput  = document.getElementById('edit_mileage');
+            if (editVehicleSelect && editMileageInput) {
+                editVehicleSelect.addEventListener('change', function() {
+                    if (this.value && VEHICLE_MILEAGE[this.value] !== undefined) {
+                        editMileageInput.value = VEHICLE_MILEAGE[this.value];
+                    }
                 });
             }
 
@@ -980,7 +1025,7 @@ if ($flash): ?>
 
             const selectedOption = sel.options[sel.selectedIndex];
             const catName = (selectedOption ? selectedOption.getAttribute('data-name') : '') || '';
-            const isItemCat = ITEM_CATEGORIES.some(c => catName.includes(c));
+            const isItemCat = isItemCategory(catName);
 
             if (isItemCat) {
                 details.classList.remove('d-none');
@@ -1006,8 +1051,8 @@ if ($flash): ?>
         // ── View Expense Modal ─────────────────────────────────────────────────
         function viewExpense(e) {
             const catLower = (e.category_name || '').toLowerCase();
-            const isItemCat = ITEM_CATEGORIES.some(c => catLower.includes(c));
-            const itemLabel = e.item_type && ITEM_TYPES[e.item_type] ? ITEM_TYPES[e.item_type] : null;
+            const isItemCat = isItemCategory(catLower);
+            const itemLabel = e.item_type_id && ITEM_TYPES[e.item_type_id] ? ITEM_TYPES[e.item_type_id] : null;
 
             let html = `
             <div class="row g-3 mb-3">
@@ -1034,8 +1079,19 @@ if ($flash): ?>
                         <p class="mb-1 text-500 fs-11 text-uppercase fw-semibold">Total Amount</p>
                         <p class="mb-0 fw-bold text-success fs-5">Ksh ${parseFloat(e.amount || 0).toLocaleString('en-KE', {minimumFractionDigits: 2})}</p>
                     </div>
-                </div>
-            </div>`;
+                </div>`;
+
+            if (e.mileage) {
+                html += `
+                <div class="col-sm-6">
+                    <div class="p-3 rounded bg-100">
+                        <p class="mb-1 text-500 fs-11 text-uppercase fw-semibold">Mileage at Time</p>
+                        <p class="mb-0 fw-semibold"><i class="fas fa-tachometer-alt me-1 text-muted"></i>${parseInt(e.mileage).toLocaleString()} km</p>
+                    </div>
+                </div>`;
+            }
+
+            html += `</div>`;
 
             if (e.description) {
                 html += `
@@ -1184,6 +1240,7 @@ if ($flash): ?>
             document.getElementById('edit_vehicle_id').value        = e.vehicle_id;
             document.getElementById('edit_expense_date').value      = e.expense_date;
             document.getElementById('edit_amount').value            = e.amount;
+            document.getElementById('edit_mileage').value           = e.mileage || '';
             document.getElementById('edit_description').value       = e.description || '';
             document.getElementById('edit_existing_receipt_path').value = e.receipt_path || '';
 
@@ -1193,7 +1250,7 @@ if ($flash): ?>
             toggleEditItemDetails();
 
             // Item detail fields
-            document.getElementById('edit_item_type').value        = e.item_type    || '';
+            document.getElementById('edit_item_type').value        = e.item_type_id || '';
             document.getElementById('edit_item_name').value        = e.item_name    || '';
             document.getElementById('edit_brand').value            = e.brand        || '';
             document.getElementById('edit_part_number').value      = e.part_number  || '';
@@ -1246,7 +1303,7 @@ if ($flash): ?>
 
             const opt     = sel.options[sel.selectedIndex];
             const catName = (opt ? opt.getAttribute('data-name') : '') || '';
-            const isItemCat = ITEM_CATEGORIES.some(c => catName.includes(c));
+            const isItemCat = isItemCategory(catName);
 
             if (isItemCat) {
                 details.classList.remove('d-none');

@@ -5,6 +5,7 @@ require_once 'includes/header.php';
 use App\Middleware\AuthMiddleware;
 use App\Services\DatabaseBackupService;
 use App\Services\SiteSettingsService;
+use App\Services\ItemTypeService;
 
 AuthMiddleware::requireAdmin();
 
@@ -272,6 +273,62 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         redirect('admin');
     }
 
+    if ($action === 'add_item_type') {
+        $name = sanitize($_POST['name'] ?? '');
+        $km = isset($_POST['km_interval']) && $_POST['km_interval'] !== '' ? (int) $_POST['km_interval'] : null;
+        $months = isset($_POST['months_interval']) && $_POST['months_interval'] !== '' ? (int) $_POST['months_interval'] : null;
+
+        if ($name === '') {
+            setFlashMessage('danger', 'Item type name is required.');
+        } else {
+            ItemTypeService::ensureTable($pdo);
+            $pdo->prepare("INSERT INTO item_types (name, km_interval, months_interval) VALUES (?, ?, ?)")->execute([$name, $km, $months]);
+            setFlashMessage('success', 'Item type added.');
+        }
+        redirect('admin');
+    }
+
+    if ($action === 'edit_item_type') {
+        $itemTypeId = (int) ($_POST['item_type_id'] ?? 0);
+        $name = sanitize($_POST['name'] ?? '');
+        $km = isset($_POST['km_interval']) && $_POST['km_interval'] !== '' ? (int) $_POST['km_interval'] : null;
+        $months = isset($_POST['months_interval']) && $_POST['months_interval'] !== '' ? (int) $_POST['months_interval'] : null;
+
+        if ($itemTypeId && $name !== '') {
+            $pdo->prepare("UPDATE item_types SET name = ?, km_interval = ?, months_interval = ? WHERE id = ?")
+                ->execute([$name, $km, $months, $itemTypeId]);
+            setFlashMessage('success', 'Item type updated.');
+        } else {
+            setFlashMessage('danger', 'Item type name is required.');
+        }
+        redirect('admin');
+    }
+
+    if ($action === 'delete_item_type') {
+        $itemTypeId = (int) ($_POST['item_type_id'] ?? 0);
+        $existsStmt = $pdo->prepare("SELECT id FROM item_types WHERE id = ?");
+        $existsStmt->execute([$itemTypeId]);
+
+        if (!$existsStmt->fetch()) {
+            setFlashMessage('danger', 'Item type not found.');
+        } else {
+            $countStmt = $pdo->prepare("SELECT COUNT(*) FROM expenses WHERE item_type_id = ?");
+            $countStmt->execute([$itemTypeId]);
+            $inUseCount = (int) $countStmt->fetchColumn();
+            $totalItemTypes = (int) $pdo->query("SELECT COUNT(*) FROM item_types")->fetchColumn();
+
+            if ($inUseCount > 0) {
+                setFlashMessage('danger', "Can't delete: {$inUseCount} expense(s) still use this item type.");
+            } elseif ($totalItemTypes <= 1) {
+                setFlashMessage('danger', "Can't delete the last remaining item type.");
+            } else {
+                $pdo->prepare("DELETE FROM item_types WHERE id = ?")->execute([$itemTypeId]);
+                setFlashMessage('success', 'Item type deleted.');
+            }
+        }
+        redirect('admin');
+    }
+
     if ($action === 'update_site_access') {
         $maintenanceMode = isset($_POST['maintenance_mode']) ? '1' : '0';
         $registrationsEnabled = isset($_POST['registrations_enabled']) ? '1' : '0';
@@ -324,6 +381,8 @@ $iconQuickPicks = [
 $defaultOilIntervals = [7000, 7500, 8000, 8500, 9000, 9500, 10000];
 $oilIntervalsRaw = SiteSettingsService::get($pdo, 'oil_intervals_km');
 $oilIntervals = $oilIntervalsRaw ? (json_decode($oilIntervalsRaw, true) ?: $defaultOilIntervals) : $defaultOilIntervals;
+
+$itemTypes = ItemTypeService::all($pdo);
 
 $defaultMaintenancePresets = [
     'Engine Oil & Filter' => ['km' => 10000, 'months' => 12],
@@ -865,6 +924,82 @@ $registrationsEnabled = SiteSettingsService::get($pdo, 'registrations_enabled') 
                 </form>
             </div>
         </div>
+
+        <!-- Item Types -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="card-title mb-0"><i class="fas fa-cog me-2"></i>Item Types</h5>
+            </div>
+            <div class="card-body">
+                <p class="text-muted small mb-3">Shared across every user's Expenses page (Item Details section) and used by the "Parts Longevity" report card to flag parts that are due soon or overdue. Leave an interval blank to skip that basis (e.g. a battery has no fixed km interval).</p>
+                <div class="table-responsive mb-4">
+                    <table class="table table-sm align-middle mb-0">
+                        <thead>
+                        <tr>
+                            <th>Item Type</th>
+                            <th style="width:140px;">Km Interval</th>
+                            <th style="width:140px;">Month Interval</th>
+                            <th class="text-end">Actions</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <?php foreach ($itemTypes as $it): ?>
+                            <tr>
+                                <td><?php echo sanitize($it['name']); ?></td>
+                                <td><?php echo $it['km_interval'] !== null ? number_format((int) $it['km_interval']) . ' km' : '—'; ?></td>
+                                <td><?php echo $it['months_interval'] !== null ? (int) $it['months_interval'] . ' mo' : '—'; ?></td>
+                                <td class="text-end text-nowrap">
+                                    <button type="button" class="btn btn-sm btn-outline-secondary item-type-edit-btn"
+                                            data-id="<?php echo (int) $it['id']; ?>"
+                                            data-name="<?php echo sanitize($it['name']); ?>"
+                                            data-km="<?php echo $it['km_interval'] !== null ? (int) $it['km_interval'] : ''; ?>"
+                                            data-months="<?php echo $it['months_interval'] !== null ? (int) $it['months_interval'] : ''; ?>"
+                                            title="Edit">
+                                        <i class="fas fa-edit"></i>
+                                    </button>
+                                    <form method="POST" class="d-inline" onsubmit="return confirm('Delete this item type? Only possible if no expenses use it.');">
+                                        <?php echo csrfField(); ?>
+                                        <input type="hidden" name="action" value="delete_item_type">
+                                        <input type="hidden" name="item_type_id" value="<?php echo (int) $it['id']; ?>">
+                                        <button type="submit" class="btn btn-sm btn-outline-danger" title="Delete">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </form>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+
+                <hr>
+
+                <h6 class="mb-3" id="item-type-form-heading"><i class="fas fa-plus-circle me-1"></i>Add New Item Type</h6>
+                <form method="POST" id="item-type-form">
+                    <?php echo csrfField(); ?>
+                    <input type="hidden" name="action" value="add_item_type" id="item-type-form-action">
+                    <input type="hidden" name="item_type_id" id="item-type-form-id" value="">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Name <span class="text-danger">*</span></label>
+                            <input type="text" name="name" id="item-type-form-name" class="form-control" placeholder="e.g. Tires" required>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Km Interval</label>
+                            <input type="number" min="0" name="km_interval" id="item-type-form-km" class="form-control" placeholder="—">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Month Interval</label>
+                            <input type="number" min="0" name="months_interval" id="item-type-form-months" class="form-control" placeholder="—">
+                        </div>
+                    </div>
+                    <div class="mt-3 d-flex gap-2">
+                        <button type="submit" class="btn btn-primary btn-sm" id="item-type-form-submit"><i class="fas fa-plus me-1"></i>Add Item Type</button>
+                        <button type="button" class="btn btn-outline-secondary btn-sm d-none" id="item-type-form-cancel">Cancel</button>
+                    </div>
+                </form>
+            </div>
+        </div>
     </div>
 
 <script>
@@ -946,6 +1081,45 @@ document.addEventListener('DOMContentLoaded', function () {
             document.getElementById('expense-category-form-name').value = data.name;
         }
     });
+
+    // Item Types manager — no icon field, so it doesn't fit setupCategoryManager()
+    (function () {
+        var form = document.getElementById('item-type-form');
+        if (!form) return;
+
+        var formAction = document.getElementById('item-type-form-action');
+        var formId = document.getElementById('item-type-form-id');
+        var formName = document.getElementById('item-type-form-name');
+        var formKm = document.getElementById('item-type-form-km');
+        var formMonths = document.getElementById('item-type-form-months');
+        var formHeading = document.getElementById('item-type-form-heading');
+        var formSubmit = document.getElementById('item-type-form-submit');
+        var formCancel = document.getElementById('item-type-form-cancel');
+
+        function resetForm() {
+            form.reset();
+            formAction.value = 'add_item_type';
+            formId.value = '';
+            formHeading.innerHTML = '<i class="fas fa-plus-circle me-1"></i>Add New Item Type';
+            formSubmit.innerHTML = '<i class="fas fa-plus me-1"></i>Add Item Type';
+            formCancel.classList.add('d-none');
+        }
+
+        document.querySelectorAll('.item-type-edit-btn').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                formAction.value = 'edit_item_type';
+                formId.value = this.dataset.id;
+                formName.value = this.dataset.name;
+                formKm.value = this.dataset.km;
+                formMonths.value = this.dataset.months;
+                formHeading.innerHTML = '<i class="fas fa-edit me-1"></i>Edit Item Type';
+                formSubmit.innerHTML = '<i class="fas fa-save me-1"></i>Update Item Type';
+                formCancel.classList.remove('d-none');
+            });
+        });
+
+        formCancel.addEventListener('click', resetForm);
+    })();
 
     // Maintenance presets: dynamic add/remove rows
     var presetsBody = document.getElementById('maintenance-presets-body');
