@@ -115,15 +115,19 @@ $vehicleStats = $pdo->query("
 $monthNames = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 // Parts Longevity — most recent replacement per item type, across every expense
-// category except Mechanic. Not scoped to $yearFilter since this reflects current
-// car state, not a period.
+// category except Mechanic and Accessories. Not scoped to $yearFilter since this
+// reflects current car state, not a period.
 $partsWhereVehicle = "v.user_id = " . (int)$userId . " AND v.is_active = 1";
 if ($vehicleFilter) {
     $partsWhereVehicle .= " AND e.vehicle_id = " . (int)$vehicleFilter;
 }
 
+// Categories that never represent a tracked part replacement
+$partsExcludedCategories = ['mechanic', 'accessories'];
+$partsExcludedPlaceholders = implode(', ', array_fill(0, count($partsExcludedCategories), '?'));
+
 try {
-    $partsLongevity = $pdo->query("
+    $stmt = $pdo->prepare("
         SELECT e.item_type_id, e.expense_date, e.mileage, ec.name AS category_name,
                it.name AS item_type_name, it.km_interval, it.months_interval,
                v.id as vehicle_id, v.make, v.model, v.current_mileage
@@ -133,17 +137,19 @@ try {
         JOIN item_types it ON e.item_type_id = it.id
         WHERE $partsWhereVehicle
           AND e.item_type_id IS NOT NULL
-          AND TRIM(LOWER(ec.name)) <> 'mechanic'
+          AND TRIM(LOWER(ec.name)) NOT IN ($partsExcludedPlaceholders)
           AND e.id = (
               SELECT e2.id FROM expenses e2
               JOIN expense_categories ec2 ON e2.category_id = ec2.id
               WHERE e2.vehicle_id = e.vehicle_id AND e2.item_type_id = e.item_type_id
-                AND TRIM(LOWER(ec2.name)) <> 'mechanic'
+                AND TRIM(LOWER(ec2.name)) NOT IN ($partsExcludedPlaceholders)
               ORDER BY e2.expense_date DESC, e2.id DESC
               LIMIT 1
           )
         ORDER BY e.expense_date DESC
-    ")->fetchAll();
+    ");
+    $stmt->execute(array_merge($partsExcludedCategories, $partsExcludedCategories));
+    $partsLongevity = $stmt->fetchAll();
 } catch (PDOException $e) {
     // expenses.mileage/item_type_id may not exist yet on environments that haven't picked up the schema change
     $partsLongevity = [];
@@ -479,7 +485,7 @@ unset($p);
                 <h5 class="card-title mb-0">
                     <i class="fas fa-tools me-2"></i>Parts Longevity
                 </h5>
-                <small class="text-muted">Excludes Mechanic expenses</small>
+                <small class="text-muted">Excludes Mechanic and Accessories expenses</small>
             </div>
             <div class="card-body">
                 <?php if (empty($partsLongevity)): ?>
@@ -513,7 +519,7 @@ unset($p);
                             <?php foreach ($partsLongevity as $p): ?>
                                 <tr>
                                     <td>
-                                        <i class="fas fa-cog text-muted me-2"></i><?php echo htmlspecialchars($p['label']); ?>
+                                        <?php echo htmlspecialchars($p['label']); ?>
                                         <div class="mt-1">
                                             <span class="badge rounded-pill" style="background:rgba(var(--falcon-primary-rgb),.1);color:var(--falcon-primary)">
                                                 <?php echo htmlspecialchars($p['category_name']); ?>
