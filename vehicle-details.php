@@ -280,9 +280,16 @@ $stmt->execute([$vehicleId]);
 $recentExpenses = $stmt->fetchAll();
 
 // Get recent documents & photos
-$stmt = $pdo->prepare("SELECT * FROM vehicle_documents WHERE vehicle_id = ? ORDER BY uploaded_at DESC, id DESC LIMIT 8");
+$stmt = $pdo->prepare("SELECT * FROM vehicle_documents WHERE vehicle_id = ? ORDER BY uploaded_at DESC, id DESC LIMIT 5");
 $stmt->execute([$vehicleId]);
 $recentDocuments = $stmt->fetchAll();
+
+// Document categories are shared across all users and managed by admins only
+// (Admin Dashboard > Document Categories) — same lookup vehicle-documents.php uses
+$documentCategories = [];
+foreach ($pdo->query("SELECT slug, label, icon, color FROM vehicle_document_categories ORDER BY label")->fetchAll() as $row) {
+    $documentCategories[$row['slug']] = $row;
+}
 ?>
 
 <div class="card mb-3">
@@ -908,7 +915,7 @@ if ($flash): ?>
                                                 <span class="badge rounded-pill ms-2 badge-subtle-warning"><?php echo sanitize($e['category_name']); ?></span>
                                             </h6>
                                             <p class="fs-10 text-600 mb-0">
-                                                <?php echo $e['description'] ? sanitize($e['description']) : 'No description'; ?>
+                                                <?php echo sanitize($e['description']) ?: sanitize($e['item_name']); ?>
                                             </p>
                                         </div>
                                         <div class="col-auto">
@@ -946,19 +953,32 @@ if ($flash): ?>
                         </a>
                     </div>
                 <?php else: ?>
-                    <div class="d-flex flex-wrap gap-2">
-                        <?php foreach ($recentDocuments as $doc):
+                    <div>
+                        <?php
+                        $fallbackDocCategory = ['label' => 'Uncategorized', 'icon' => 'fa-file', 'color' => 'dark'];
+                        foreach ($recentDocuments as $doc):
+                            $cat = $documentCategories[$doc['category']] ?? $fallbackDocCategory;
                             $isImage = str_starts_with($doc['file_type'], 'image/');
                             $fileUrl = 'uploads/documents/' . rawurlencode($doc['file_path']);
+                            $displayTitle = $doc['title'] ?: $doc['file_name'];
                         ?>
-                            <a href="vehicle-documents?vehicle_id=<?php echo IdCodec::encode($vehicleId); ?>" class="text-decoration-none" title="<?php echo sanitize($doc['title'] ?: $doc['file_name']); ?>">
-                                <?php if ($isImage): ?>
-                                    <img src="<?php echo $fileUrl; ?>" class="rounded-3 border" style="width:64px; height:64px; object-fit:cover;" alt="">
-                                <?php else: ?>
-                                    <div class="rounded-3 border bg-body-tertiary d-flex align-items-center justify-content-center" style="width:64px; height:64px;">
-                                        <i class="fas fa-file-pdf text-danger fs-4"></i>
+                            <a href="vehicle-documents?vehicle_id=<?php echo IdCodec::encode($vehicleId); ?>" class="text-decoration-none">
+                                <div class="row g-3 align-items-center pb-x1 mb-2 border-bottom">
+                                    <div class="col-auto">
+                                        <?php if ($isImage): ?>
+                                            <img src="<?php echo $fileUrl; ?>" class="rounded-3 border" style="width:48px; height:48px; object-fit:cover;" alt="">
+                                        <?php else: ?>
+                                            <div class="rounded-3 border bg-body-tertiary d-flex align-items-center justify-content-center" style="width:48px; height:48px;">
+                                                <i class="fas fa-file-pdf text-danger"></i>
+                                            </div>
+                                        <?php endif; ?>
                                     </div>
-                                <?php endif; ?>
+                                    <div class="col">
+                                        <span class="badge badge-subtle-<?php echo sanitize($cat['color']); ?> fs-11 mb-1"><?php echo sanitize($cat['label']); ?></span>
+                                        <p class="fs-10 text-800 mb-0 text-truncate" title="<?php echo sanitize($displayTitle); ?>"><?php echo sanitize($displayTitle); ?></p>
+                                        <p class="fs-11 text-500 mb-0"><?php echo formatDate($doc['uploaded_at']); ?></p>
+                                    </div>
+                                </div>
                             </a>
                         <?php endforeach; ?>
                     </div>
