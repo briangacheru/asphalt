@@ -3,6 +3,7 @@ $pageTitle = 'Reports';
 require_once 'includes/header.php';
 
 use App\Helpers\IdCodec;
+use App\Services\ItemTypeService;
 
 $vehiclesStmt = $pdo->prepare("SELECT id, make, model, year FROM vehicles WHERE is_active = 1 AND user_id = ? ORDER BY make, model");
 $vehiclesStmt->execute([$userId]);
@@ -122,8 +123,9 @@ if ($vehicleFilter) {
     $partsWhereVehicle .= " AND e.vehicle_id = " . (int)$vehicleFilter;
 }
 
-// Categories that never represent a tracked part replacement
-$partsExcludedCategories = ['mechanic', 'accessories'];
+// Categories that never represent a tracked part replacement (shared with the
+// maintenance-schedule sync so the two stay consistent)
+$partsExcludedCategories = ItemTypeService::EXCLUDED_CATEGORIES;
 $partsExcludedPlaceholders = implode(', ', array_fill(0, count($partsExcludedCategories), '?'));
 
 try {
@@ -485,7 +487,7 @@ unset($p);
                 <h5 class="card-title mb-0">
                     <i class="fas fa-tools me-2"></i>Parts Longevity
                 </h5>
-                <small class="text-muted">Excludes Mechanic and Accessories expenses</small>
+                <small class="text-muted">Excludes Mechanic and Accessories expenses &bull; auto-synced to <a href="maintenance-schedule">Maintenance Schedule</a></small>
             </div>
             <div class="card-body">
                 <?php if (empty($partsLongevity)): ?>

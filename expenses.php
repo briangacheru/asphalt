@@ -4,6 +4,7 @@ require_once 'includes/header.php';
 
 use App\Helpers\IdCodec;
 use App\Services\ItemTypeService;
+use App\Services\PartMaintenanceSyncService;
 
 $vehiclesStmt = $pdo->prepare("SELECT id, make, model, year, current_mileage FROM vehicles WHERE is_active = 1 AND user_id = ? ORDER BY make, model");
 $vehiclesStmt->execute([$userId]);
@@ -115,6 +116,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                 $pdo->prepare("INSERT INTO mileage_log (vehicle_id, mileage, log_date, source) VALUES (?, ?, ?, 'expense')")->execute([$vehicle_id, $mileage, $expense_date]);
             }
 
+            if ($item_type_id && ItemTypeService::isTrackedCategory($catName)) {
+                try {
+                    PartMaintenanceSyncService::syncFromExpense($pdo, $vehicle_id, $item_type_id, $expense_date, $mileage);
+                } catch (PDOException $e) {
+                    // Non-fatal — the expense itself already saved successfully
+                }
+            }
+
             setFlashMessage('success', 'Expense added!');
             redirect('expenses' . ($vehicleFilter ? '?vehicle_id=' . IdCodec::encode($vehicleFilter) : ''));
         } catch (PDOException $e) {
@@ -197,6 +206,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             if ($mileage !== null) {
                 $pdo->prepare("UPDATE vehicles SET current_mileage = GREATEST(current_mileage, ?) WHERE id = ? AND user_id = ?")->execute([$mileage, $vehicle_id, $userId]);
                 $pdo->prepare("INSERT INTO mileage_log (vehicle_id, mileage, log_date, source) VALUES (?, ?, ?, 'expense')")->execute([$vehicle_id, $mileage, $expense_date]);
+            }
+
+            if ($item_type_id && ItemTypeService::isTrackedCategory($catName)) {
+                try {
+                    PartMaintenanceSyncService::syncFromExpense($pdo, $vehicle_id, $item_type_id, $expense_date, $mileage);
+                } catch (PDOException $e) {
+                    // Non-fatal — the expense itself already saved successfully
+                }
             }
 
             setFlashMessage('success', 'Expense updated!');

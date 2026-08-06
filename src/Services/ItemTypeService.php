@@ -9,6 +9,15 @@ namespace App\Services;
  */
 class ItemTypeService
 {
+    // Expense categories that never represent a tracked part replacement —
+    // shared by the Parts Longevity report and the maintenance-schedule sync.
+    public const EXCLUDED_CATEGORIES = ['mechanic', 'accessories'];
+
+    public static function isTrackedCategory(string $categoryName): bool
+    {
+        return !in_array(trim(strtolower($categoryName)), self::EXCLUDED_CATEGORIES, true);
+    }
+
     private static array $defaultSeed = [
         'Oil Filter'           => ['km' => 8000,   'months' => 6],
         'Cabin Filter'         => ['km' => 15000,  'months' => 12],
