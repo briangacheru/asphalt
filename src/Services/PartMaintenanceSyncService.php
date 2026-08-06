@@ -11,6 +11,51 @@ namespace App\Services;
  */
 class PartMaintenanceSyncService
 {
+    /**
+     * Backfill: sync every already-logged, part-tagged expense for a user's
+     * vehicles into maintenance_schedule. syncFromExpense() only runs going
+     * forward (when an expense is saved), so expenses logged before this
+     * sync existed — or before an item type had an interval set — never
+     * triggered it. Safe to run repeatedly; returns how many parts it synced.
+     */
+    public static function syncAllForUser(\PDO $pdo, int $userId): int
+    {
+        $excluded = ItemTypeService::EXCLUDED_CATEGORIES;
+        $placeholders = implode(', ', array_fill(0, count($excluded), '?'));
+
+        $stmt = $pdo->prepare("
+            SELECT e.vehicle_id, e.item_type_id, e.expense_date, e.mileage
+            FROM expenses e
+            JOIN vehicles v ON e.vehicle_id = v.id
+            JOIN expense_categories ec ON e.category_id = ec.id
+            WHERE v.user_id = ? AND v.is_active = 1
+              AND e.item_type_id IS NOT NULL
+              AND TRIM(LOWER(ec.name)) NOT IN ($placeholders)
+              AND e.id = (
+                  SELECT e2.id FROM expenses e2
+                  JOIN expense_categories ec2 ON e2.category_id = ec2.id
+                  WHERE e2.vehicle_id = e.vehicle_id AND e2.item_type_id = e.item_type_id
+                    AND TRIM(LOWER(ec2.name)) NOT IN ($placeholders)
+                  ORDER BY e2.expense_date DESC, e2.id DESC
+                  LIMIT 1
+              )
+        ");
+        $stmt->execute(array_merge([$userId], $excluded, $excluded));
+        $rows = $stmt->fetchAll();
+
+        foreach ($rows as $row) {
+            self::syncFromExpense(
+                $pdo,
+                (int) $row['vehicle_id'],
+                (int) $row['item_type_id'],
+                $row['expense_date'],
+                $row['mileage'] !== null ? (int) $row['mileage'] : null
+            );
+        }
+
+        return count($rows);
+    }
+
     public static function syncFromExpense(\PDO $pdo, int $vehicleId, int $itemTypeId, string $expenseDate, ?int $mileage): void
     {
         $itemStmt = $pdo->prepare("SELECT name, km_interval, months_interval FROM item_types WHERE id = ?");

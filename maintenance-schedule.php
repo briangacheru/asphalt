@@ -4,6 +4,7 @@ require_once 'includes/header.php';
 
 use App\Helpers\IdCodec;
 use App\Services\SiteSettingsService;
+use App\Services\PartMaintenanceSyncService;
 
 $vehiclesStmt = $pdo->prepare("SELECT id, make, model, year FROM vehicles WHERE is_active = 1 AND user_id = ? ORDER BY make, model");
 $vehiclesStmt->execute([$userId]);
@@ -151,6 +152,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         redirect('maintenance-schedule' . ($vehicleFilter ? '?vehicle_id=' . IdCodec::encode($vehicleFilter) : ''));
     }
 
+    if ($action === 'sync_from_expenses') {
+        if (!verifyCSRFToken($_POST['csrf_token'] ?? '')) {
+            setFlashMessage('danger', 'Invalid security token. Please try again.');
+            redirect('maintenance-schedule' . ($vehicleFilter ? '?vehicle_id=' . IdCodec::encode($vehicleFilter) : ''));
+        }
+
+        try {
+            $syncedCount = PartMaintenanceSyncService::syncAllForUser($pdo, $userId);
+            setFlashMessage('success', $syncedCount > 0
+                ? "Synced {$syncedCount} part(s) from your expense history."
+                : 'Nothing to sync — no part-tagged expenses found.');
+        } catch (PDOException $e) {
+            setFlashMessage('danger', 'Sync failed: ' . $e->getMessage());
+        }
+        redirect('maintenance-schedule' . ($vehicleFilter ? '?vehicle_id=' . IdCodec::encode($vehicleFilter) : ''));
+    }
+
     if ($action === 'delete') {
         if (!verifyCSRFToken($_POST['csrf_token'] ?? '')) {
             setFlashMessage('danger', 'Invalid security token. Please try again.');
@@ -210,6 +228,9 @@ foreach ($schedules as $s) {
         $ok[] = $s;
     }
 }
+
+// Single combined list for the unified table, most urgent first
+$allAnnotated = array_merge($overdue, $dueSoon, $upcoming, $ok);
 ?>
 
     <div class="card mb-3">
@@ -227,7 +248,14 @@ foreach ($schedules as $s) {
                         </div>
                     </div>
                 </div>
-                <div class="col-md-auto mt-4 mt-md-0">
+                <div class="col-md-auto mt-4 mt-md-0 d-flex gap-2">
+                    <form method="POST" onsubmit="return confirm('Sync part-tagged expenses (Tires, Brake Pads, etc.) into this schedule? Safe to run anytime.');">
+                        <?php echo csrfField(); ?>
+                        <input type="hidden" name="action" value="sync_from_expenses">
+                        <button type="submit" class="btn btn-sm btn-outline-secondary" title="Catch up historical expenses that predate auto-sync">
+                            <i class="fas fa-sync"></i> Sync from Expenses
+                        </button>
+                    </form>
                     <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#addScheduleModal">
                         <i class="fas fa-plus"></i> Add Item
                     </button>
@@ -267,9 +295,9 @@ if ($flash): ?>
     </div>
 <?php endif; ?>
 
-    <div class="row g-3 mb-3">
+    <div class="row g-3 mb-3" id="statusFilterCards">
         <div class="col-sm-6 col-md-6 col-lg-3 col-xxl-3">
-            <div class="card h-100">
+            <div class="card h-100 status-filter-card" data-status-filter="overdue" role="button" tabindex="0">
                 <div class="card-body">
                     <div class="row flex-between-center">
                         <div class="col d-md-flex d-lg-block flex-between-center">
@@ -284,7 +312,7 @@ if ($flash): ?>
             </div>
         </div>
         <div class="col-sm-6 col-md-6 col-lg-3 col-xxl-3">
-            <div class="card h-100">
+            <div class="card h-100 status-filter-card" data-status-filter="due_soon" role="button" tabindex="0">
                 <div class="card-body">
                     <div class="row flex-between-center">
                         <div class="col d-md-flex d-lg-block flex-between-center">
@@ -299,7 +327,7 @@ if ($flash): ?>
             </div>
         </div>
         <div class="col-sm-6 col-md-6 col-lg-3 col-xxl-3">
-            <div class="card h-100">
+            <div class="card h-100 status-filter-card" data-status-filter="upcoming" role="button" tabindex="0">
                 <div class="card-body">
                     <div class="row flex-between-center">
                         <div class="col d-md-flex d-lg-block flex-between-center">
@@ -314,7 +342,7 @@ if ($flash): ?>
             </div>
         </div>
         <div class="col-sm-6 col-md-6 col-lg-3 col-xxl-3">
-            <div class="card h-100">
+            <div class="card h-100 status-filter-card" data-status-filter="ok" role="button" tabindex="0">
                 <div class="card-body">
                     <div class="row flex-between-center">
                         <div class="col d-md-flex d-lg-block flex-between-center">
@@ -332,21 +360,26 @@ if ($flash): ?>
 
 <?php
 // Function to render schedule sections
-function renderScheduleSection($items, $title, $badgeColor, $icon) {
-    if (empty($items)) return;
+function renderScheduleTable($items) {
     global $pdo, $vehicles;
     ?>
     <div class="card mb-3">
-        <div class="card-header d-flex align-items-center bg-body-tertiary">
-            <i class="fas fa-<?php echo $icon; ?> text-<?php echo $badgeColor; ?> me-2"></i>
-            <strong><?php echo $title; ?></strong>
-            <span class="badge bg-<?php echo $badgeColor; ?> ms-2"><?php echo count($items); ?></span>
+        <div class="card-header d-flex align-items-center justify-content-between bg-body-tertiary">
+            <div>
+                <i class="fas fa-list-check me-2"></i>
+                <strong>Maintenance Items</strong>
+                <span class="badge bg-secondary ms-2"><?php echo count($items); ?></span>
+            </div>
+            <a href="#" id="clearStatusFilter" class="small d-none">
+                <i class="fas fa-times-circle me-1"></i>Clear filter
+            </a>
         </div>
         <div class="card-body p-0">
             <div class="table-responsive">
-                <table class="table table-responsive-sm mb-0 data-table fs-10" data-datatables='{"order": []}'>
+                <table id="maintenanceScheduleTable" class="table table-responsive-sm mb-0 data-table fs-10"
+                       data-datatables='{"order": [], "columnDefs": [{"targets": 7, "visible": false, "searchable": true}]}'>
                     <thead class="bg-200">
-                    <tr >
+                    <tr>
                         <th>Vehicle</th>
                         <th>Item</th>
                         <th>Last Service</th>
@@ -354,6 +387,7 @@ function renderScheduleSection($items, $title, $badgeColor, $icon) {
                         <th>Priority</th>
                         <th>Status</th>
                         <th>Actions</th>
+                        <th>StatusKey</th>
                     </tr>
                     </thead>
                     <tbody>
@@ -581,6 +615,7 @@ function renderScheduleSection($items, $title, $badgeColor, $icon) {
                                     </div>
                                 </div>
                             </td>
+                            <td><?php echo htmlspecialchars($s['status']); ?></td>
                         </tr>
                     <?php endforeach; ?>
                     </tbody>
@@ -592,10 +627,9 @@ function renderScheduleSection($items, $title, $badgeColor, $icon) {
 }
 
 // Render schedule sections
-renderScheduleSection($overdue, 'Overdue', 'danger', 'exclamation-circle');
-renderScheduleSection($dueSoon, 'Due Soon', 'warning', 'exclamation-triangle');
-renderScheduleSection($upcoming, 'Upcoming', 'info', 'clock');
-renderScheduleSection($ok, 'On Track', 'success', 'check-circle');
+if (!empty($allAnnotated)) {
+    renderScheduleTable($allAnnotated);
+}
 
 // Empty state
 if (empty($schedules)): ?>
@@ -736,6 +770,60 @@ if (empty($schedules)): ?>
                 if (option.dataset.months) {
                     monthsInput.value = option.dataset.months;
                 }
+            }
+        });
+    </script>
+
+    <style>
+        .status-filter-card { cursor: pointer; transition: box-shadow .15s ease; }
+        .status-filter-card:hover { box-shadow: 0 0 0 2px rgba(var(--falcon-primary-rgb), .25); }
+        .status-filter-card.active { box-shadow: 0 0 0 2px var(--falcon-primary); }
+    </style>
+
+    <script>
+        // Stat cards double as filters for the maintenance table's hidden StatusKey column
+        document.addEventListener('DOMContentLoaded', function () {
+            var $table = $('#maintenanceScheduleTable');
+            if (!$table.length) return;
+
+            function wireStatusFilters() {
+                var dt = $table.DataTable();
+                var cards = document.querySelectorAll('.status-filter-card');
+                var clearLink = document.getElementById('clearStatusFilter');
+
+                function applyFilter(status) {
+                    dt.column(7).search(status ? '^' + status + '$' : '', true, false).draw();
+                    cards.forEach(function (c) {
+                        c.classList.toggle('active', c.dataset.statusFilter === status);
+                    });
+                    if (clearLink) clearLink.classList.toggle('d-none', !status);
+                }
+
+                cards.forEach(function (card) {
+                    card.addEventListener('click', function () {
+                        var status = this.dataset.statusFilter;
+                        applyFilter(this.classList.contains('active') ? null : status);
+                    });
+                    card.addEventListener('keydown', function (e) {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            this.click();
+                        }
+                    });
+                });
+
+                if (clearLink) {
+                    clearLink.addEventListener('click', function (e) {
+                        e.preventDefault();
+                        applyFilter(null);
+                    });
+                }
+            }
+
+            if ($.fn.DataTable.isDataTable('#maintenanceScheduleTable')) {
+                wireStatusFilters();
+            } else {
+                $table.one('init.dt', wireStatusFilters);
             }
         });
     </script>
