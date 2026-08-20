@@ -391,6 +391,7 @@ function renderScheduleTable($items) {
                     </tr>
                     </thead>
                     <tbody>
+                    <?php $deferredModals = ''; ?>
                     <?php foreach ($items as $s): ?>
                         <tr class="hover-actions-trigger btn-reveal-trigger hover-bg-100 cursor-pointer"
                             data-bs-toggle="modal" data-bs-target="#editScheduleModal<?php echo $s['id']; ?>">
@@ -478,7 +479,15 @@ function renderScheduleTable($items) {
                                 <div class="dropdown font-sans-serif btn-reveal-trigger">
                                     <button class="btn btn-link text-600 btn-sm dropdown-toggle dropdown-caret-none btn-reveal-sm transition-none" type="button" id="crm-recent-leads-0" onclick="event.stopPropagation()" data-bs-toggle="dropdown" data-boundary="viewport" aria-haspopup="true" aria-expanded="false"><span class="fas fa-ellipsis-h fs-11"></span></button>
                                 </div>
-
+                            </td>
+                            <td><?php echo htmlspecialchars($s['status']); ?></td>
+                        </tr>
+                        <?php
+                        // Modals are rendered after </table> instead of inline: a fixed-position
+                        // modal nested inside .table-responsive's overflow-x:auto gets clipped to
+                        // that container on mobile browsers instead of covering the viewport.
+                        ob_start();
+                        ?>
                                 <!-- Mark Done Modal -->
                                 <div class="modal fade" id="markDoneModal<?php echo $s['id']; ?>" tabindex="-1" aria-labelledby="markDoneModalLabel<?php echo $s['id']; ?>" aria-hidden="true">
                                     <div class="modal-dialog">
@@ -614,15 +623,15 @@ function renderScheduleTable($items) {
                                         </div>
                                     </div>
                                 </div>
-                            </td>
-                            <td><?php echo htmlspecialchars($s['status']); ?></td>
-                        </tr>
-                    <?php endforeach; ?>
+                        <?php
+                        $deferredModals .= ob_get_clean();
+                    endforeach; ?>
                     </tbody>
                 </table>
             </div>
         </div>
     </div>
+    <?php echo $deferredModals; ?>
     <?php
 }
 
