@@ -238,7 +238,7 @@ $currentPage = basename($_SERVER['PHP_SELF'], '.php');
                       <hr class="mb-0 navbar-vertical-divider" />
                     </div>
                   </div>
-                  <!-- parent pages--><a class="nav-link <?php echo $currentPage === 'vehicles' ? 'reports' : ''; ?>" href="reports" role="button">
+                  <!-- parent pages--><a class="nav-link <?php echo $currentPage === 'reports' ? 'active' : ''; ?>" href="reports" role="button">
                     <div class="d-flex align-items-center"><span class="nav-link-icon"><span class="fas fa-chart-bar"></span></span><span class="nav-link-text ps-1">Reports</span>
                     </div>
                   </a>
@@ -277,12 +277,12 @@ $currentPage = basename($_SERVER['PHP_SELF'], '.php');
                               <hr class="mb-0 navbar-vertical-divider" />
                           </div>
                       </div>
-                      <!-- parent pages--><a class="nav-link <?php echo $currentPage === 'settings' ? 'reports' : ''; ?>" href="settings" role="button">
+                      <!-- parent pages--><a class="nav-link <?php echo $currentPage === 'settings' ? 'active' : ''; ?>" href="settings" role="button">
                           <div class="d-flex align-items-center"><span class="nav-link-icon"><span class="fas fa-cog"></span></span><span class="nav-link-text ps-1">Settings</span>
                           </div>
                       </a>
                       <?php if (\App\Middleware\AuthMiddleware::isAdmin()): ?>
-                      <!-- parent pages--><a class="nav-link <?php echo $currentPage === 'admin' ? 'reports' : ''; ?>" href="admin" role="button">
+                      <!-- parent pages--><a class="nav-link <?php echo $currentPage === 'admin' ? 'active' : ''; ?>" href="admin" role="button">
                           <div class="d-flex align-items-center"><span class="nav-link-icon"><span class="fas fa-user-shield"></span></span><span class="nav-link-text ps-1">Admin Dashboard</span>
                           </div>
                       </a>
