@@ -198,9 +198,15 @@ if ($flash): ?>
     </div>
 <?php endif; ?>
 
-<div class="row g-3 mb-3">
+<style>
+    .insurance-filter-card { cursor: pointer; transition: box-shadow .15s ease, border-color .15s ease; }
+    .insurance-filter-card:hover { box-shadow: 0 0 0 2px rgba(0,0,0,0.08); }
+    .insurance-filter-card.active { border-color: var(--falcon-primary, #2a7be4); box-shadow: 0 0 0 2px var(--falcon-primary, #2a7be4); }
+</style>
+
+<div class="row g-3 mb-3" id="insurance-status-filters">
     <div class="col-6 col-md-3">
-        <div class="card h-100">
+        <div class="card h-100 insurance-filter-card" data-filter="expired" role="button" tabindex="0">
             <div class="card-body text-center">
                 <h3 class="text-danger mb-0"><?php echo $counts['expired']; ?></h3>
                 <p class="fs-10 text-600 mb-0">Expired</p>
@@ -208,7 +214,7 @@ if ($flash): ?>
         </div>
     </div>
     <div class="col-6 col-md-3">
-        <div class="card h-100">
+        <div class="card h-100 insurance-filter-card" data-filter="expiring" role="button" tabindex="0">
             <div class="card-body text-center">
                 <h3 class="text-warning mb-0"><?php echo $counts['expiring']; ?></h3>
                 <p class="fs-10 text-600 mb-0">Expiring Soon</p>
@@ -216,7 +222,7 @@ if ($flash): ?>
         </div>
     </div>
     <div class="col-6 col-md-3">
-        <div class="card h-100">
+        <div class="card h-100 insurance-filter-card" data-filter="ok" role="button" tabindex="0">
             <div class="card-body text-center">
                 <h3 class="text-success mb-0"><?php echo $counts['ok']; ?></h3>
                 <p class="fs-10 text-600 mb-0">Insured</p>
@@ -224,13 +230,18 @@ if ($flash): ?>
         </div>
     </div>
     <div class="col-6 col-md-3">
-        <div class="card h-100">
+        <div class="card h-100 insurance-filter-card" data-filter="none" role="button" tabindex="0">
             <div class="card-body text-center">
                 <h3 class="text-secondary mb-0"><?php echo $counts['none']; ?></h3>
                 <p class="fs-10 text-600 mb-0">Not Insured</p>
             </div>
         </div>
     </div>
+</div>
+
+<div class="d-none align-items-center justify-content-between mb-3" id="insurance-filter-banner">
+    <p class="fs-10 text-600 mb-0">Showing <strong id="insurance-filter-count"></strong> vehicle(s) &mdash; filtered by <strong id="insurance-filter-label"></strong></p>
+    <button type="button" class="btn btn-sm btn-outline-secondary" id="insurance-filter-clear"><i class="fas fa-times"></i> Clear Filter</button>
 </div>
 
 <?php if (empty($vehicles)): ?>
@@ -245,7 +256,7 @@ if ($flash): ?>
         </div>
     </div>
 <?php else: ?>
-    <div class="row g-3">
+    <div class="row g-3" id="insurance-vehicle-grid">
         <?php foreach ($vehicles as $v):
             $meta = $statusMeta[$v['status']];
             $vehicleIdToken = IdCodec::encode($v['vehicle_id']);
@@ -253,7 +264,7 @@ if ($flash): ?>
             $history = $historyByVehicle[$v['vehicle_id']];
             $pastPolicies = array_slice($history, 1);
         ?>
-            <div class="col-lg-6" id="vehicle-insurance-<?php echo $v['vehicle_id']; ?>">
+            <div class="col-lg-6 insurance-vehicle-tile" data-status="<?php echo sanitize($v['status']); ?>" id="vehicle-insurance-<?php echo $v['vehicle_id']; ?>">
                 <div class="card h-100 <?php echo in_array($v['status'], ['expired', 'expiring'], true) ? 'border-' . $meta['color'] . ' border-2' : ''; ?> <?php echo $v['vehicle_id'] === $highlightVehicleId ? 'border-primary border-2' : ''; ?>">
                     <div class="card-header bg-body-tertiary">
                         <div class="row align-items-center">
@@ -363,6 +374,15 @@ if ($flash): ?>
                 </div>
             </div>
         <?php endforeach; ?>
+    </div>
+    <div class="card d-none" id="insurance-filter-empty-state">
+        <div class="card-body">
+            <div class="empty-state text-center py-5">
+                <i class="fas fa-filter empty-state-icon fs-1 text-300 mb-3"></i>
+                <h6 class="fs-9 mb-1">No vehicles match this filter.</h6>
+                <button type="button" class="btn btn-outline-secondary btn-sm" id="insurance-filter-empty-clear"><i class="fas fa-times"></i> Clear Filter</button>
+            </div>
+        </div>
     </div>
 <?php endif; ?>
 
@@ -508,6 +528,67 @@ if ($flash): ?>
             highlightEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
         <?php endif; ?>
+
+        var filterCards = document.querySelectorAll('.insurance-filter-card');
+        var vehicleTiles = document.querySelectorAll('.insurance-vehicle-tile');
+        var filterBanner = document.getElementById('insurance-filter-banner');
+        var filterCountEl = document.getElementById('insurance-filter-count');
+        var filterLabelEl = document.getElementById('insurance-filter-label');
+        var filterEmptyState = document.getElementById('insurance-filter-empty-state');
+        var filterLabels = { expired: 'Expired', expiring: 'Expiring Soon', ok: 'Insured', none: 'Not Insured' };
+        var activeFilter = null;
+
+        function applyInsuranceFilter(filter) {
+            activeFilter = filter;
+
+            filterCards.forEach(function (card) {
+                card.classList.toggle('active', card.dataset.filter === filter);
+            });
+
+            var visibleCount = 0;
+            vehicleTiles.forEach(function (tile) {
+                var matches = !filter || tile.dataset.status === filter;
+                tile.style.display = matches ? '' : 'none';
+                if (matches) {
+                    visibleCount++;
+                }
+            });
+
+            if (filter) {
+                filterBanner.classList.remove('d-none');
+                filterBanner.classList.add('d-flex');
+                filterCountEl.textContent = visibleCount;
+                filterLabelEl.textContent = filterLabels[filter] || filter;
+            } else {
+                filterBanner.classList.add('d-none');
+                filterBanner.classList.remove('d-flex');
+            }
+
+            if (filterEmptyState) {
+                filterEmptyState.classList.toggle('d-none', !filter || visibleCount > 0);
+            }
+        }
+
+        filterCards.forEach(function (card) {
+            card.addEventListener('click', function () {
+                applyInsuranceFilter(activeFilter === card.dataset.filter ? null : card.dataset.filter);
+            });
+            card.addEventListener('keydown', function (e) {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    card.click();
+                }
+            });
+        });
+
+        var filterClearBtn = document.getElementById('insurance-filter-clear');
+        if (filterClearBtn) {
+            filterClearBtn.addEventListener('click', function () { applyInsuranceFilter(null); });
+        }
+        var filterEmptyClearBtn = document.getElementById('insurance-filter-empty-clear');
+        if (filterEmptyClearBtn) {
+            filterEmptyClearBtn.addEventListener('click', function () { applyInsuranceFilter(null); });
+        }
 
         if (window.GLightbox) {
             GLightbox({ selector: '.glightbox' });
