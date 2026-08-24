@@ -350,7 +350,7 @@ if ($flash): ?>
                         <?php endif; ?>
                     </div>
                     <div class="card-footer bg-body-tertiary d-flex justify-content-between">
-                        <button type="button" class="btn btn-sm btn-primary" onclick="openAddInsuranceModal('<?php echo $vehicleIdToken; ?>', <?php echo json_encode($vehicleLabel); ?>)">
+                        <button type="button" class="btn btn-sm btn-primary" onclick='openAddInsuranceModal(<?php echo json_encode($vehicleIdToken, JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_HEX_TAG); ?>, <?php echo json_encode($vehicleLabel, JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_HEX_TAG); ?>)'>
                             <i class="fas fa-plus"></i> <?php echo $v['status'] === 'none' ? 'Add Insurance' : 'Renew Insurance'; ?>
                         </button>
                         <?php if ($v['status'] !== 'none'): ?>
