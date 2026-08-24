@@ -241,23 +241,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         SiteSettingsService::set($pdo, 'oil_intervals_km', json_encode($oilValues), $userId);
 
-        $names = $_POST['preset_name'] ?? [];
-        $kms = $_POST['preset_km'] ?? [];
-        $months = $_POST['preset_months'] ?? [];
-        $presets = [];
-        foreach ($names as $i => $name) {
-            $name = sanitize(trim($name));
-            if ($name === '') {
-                continue;
-            }
-            $km = isset($kms[$i]) && $kms[$i] !== '' ? (int) $kms[$i] : null;
-            $mo = isset($months[$i]) && $months[$i] !== '' ? (int) $months[$i] : null;
-            $presets[$name] = ['km' => $km, 'months' => $mo];
-        }
-        if (!empty($presets)) {
-            SiteSettingsService::set($pdo, 'maintenance_presets', json_encode($presets), $userId);
-        }
-
         $thresholds = [
             'urgent_km' => max(1, (int) ($_POST['urgent_km'] ?? 500)),
             'upcoming_km' => max(1, (int) ($_POST['upcoming_km'] ?? 1500)),
@@ -383,26 +366,6 @@ $oilIntervalsRaw = SiteSettingsService::get($pdo, 'oil_intervals_km');
 $oilIntervals = $oilIntervalsRaw ? (json_decode($oilIntervalsRaw, true) ?: $defaultOilIntervals) : $defaultOilIntervals;
 
 $itemTypes = ItemTypeService::all($pdo);
-
-$defaultMaintenancePresets = [
-    'Engine Oil & Filter' => ['km' => 10000, 'months' => 12],
-    'Air Filter' => ['km' => 20000, 'months' => 24],
-    'Cabin Filter' => ['km' => 15000, 'months' => 12],
-    'Spark Plugs' => ['km' => 40000, 'months' => 48],
-    'Brake Fluid' => ['km' => 40000, 'months' => 24],
-    'Coolant' => ['km' => 50000, 'months' => 36],
-    'Transmission Fluid' => ['km' => 60000, 'months' => 48],
-    'Power Steering Fluid' => ['km' => 50000, 'months' => 36],
-    'Timing Belt' => ['km' => 100000, 'months' => 72],
-    'Serpentine Belt' => ['km' => 80000, 'months' => 60],
-    'Battery' => ['km' => null, 'months' => 48],
-    'Front Brake Pads' => ['km' => 50000, 'months' => null],
-    'Rear Brake Pads' => ['km' => 60000, 'months' => null],
-    'Tires' => ['km' => 50000, 'months' => 48],
-    'Wiper Blades' => ['km' => null, 'months' => 12],
-];
-$maintenancePresetsRaw = SiteSettingsService::get($pdo, 'maintenance_presets');
-$maintenancePresets = $maintenancePresetsRaw ? (json_decode($maintenancePresetsRaw, true) ?: $defaultMaintenancePresets) : $defaultMaintenancePresets;
 
 $defaultReminderThresholds = [
     'urgent_km' => 500,
@@ -846,7 +809,7 @@ $registrationsEnabled = SiteSettingsService::get($pdo, 'registrations_enabled') 
                 <h5 class="card-title mb-0"><i class="fas fa-sliders-h me-2"></i>Reminder &amp; Maintenance Settings</h5>
             </div>
             <div class="card-body">
-                <p class="text-muted small mb-4">Controls the oil-change interval choices on Add Service, the quick-add presets on Maintenance Schedule, and the thresholds the reminder cron jobs use to decide when and how often to email users.</p>
+                <p class="text-muted small mb-4">Controls the oil-change interval choices on Add Service and the thresholds the reminder cron jobs use to decide when and how often to email users.</p>
 
                 <form method="POST" id="reminder-settings-form">
                     <?php echo csrfField(); ?>
@@ -892,32 +855,6 @@ $registrationsEnabled = SiteSettingsService::get($pdo, 'registrations_enabled') 
                         </div>
                     </div>
 
-                    <h6 class="mb-2">Default Maintenance Presets</h6>
-                    <p class="text-muted small">Shown as quick-add buttons on the Maintenance Schedule page. Leave a field blank for "not tracked by that unit."</p>
-                    <div class="table-responsive mb-2">
-                        <table class="table table-sm align-middle mb-0" id="maintenance-presets-table">
-                            <thead>
-                            <tr>
-                                <th>Item</th>
-                                <th style="width:140px;">Km Interval</th>
-                                <th style="width:140px;">Month Interval</th>
-                                <th style="width:40px;"></th>
-                            </tr>
-                            </thead>
-                            <tbody id="maintenance-presets-body">
-                                <?php foreach ($maintenancePresets as $name => $preset): ?>
-                                    <tr>
-                                        <td><input type="text" name="preset_name[]" class="form-control form-control-sm" value="<?php echo htmlspecialchars($name); ?>"></td>
-                                        <td><input type="number" min="0" name="preset_km[]" class="form-control form-control-sm" value="<?php echo $preset['km'] !== null ? (int) $preset['km'] : ''; ?>" placeholder="—"></td>
-                                        <td><input type="number" min="0" name="preset_months[]" class="form-control form-control-sm" value="<?php echo $preset['months'] !== null ? (int) $preset['months'] : ''; ?>" placeholder="—"></td>
-                                        <td><button type="button" class="btn btn-sm btn-outline-danger remove-preset-row"><i class="fas fa-times"></i></button></td>
-                                    </tr>
-                                <?php endforeach; ?>
-                            </tbody>
-                        </table>
-                    </div>
-                    <button type="button" class="btn btn-sm btn-outline-secondary mb-4" id="add-preset-row"><i class="fas fa-plus me-1"></i>Add Item</button>
-
                     <div class="d-flex justify-content-end">
                         <button type="submit" class="btn btn-primary btn-sm"><i class="fas fa-save me-1"></i>Save Reminder &amp; Maintenance Settings</button>
                     </div>
@@ -931,7 +868,7 @@ $registrationsEnabled = SiteSettingsService::get($pdo, 'registrations_enabled') 
                 <h5 class="card-title mb-0"><i class="fas fa-cog me-2"></i>Item Types</h5>
             </div>
             <div class="card-body">
-                <p class="text-muted small mb-3">Shared across every user's Expenses page (Item Details section) and used by the "Parts Longevity" report card to flag parts that are due soon or overdue. Leave an interval blank to skip that basis (e.g. a battery has no fixed km interval).</p>
+                <p class="text-muted small mb-3">Shared across every user's Expenses page (Item Details section), the Maintenance Schedule quick-add list, and the "Parts Longevity" report card that flags parts due soon or overdue. Leave an interval blank to skip that basis (e.g. a battery has no fixed km interval).</p>
                 <div class="table-responsive mb-4">
                     <table class="table table-sm align-middle mb-0">
                         <thead>
@@ -1120,30 +1057,6 @@ document.addEventListener('DOMContentLoaded', function () {
 
         formCancel.addEventListener('click', resetForm);
     })();
-
-    // Maintenance presets: dynamic add/remove rows
-    var presetsBody = document.getElementById('maintenance-presets-body');
-    var addPresetBtn = document.getElementById('add-preset-row');
-
-    function bindRemoveButton(btn) {
-        btn.addEventListener('click', function () {
-            this.closest('tr').remove();
-        });
-    }
-    presetsBody.querySelectorAll('.remove-preset-row').forEach(bindRemoveButton);
-
-    if (addPresetBtn) {
-        addPresetBtn.addEventListener('click', function () {
-            var row = document.createElement('tr');
-            row.innerHTML =
-                '<td><input type="text" name="preset_name[]" class="form-control form-control-sm" placeholder="e.g. Fuel Filter"></td>' +
-                '<td><input type="number" min="0" name="preset_km[]" class="form-control form-control-sm" placeholder="—"></td>' +
-                '<td><input type="number" min="0" name="preset_months[]" class="form-control form-control-sm" placeholder="—"></td>' +
-                '<td><button type="button" class="btn btn-sm btn-outline-danger remove-preset-row"><i class="fas fa-times"></i></button></td>';
-            presetsBody.appendChild(row);
-            bindRemoveButton(row.querySelector('.remove-preset-row'));
-        });
-    }
 });
 </script>
 

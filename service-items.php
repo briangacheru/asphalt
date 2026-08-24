@@ -3,6 +3,8 @@ $pageTitle = 'Service Items';
 require_once 'includes/header.php';
 
 use App\Helpers\IdCodec;
+use App\Services\ServiceItemExpenseSync;
+use App\Services\ItemTypeService;
 
 $serviceId = IdCodec::decode($_GET['service_id'] ?? null) ?? 0;
 
@@ -31,32 +33,95 @@ $stmt = $pdo->prepare("SELECT * FROM service_items WHERE service_record_id = ? O
 $stmt->execute([$serviceId]);
 $existingItems = $stmt->fetchAll();
 
-// Item types with labels
-$itemTypes = [
-    'oil_filter' => ['label' => 'Oil Filter', 'icon' => 'fas fa-oil-can'],
-    'cabin_filter' => ['label' => 'Cabin Filter', 'icon' => 'fas fa-fan'],
-    'air_filter' => ['label' => 'Air Filter', 'icon' => 'fas fa-wind'],
-    'front_brake_pads' => ['label' => 'Front Brake Pads', 'icon' => 'fas fa-compact-disc'],
-    'rear_brake_pads' => ['label' => 'Rear Brake Pads', 'icon' => 'fas fa-compact-disc'],
-    'spark_plugs' => ['label' => 'Spark Plugs', 'icon' => 'fas fa-bolt'],
-    'coolant' => ['label' => 'Coolant', 'icon' => 'fas fa-tint'],
-    'transmission_fluid' => ['label' => 'Transmission Fluid', 'icon' => 'fas fa-cog'],
-    'brake_fluid' => ['label' => 'Brake Fluid', 'icon' => 'fas fa-tint'],
-    'power_steering_fluid' => ['label' => 'Power Steering Fluid', 'icon' => 'fas fa-tint'],
-    'timing_belt' => ['label' => 'Timing Belt', 'icon' => 'fas fa-sync'],
-    'serpentine_belt' => ['label' => 'Serpentine Belt', 'icon' => 'fas fa-sync'],
-    'battery' => ['label' => 'Battery', 'icon' => 'fas fa-car-battery'],
-    'tires' => ['label' => 'Tires', 'icon' => 'fas fa-circle'],
-    'wipers' => ['label' => 'Wipers', 'icon' => 'fas fa-water'],
-    'other' => ['label' => 'Other', 'icon' => 'fas fa-ellipsis-h']
-];
+// Item types — sourced from the admin-managed Item Types catalog (Admin Dashboard >
+// Item Types), the same one used by the Add Expense "Item Details" section. Item Type
+// is a real foreign key (item_type_id) here now instead of a hand-rolled slug that had
+// to be re-matched against a freshly rebuilt list on every request — a mismatch there
+// used to make the selected type silently fail to save. item_types has no icon column,
+// so every type shares one icon rather than keeping a per-type map in sync with it.
+const SERVICE_ITEM_ICON = 'fas fa-wrench';
+
+function slugifyItemType(string $name): string
+{
+    $slug = strtolower(trim($name));
+    $slug = preg_replace('/[^a-z0-9]+/', '_', $slug);
+    return trim($slug, '_');
+}
+
+// $itemTypes (slug => label) and $slugToId exist only to read/display service_items
+// rows saved before item_type_id existed, which only have the legacy slug column.
+$allItemTypes = ItemTypeService::all($pdo);
+$itemTypesById = [];
+$itemTypes = [];
+$slugToId = [];
+foreach ($allItemTypes as $it) {
+    $itemTypesById[$it['id']] = $it['name'];
+    $slug = slugifyItemType($it['name']);
+    if ($slug !== '') {
+        $itemTypes[$slug] = $it['name'];
+        $slugToId[$slug] = $it['id'];
+    }
+}
+
+function serviceItemLabel(array $item, array $itemTypesById, array $itemTypes): string
+{
+    if (!empty($item['item_type_id']) && isset($itemTypesById[$item['item_type_id']])) {
+        return $itemTypesById[$item['item_type_id']];
+    }
+    return $itemTypes[$item['item_type']] ?? $item['item_type'];
+}
+
+// Quick Add Common Items — item types this vehicle has actually had replaced
+// before, ranked by how often they've recurred across its service history
+// (items changed more than once first), capped at 15. Grouped by item_type_id
+// (the FK) primarily, falling back to the legacy item_type slug for rows saved
+// before it existed, since those two can't reliably be grouped together in SQL.
+try {
+    $stmt = $pdo->prepare("
+        SELECT si.item_type_id, si.item_type, COUNT(*) as usage_count
+        FROM service_items si
+        JOIN service_records sr ON si.service_record_id = sr.id
+        WHERE sr.vehicle_id = ?
+        GROUP BY si.item_type_id, si.item_type
+    ");
+    $stmt->execute([$service['vehicle_id']]);
+    $usageRows = $stmt->fetchAll();
+} catch (PDOException $e) {
+    // service_items.item_type_id may not exist yet on environments that haven't picked up the schema change
+    $stmt = $pdo->prepare("
+        SELECT NULL as item_type_id, si.item_type, COUNT(*) as usage_count
+        FROM service_items si
+        JOIN service_records sr ON si.service_record_id = sr.id
+        WHERE sr.vehicle_id = ?
+        GROUP BY si.item_type
+    ");
+    $stmt->execute([$service['vehicle_id']]);
+    $usageRows = $stmt->fetchAll();
+}
+
+$usageByTypeId = [];
+foreach ($usageRows as $row) {
+    $typeId = $row['item_type_id'] ?: ($slugToId[$row['item_type']] ?? null);
+    if ($typeId === null) {
+        continue;
+    }
+    $usageByTypeId[$typeId] = ($usageByTypeId[$typeId] ?? 0) + (int) $row['usage_count'];
+}
+arsort($usageByTypeId);
+
+$commonItems = [];
+foreach (array_slice($usageByTypeId, 0, 15, true) as $typeId => $count) {
+    if (isset($itemTypesById[$typeId])) {
+        $commonItems[] = ['id' => (int) $typeId, 'label' => $itemTypesById[$typeId]];
+    }
+}
 
 // Handle form submission
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
 
     if ($action === 'add_item') {
-        $item_type = sanitize($_POST['item_type'] ?? '');
+        $item_type_id = (int)($_POST['item_type_id'] ?? 0) ?: null;
         $item_name = sanitize($_POST['item_name'] ?? '');
         $brand = sanitize($_POST['brand'] ?? '');
         $part_number = sanitize($_POST['part_number'] ?? '');
@@ -64,21 +129,47 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $cost = (float)($_POST['cost'] ?? 0);
         $notes = sanitize($_POST['notes'] ?? '');
 
-        if ($item_type && array_key_exists($item_type, $itemTypes)) {
+        if ($item_type_id && isset($itemTypesById[$item_type_id])) {
+            $itemLabel = $itemTypesById[$item_type_id];
+            $item_type_slug = slugifyItemType($itemLabel);
             try {
-                $stmt = $pdo->prepare("
-                    INSERT INTO service_items (service_record_id, item_type, item_name, brand, part_number, quantity, cost, notes)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                ");
-                $stmt->execute([$serviceId, $item_type, $item_name, $brand, $part_number, $quantity, $cost, $notes]);
+                try {
+                    $stmt = $pdo->prepare("
+                        INSERT INTO service_items (service_record_id, item_type, item_type_id, item_name, brand, part_number, quantity, cost, notes)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ");
+                    $stmt->execute([$serviceId, $item_type_slug, $item_type_id, $item_name, $brand, $part_number, $quantity, $cost, $notes]);
+                } catch (PDOException $e) {
+                    // service_items.item_type_id may not exist yet — fall back to the legacy columns
+                    $stmt = $pdo->prepare("
+                        INSERT INTO service_items (service_record_id, item_type, item_name, brand, part_number, quantity, cost, notes)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    ");
+                    $stmt->execute([$serviceId, $item_type_slug, $item_name, $brand, $part_number, $quantity, $cost, $notes]);
+                }
+                $newItemId = (int) $pdo->lastInsertId();
 
                 // Update total service cost
                 $stmt = $pdo->prepare("
-                    UPDATE service_records 
+                    UPDATE service_records
                     SET service_cost = (SELECT COALESCE(SUM(cost * quantity), 0) FROM service_items WHERE service_record_id = ?)
                     WHERE id = ?
                 ");
                 $stmt->execute([$serviceId, $serviceId]);
+
+                try {
+                    ServiceItemExpenseSync::upsert($pdo, [
+                        'id' => $newItemId,
+                        'item_name' => $item_name,
+                        'brand' => $brand,
+                        'part_number' => $part_number,
+                        'quantity' => $quantity,
+                        'cost' => $cost,
+                        'notes' => $notes,
+                    ], $service, $itemLabel, $item_type_id);
+                } catch (PDOException $e) {
+                    // Non-fatal — the item itself already saved successfully
+                }
 
                 setFlashMessage('success', 'Item added successfully!');
                 redirect('service-items?service_id=' . IdCodec::encode($serviceId));
@@ -88,7 +179,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     } elseif ($action === 'edit_item') {
         $itemId = (int)($_POST['item_id'] ?? 0);
-        $item_type = sanitize($_POST['item_type'] ?? '');
+        $item_type_id = (int)($_POST['item_type_id'] ?? 0) ?: null;
         $item_name = sanitize($_POST['item_name'] ?? '');
         $brand = sanitize($_POST['brand'] ?? '');
         $part_number = sanitize($_POST['part_number'] ?? '');
@@ -96,22 +187,48 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $cost = (float)($_POST['cost'] ?? 0);
         $notes = sanitize($_POST['notes'] ?? '');
 
-        if ($itemId && $item_type && array_key_exists($item_type, $itemTypes)) {
+        if ($itemId && $item_type_id && isset($itemTypesById[$item_type_id])) {
+            $itemLabel = $itemTypesById[$item_type_id];
+            $item_type_slug = slugifyItemType($itemLabel);
             try {
-                $stmt = $pdo->prepare("
-                    UPDATE service_items 
-                    SET item_type = ?, item_name = ?, brand = ?, part_number = ?, quantity = ?, cost = ?, notes = ?
-                    WHERE id = ? AND service_record_id = ?
-                ");
-                $stmt->execute([$item_type, $item_name, $brand, $part_number, $quantity, $cost, $notes, $itemId, $serviceId]);
+                try {
+                    $stmt = $pdo->prepare("
+                        UPDATE service_items
+                        SET item_type = ?, item_type_id = ?, item_name = ?, brand = ?, part_number = ?, quantity = ?, cost = ?, notes = ?
+                        WHERE id = ? AND service_record_id = ?
+                    ");
+                    $stmt->execute([$item_type_slug, $item_type_id, $item_name, $brand, $part_number, $quantity, $cost, $notes, $itemId, $serviceId]);
+                } catch (PDOException $e) {
+                    // service_items.item_type_id may not exist yet — fall back to the legacy columns
+                    $stmt = $pdo->prepare("
+                        UPDATE service_items
+                        SET item_type = ?, item_name = ?, brand = ?, part_number = ?, quantity = ?, cost = ?, notes = ?
+                        WHERE id = ? AND service_record_id = ?
+                    ");
+                    $stmt->execute([$item_type_slug, $item_name, $brand, $part_number, $quantity, $cost, $notes, $itemId, $serviceId]);
+                }
 
                 // Update total service cost
                 $stmt = $pdo->prepare("
-                    UPDATE service_records 
+                    UPDATE service_records
                     SET service_cost = (SELECT COALESCE(SUM(cost * quantity), 0) FROM service_items WHERE service_record_id = ?)
                     WHERE id = ?
                 ");
                 $stmt->execute([$serviceId, $serviceId]);
+
+                try {
+                    ServiceItemExpenseSync::upsert($pdo, [
+                        'id' => $itemId,
+                        'item_name' => $item_name,
+                        'brand' => $brand,
+                        'part_number' => $part_number,
+                        'quantity' => $quantity,
+                        'cost' => $cost,
+                        'notes' => $notes,
+                    ], $service, $itemLabel, $item_type_id);
+                } catch (PDOException $e) {
+                    // Non-fatal — the item itself already saved successfully
+                }
 
                 setFlashMessage('success', 'Item updated successfully!');
                 redirect('service-items?service_id=' . IdCodec::encode($serviceId));
@@ -128,11 +245,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 // Update total service cost
                 $stmt = $pdo->prepare("
-                    UPDATE service_records 
+                    UPDATE service_records
                     SET service_cost = (SELECT COALESCE(SUM(cost * quantity), 0) FROM service_items WHERE service_record_id = ?)
                     WHERE id = ?
                 ");
                 $stmt->execute([$serviceId, $serviceId]);
+
+                try {
+                    ServiceItemExpenseSync::remove($pdo, $itemId);
+                } catch (PDOException $e) {
+                    // Non-fatal — the item itself already deleted successfully
+                }
 
                 setFlashMessage('success', 'Item deleted successfully!');
                 redirect('service-items?service_id=' . IdCodec::encode($serviceId));
@@ -275,10 +398,10 @@ if ($flash): ?>
                         <input type="hidden" name="action" value="add_item">
                         <div class="col-md-12">
                             <label class="form-label" for="inputMake">Item Type</label>
-                            <select name="item_type" class="form-control" required>
+                            <select name="item_type_id" class="form-control" required>
                                 <option value="">Select item type...</option>
-                                <?php foreach ($itemTypes as $key => $item): ?>
-                                    <option value="<?php echo $key; ?>"><?php echo $item['label']; ?></option>
+                                <?php foreach ($allItemTypes as $it): ?>
+                                    <option value="<?php echo $it['id']; ?>"><?php echo sanitize($it['name']); ?></option>
                                 <?php endforeach; ?>
                             </select>
                         </div>
@@ -303,7 +426,7 @@ if ($flash): ?>
                                    min="1" value="1">
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label">Cost (per unit)</label>
+                            <label class="form-label">Cost per Unit (Ksh)</label>
                             <input type="number" name="cost" class="form-control"
                                    min="0" step="1" placeholder="0.00">
                         </div>
@@ -328,28 +451,32 @@ if ($flash): ?>
                     <h6 class="mb-0"><i class="fas fa-car"></i> Quick Add Common Items</h6>
                 </div>
                 <div class="card-body">
-                    <div class="btn-group" style="flex-wrap: wrap; gap: var(--spacing-sm);">
-                        <?php
-                        $commonItems = ['oil_filter', 'cabin_filter', 'air_filter', 'front_brake_pads', 'rear_brake_pads', 'spark_plugs', 'coolant', 'battery', 'tires', 'wipers'];
-                        foreach ($commonItems as $type):
-                            // Check if already added
-                            $alreadyAdded = false;
-                            foreach ($existingItems as $existing) {
-                                if ($existing['item_type'] === $type) {
-                                    $alreadyAdded = true;
-                                    break;
+                    <?php if (empty($commonItems)): ?>
+                        <p class="fs-10 text-muted mb-0">Items you've logged for this vehicle before will show up here for quick re-adding.</p>
+                    <?php else: ?>
+                        <p class="fs-10 text-600 mb-2">Based on this vehicle's service history</p>
+                        <div class="btn-group" style="flex-wrap: wrap; gap: var(--spacing-sm);">
+                            <?php foreach ($commonItems as $ci):
+                                // Check if already added
+                                $alreadyAdded = false;
+                                foreach ($existingItems as $existing) {
+                                    $existingTypeId = $existing['item_type_id'] ?? ($slugToId[$existing['item_type']] ?? null);
+                                    if ($existingTypeId === $ci['id']) {
+                                        $alreadyAdded = true;
+                                        break;
+                                    }
                                 }
-                            }
-                            ?>
-                            <button type="button"
-                                    class="btn quick-add-btn <?php echo $alreadyAdded ? 'btn-falcon-primary' : 'btn-outline'; ?>"
-                                    data-item-type="<?php echo $type; ?>"
-                                    onclick="quickAdd('<?php echo $type; ?>')">
-                                <i class="<?php echo $itemTypes[$type]['icon']; ?>"></i>
-                                <?php echo $itemTypes[$type]['label']; ?>
-                            </button>
-                        <?php endforeach; ?>
-                    </div>
+                                ?>
+                                <button type="button"
+                                        class="btn quick-add-btn <?php echo $alreadyAdded ? 'btn-falcon-primary' : 'btn-outline'; ?>"
+                                        data-item-type-id="<?php echo $ci['id']; ?>"
+                                        onclick="quickAdd(<?php echo $ci['id']; ?>)">
+                                    <i class="<?php echo SERVICE_ITEM_ICON; ?>"></i>
+                                    <?php echo sanitize($ci['label']); ?>
+                                </button>
+                            <?php endforeach; ?>
+                        </div>
+                    <?php endif; ?>
                 </div>
             </div>
         </div>
@@ -393,9 +520,9 @@ if ($flash): ?>
                                         data-bs-toggle="modal" data-bs-target="#viewItemModal<?php echo $item['id']; ?>">
                                         <td>
                                             <div class="d-flex align-center gap-1">
-                                                <i class="<?php echo $itemTypes[$item['item_type']]['icon'] ?? 'fas fa-cog'; ?>"></i>
+                                                <i class="<?php echo SERVICE_ITEM_ICON; ?>"></i>
                                                 <div>
-                                                    <strong><?php echo $itemTypes[$item['item_type']]['label'] ?? $item['item_type']; ?></strong>
+                                                    <strong><?php echo sanitize(serviceItemLabel($item, $itemTypesById, $itemTypes)); ?></strong>
                                                 </div>
                                             </div>
                                         </td>
@@ -455,7 +582,7 @@ if ($flash): ?>
                                     <div class="modal-content">
                                         <div class="modal-header">
                                             <h5 class="modal-title" id="viewItemModalLabel<?php echo $item['id']; ?>">
-                                                <i class="<?php echo $itemTypes[$item['item_type']]['icon'] ?? 'fas fa-cog'; ?> text-primary"></i>
+                                                <i class="<?php echo SERVICE_ITEM_ICON; ?> text-primary"></i>
                                                 Item Details
                                             </h5>
                                             <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
@@ -465,8 +592,8 @@ if ($flash): ?>
                                                 <div class="col-12">
                                                     <div class="rounded mb-2">
                                                         <h6 class="text-primary mb-2">
-                                                            <i class="<?php echo $itemTypes[$item['item_type']]['icon'] ?? 'fas fa-cog'; ?>"></i>
-                                                            <?php echo $itemTypes[$item['item_type']]['label'] ?? $item['item_type']; ?>
+                                                            <i class="<?php echo SERVICE_ITEM_ICON; ?>"></i>
+                                                            <?php echo sanitize(serviceItemLabel($item, $itemTypesById, $itemTypes)); ?>
                                                         </h6>
                                                         <?php if ($item['item_name']): ?>
                                                             <p class="mb-0 text-muted"><?php echo sanitize($item['item_name']); ?></p>
@@ -540,18 +667,19 @@ if ($flash): ?>
 
                                                 <div class="mb-3">
                                                     <label class="form-label">Item Type <span class="text-danger">*</span></label>
-                                                    <select name="item_type" class="form-select" required>
+                                                    <select name="item_type_id" class="form-select" required>
                                                         <option value="">Select type...</option>
-                                                        <?php foreach ($itemTypes as $key => $type): ?>
-                                                            <option value="<?php echo $key; ?>" <?php echo $item['item_type'] === $key ? 'selected' : ''; ?>>
-                                                                <?php echo $type['label']; ?>
+                                                        <?php $editSelectedId = $item['item_type_id'] ?? ($slugToId[$item['item_type']] ?? null); ?>
+                                                        <?php foreach ($allItemTypes as $it): ?>
+                                                            <option value="<?php echo $it['id']; ?>" <?php echo $editSelectedId == $it['id'] ? 'selected' : ''; ?>>
+                                                                <?php echo sanitize($it['name']); ?>
                                                             </option>
                                                         <?php endforeach; ?>
                                                     </select>
                                                 </div>
 
                                                 <div class="mb-3">
-                                                    <label class="form-label">Item Name</label>
+                                                    <label class="form-label">Item Name / Model</label>
                                                     <input type="text" name="item_name" class="form-control" value="<?php echo sanitize($item['item_name']); ?>" placeholder="e.g., Genuine Oil Filter">
                                                 </div>
 
@@ -572,7 +700,7 @@ if ($flash): ?>
                                                         <input type="number" name="quantity" class="form-control" value="<?php echo $item['quantity']; ?>" min="1" required>
                                                     </div>
                                                     <div class="col-md-6 mb-3">
-                                                        <label class="form-label">Cost (Ksh)</label>
+                                                        <label class="form-label">Cost per Unit (Ksh)</label>
                                                         <input type="number" name="cost" class="form-control" value="<?php echo $item['cost']; ?>" step="0.01" min="0">
                                                     </div>
                                                 </div>
@@ -617,8 +745,8 @@ if ($flash): ?>
 
                                                 <div class="bg-body-tertiary rounded p-3">
                                                     <h6 class="mb-2">
-                                                        <i class="<?php echo $itemTypes[$item['item_type']]['icon'] ?? 'fas fa-cog'; ?> text-danger"></i>
-                                                        <?php echo $itemTypes[$item['item_type']]['label'] ?? $item['item_type']; ?>
+                                                        <i class="<?php echo SERVICE_ITEM_ICON; ?> text-danger"></i>
+                                                        <?php echo sanitize(serviceItemLabel($item, $itemTypesById, $itemTypes)); ?>
                                                     </h6>
                                                     <?php if ($item['item_name']): ?>
                                                         <p class="mb-1 text-muted fs-10"><?php echo sanitize($item['item_name']); ?></p>
@@ -649,11 +777,11 @@ if ($flash): ?>
     </div>
 
     <script>
-        function quickAdd(itemType) {
-            const select = document.querySelector('select[name="item_type"]');
+        function quickAdd(itemTypeId) {
+            const select = document.querySelector('select[name="item_type_id"]');
             if (select) {
                 // Update select value
-                select.value = itemType;
+                select.value = itemTypeId;
 
                 // Reset all buttons to outline
                 const buttons = document.querySelectorAll('.quick-add-btn');
@@ -669,7 +797,7 @@ if ($flash): ?>
                 });
 
                 // Highlight the selected button
-                const selectedBtn = document.querySelector(`.quick-add-btn[data-item-type="${itemType}"]`);
+                const selectedBtn = document.querySelector(`.quick-add-btn[data-item-type-id="${itemTypeId}"]`);
                 if (selectedBtn) {
                     selectedBtn.classList.remove('btn-outline');
                     selectedBtn.classList.add('btn-falcon-primary');

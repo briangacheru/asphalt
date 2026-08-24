@@ -3,6 +3,8 @@ $pageTitle = 'Dashboard';
 require_once 'includes/header.php';
 
 use App\Helpers\IdCodec;
+use App\Services\SiteSettingsService;
+use App\Services\InsuranceService;
 
 // Recent services
 $stmt = $pdo->prepare("
@@ -35,7 +37,9 @@ $vehiclesNeedingService = $stmt->fetchAll();
 $stmt = $pdo->prepare("
     SELECT v.*,
            (SELECT service_date FROM service_records WHERE vehicle_id = v.id ORDER BY service_date DESC LIMIT 1) as last_service,
+           (SELECT mileage FROM service_records WHERE vehicle_id = v.id ORDER BY service_date DESC LIMIT 1) as last_service_mileage,
            (SELECT next_service_mileage FROM service_records WHERE vehicle_id = v.id ORDER BY service_date DESC LIMIT 1) as next_service,
+           (SELECT oil_interval FROM service_records WHERE vehicle_id = v.id ORDER BY service_date DESC LIMIT 1) as last_service_oil_interval,
            (SELECT fill_date FROM fuel_log WHERE vehicle_id = v.id ORDER BY fill_date DESC LIMIT 1) as last_fuel_date,
            (SELECT mileage FROM fuel_log WHERE vehicle_id = v.id ORDER BY fill_date DESC LIMIT 1) as last_fuel_mileage
     FROM vehicles v
@@ -47,32 +51,57 @@ $vehicles = $stmt->fetchAll();
 
 $pinnedVehicles = array_values(array_filter($vehicles, fn($v) => (int)$v['is_pinned'] === 1));
 
-// Most urgent maintenance schedule item per pinned vehicle
+// Most urgent maintenance schedule item per pinned vehicle (overdue or due soon)
+// Uses the same admin-configurable thresholds as the maintenance reminder cron
+// (Admin Dashboard > Reminder & Maintenance Settings)
+$defaultThresholds = ['maintenance_due_soon_km' => 1000, 'maintenance_due_soon_days' => 30];
+$thresholdsRaw = SiteSettingsService::get($pdo, 'reminder_thresholds');
+$thresholds = array_merge($defaultThresholds, $thresholdsRaw ? (json_decode($thresholdsRaw, true) ?: []) : []);
+$dueSoonKmWindow = (int) $thresholds['maintenance_due_soon_km'];
+$dueSoonDaysWindow = (int) $thresholds['maintenance_due_soon_days'];
+
 $vehicleMaintenanceAlert = [];
 foreach ($pinnedVehicles as $v) {
     $items = $pdo->prepare("SELECT * FROM maintenance_schedule WHERE vehicle_id = ?");
     $items->execute([$v['id']]);
-    $best = null;
+    $due = [];
     foreach ($items->fetchAll() as $item) {
         $kmOverdue = $item['next_due_mileage'] ? $v['current_mileage'] - $item['next_due_mileage'] : null;
-        $dateOverdue = $item['next_due_date'] ? (strtotime($item['next_due_date']) < time()) : false;
+        $daysUntilDue = $item['next_due_date'] ? (strtotime($item['next_due_date']) - time()) / 86400 : null;
 
-        if ($kmOverdue !== null && $kmOverdue > 0) {
-            $item['status'] = 'overdue';
-            $item['urgency'] = $kmOverdue;
-        } elseif ($dateOverdue) {
-            $item['status'] = 'overdue';
-            $item['urgency'] = PHP_INT_MAX;
-        } else {
-            $item['status'] = 'ok';
-            $item['urgency'] = $kmOverdue !== null ? $kmOverdue : -PHP_INT_MAX;
+        $isOverdue = ($kmOverdue !== null && $kmOverdue > 0) || ($daysUntilDue !== null && $daysUntilDue < 0);
+        $isDueSoon = !$isOverdue && (
+            ($kmOverdue !== null && $kmOverdue > -$dueSoonKmWindow) ||
+            ($daysUntilDue !== null && $daysUntilDue <= $dueSoonDaysWindow)
+        );
+
+        if (!$isOverdue && !$isDueSoon) {
+            continue;
         }
 
-        if ($best === null || $item['urgency'] > $best['urgency']) {
-            $best = $item;
-        }
+        $item['status'] = $isOverdue ? 'overdue' : 'due_soon';
+        $item['urgency'] = $kmOverdue !== null ? $kmOverdue : ($daysUntilDue !== null ? -$daysUntilDue : 0);
+        $due[] = $item;
     }
-    $vehicleMaintenanceAlert[$v['id']] = $best;
+
+    usort($due, fn($a, $b) => $b['urgency'] <=> $a['urgency']);
+
+    $vehicleMaintenanceAlert[$v['id']] = [
+        'top' => $due[0] ?? null,
+        'more' => max(0, count($due) - 1),
+    ];
+}
+
+// Current insurance policy status per vehicle (covers My Vehicles and the pinned cards)
+$insuranceStatusMeta = [
+    'expired'  => ['label' => 'Expired', 'class' => 'text-danger', 'badge' => 'bg-danger'],
+    'expiring' => ['label' => 'Expiring Soon', 'class' => 'text-warning', 'badge' => 'bg-warning'],
+    'ok'       => ['label' => 'Insured', 'class' => 'text-success', 'badge' => 'bg-success'],
+    'none'     => ['label' => 'No Policy', 'class' => 'text-600', 'badge' => 'bg-secondary'],
+];
+$vehicleInsuranceStatus = [];
+foreach (InsuranceService::statusForUser($pdo, $userId) as $row) {
+    $vehicleInsuranceStatus[$row['vehicle_id']] = $row;
 }
 
 // Quick stats for the new dashboard view
@@ -192,15 +221,24 @@ $recentServiceCount = count($recentServices);
                                             </strong>
                                         </li>
                                     <?php endif; ?>
-                                    <?php if ($alert): ?>
-                                        <li class="d-flex justify-content-between py-1">
-                                            <span class="text-600">Maintenance</span>
-                                            <strong class="<?php echo $alert['status'] === 'overdue' ? 'text-danger' : 'text-success'; ?>">
-                                                <?php echo sanitize($alert['item_type']); ?>
-                                                <?php echo $alert['status'] === 'overdue' ? ' due' : ' ok'; ?>
+                                    <li class="d-flex justify-content-between border-bottom py-1">
+                                        <span class="text-600">Maintenance</span>
+                                        <?php if ($alert && $alert['top']): ?>
+                                            <strong class="<?php echo $alert['top']['status'] === 'overdue' ? 'text-danger' : 'text-warning'; ?>">
+                                                <?php echo sanitize($alert['top']['item_type']); ?>
+                                                <?php echo $alert['top']['status'] === 'overdue' ? ' overdue' : ' due soon'; ?>
+                                                <?php echo $alert['more'] > 0 ? ' (+' . $alert['more'] . ' more)' : ''; ?>
                                             </strong>
-                                        </li>
-                                    <?php endif; ?>
+                                        <?php else: ?>
+                                            <strong class="text-success">OK</strong>
+                                        <?php endif; ?>
+                                    </li>
+                                    <?php $insurance = $vehicleInsuranceStatus[$vehicle['id']] ?? null;
+                                          $insMeta = $insuranceStatusMeta[$insurance['status'] ?? 'none']; ?>
+                                    <li class="d-flex justify-content-between py-1">
+                                        <span class="text-600">Insurance</span>
+                                        <strong class="<?php echo $insMeta['class']; ?>"><?php echo $insMeta['label']; ?></strong>
+                                    </li>
                                 </ul>
 
                                 <a href="vehicle-details?id=<?php echo IdCodec::encode($vehicle['id']); ?>" class="btn btn-sm btn-outline-primary mt-2 fs-10">
@@ -433,6 +471,12 @@ $recentServiceCount = count($recentServices);
                                             <?php endif; ?>
                                         </p>
 
+                                        <?php $insurance = $vehicleInsuranceStatus[$vehicle['id']] ?? null;
+                                              $insMeta = $insuranceStatusMeta[$insurance['status'] ?? 'none']; ?>
+                                        <span class="badge <?php echo $insMeta['badge']; ?> bg-opacity-75 mb-2" style="font-size:.65rem;">
+                                            <i class="fas fa-shield-alt me-1"></i><?php echo $insMeta['label']; ?>
+                                        </span>
+
                                         <?php if ($vehicle['next_service']): ?>
                                             <hr class="my-2">
                                             <div class="mb-2">
@@ -552,9 +596,10 @@ $recentServiceCount = count($recentServices);
                                         <?php endif; ?>
                                     </p>
 
-                                    <?php if ($vehicle['next_service']):
+                                    <?php if ($vehicle['next_service'] && $vehicle['last_service_oil_interval']):
                                         $kmRemaining = $vehicle['next_service'] - $vehicle['current_mileage'];
-                                        $pct = max(0, min(100, 100 - ($kmRemaining / max($vehicle['next_service'], 1) * 100)));
+                                        $kmUsed = $vehicle['current_mileage'] - $vehicle['last_service_mileage'];
+                                        $pct = min(100, max(0, ($kmUsed / $vehicle['last_service_oil_interval']) * 100));
                                         $ringClass = $kmRemaining <= 0 ? 'text-danger' : ($kmRemaining <= 1000 ? 'text-warning' : 'text-success');
                                     ?>
                                         <p class="fs-10 mb-1 text-600">Service progress</p>
@@ -581,15 +626,24 @@ $recentServiceCount = count($recentServices);
                                                     <?php echo $vehicle['last_fuel_date'] ? date('M d, Y', strtotime($vehicle['last_fuel_date'])) : 'No fuel logs'; ?>
                                                 </strong>
                                             </li>
-                                            <?php if ($alert): ?>
-                                                <li class="d-flex justify-content-between py-1">
-                                                    <span class="text-600">Maintenance</span>
-                                                    <strong class="<?php echo $alert['status'] === 'overdue' ? 'text-danger' : 'text-success'; ?>">
-                                                        <?php echo sanitize($alert['item_type']); ?>
-                                                        <?php echo $alert['status'] === 'overdue' ? ' due' : ' ok'; ?>
+                                            <li class="d-flex justify-content-between border-bottom py-1">
+                                                <span class="text-600">Maintenance</span>
+                                                <?php if ($alert && $alert['top']): ?>
+                                                    <strong class="<?php echo $alert['top']['status'] === 'overdue' ? 'text-danger' : 'text-warning'; ?>">
+                                                        <?php echo sanitize($alert['top']['item_type']); ?>
+                                                        <?php echo $alert['top']['status'] === 'overdue' ? ' overdue' : ' due soon'; ?>
+                                                        <?php echo $alert['more'] > 0 ? ' (+' . $alert['more'] . ' more)' : ''; ?>
                                                     </strong>
-                                                </li>
-                                            <?php endif; ?>
+                                                <?php else: ?>
+                                                    <strong class="text-success">OK</strong>
+                                                <?php endif; ?>
+                                            </li>
+                                            <?php $insurance = $vehicleInsuranceStatus[$vehicle['id']] ?? null;
+                                                  $insMeta = $insuranceStatusMeta[$insurance['status'] ?? 'none']; ?>
+                                            <li class="d-flex justify-content-between py-1">
+                                                <span class="text-600">Insurance</span>
+                                                <strong class="<?php echo $insMeta['class']; ?>"><?php echo $insMeta['label']; ?></strong>
+                                            </li>
                                         </ul>
                                     </div>
 
@@ -782,9 +836,15 @@ $recentServiceCount = count($recentServices);
                                                             </strong>
                                                         </li>
                                                         <?php endif; ?>
-                                                        <li class="d-flex justify-content-between py-1">
+                                                        <li class="d-flex justify-content-between border-bottom py-1">
                                                             <span class="text-600">Last Service</span>
                                                             <strong><?php echo $vehicle['last_service'] ? date('M d, Y', strtotime($vehicle['last_service'])) : 'No service yet'; ?></strong>
+                                                        </li>
+                                                        <?php $insurance = $vehicleInsuranceStatus[$vehicle['id']] ?? null;
+                                                              $insMeta = $insuranceStatusMeta[$insurance['status'] ?? 'none']; ?>
+                                                        <li class="d-flex justify-content-between py-1">
+                                                            <span class="text-600">Insurance</span>
+                                                            <strong class="<?php echo $insMeta['class']; ?>"><?php echo $insMeta['label']; ?></strong>
                                                         </li>
                                                     </ul>
                                                     <a href="vehicle-details?id=<?php echo IdCodec::encode($vehicle['id']); ?>" class="btn btn-sm btn-primary fs-10">

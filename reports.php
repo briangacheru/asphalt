@@ -21,71 +21,144 @@ if ($vehicleFilter) {
 }
 
 // Overall Statistics
-$overallStats = $pdo->query("
-    SELECT
-        (SELECT COUNT(*) FROM vehicles WHERE is_active = 1 AND user_id = " . (int)$userId . ") as total_vehicles,
-        (SELECT COUNT(*) FROM service_records WHERE vehicle_id IN ($userVehicleIds)) as total_services,
-        (SELECT COALESCE(SUM(service_cost), 0) FROM service_records WHERE vehicle_id IN ($userVehicleIds)) as total_service_cost,
-        (SELECT COALESCE(SUM(total_cost), 0) FROM fuel_log WHERE vehicle_id IN ($userVehicleIds)) as total_fuel_cost,
-        (SELECT COALESCE(SUM(amount), 0) FROM expenses WHERE vehicle_id IN ($userVehicleIds)) as total_expenses,
-        (SELECT COALESCE(SUM(liters), 0) FROM fuel_log WHERE vehicle_id IN ($userVehicleIds)) as total_fuel
-")->fetch();
+// service_item_id-linked expense rows are excluded below — they mirror a
+// service_items row whose cost is already counted in total_service_cost, so
+// including them here would double-count that spend.
+try {
+    $overallStats = $pdo->query("
+        SELECT
+            (SELECT COUNT(*) FROM vehicles WHERE is_active = 1 AND user_id = " . (int)$userId . ") as total_vehicles,
+            (SELECT COUNT(*) FROM service_records WHERE vehicle_id IN ($userVehicleIds)) as total_services,
+            (SELECT COALESCE(SUM(service_cost), 0) FROM service_records WHERE vehicle_id IN ($userVehicleIds)) as total_service_cost,
+            (SELECT COALESCE(SUM(total_cost), 0) FROM fuel_log WHERE vehicle_id IN ($userVehicleIds)) as total_fuel_cost,
+            (SELECT COALESCE(SUM(amount), 0) FROM expenses WHERE vehicle_id IN ($userVehicleIds) AND service_item_id IS NULL) as total_expenses,
+            (SELECT COALESCE(SUM(liters), 0) FROM fuel_log WHERE vehicle_id IN ($userVehicleIds)) as total_fuel
+    ")->fetch();
+} catch (PDOException $e) {
+    // expenses.service_item_id may not exist yet on environments that haven't picked up the schema change
+    $overallStats = $pdo->query("
+        SELECT
+            (SELECT COUNT(*) FROM vehicles WHERE is_active = 1 AND user_id = " . (int)$userId . ") as total_vehicles,
+            (SELECT COUNT(*) FROM service_records WHERE vehicle_id IN ($userVehicleIds)) as total_services,
+            (SELECT COALESCE(SUM(service_cost), 0) FROM service_records WHERE vehicle_id IN ($userVehicleIds)) as total_service_cost,
+            (SELECT COALESCE(SUM(total_cost), 0) FROM fuel_log WHERE vehicle_id IN ($userVehicleIds)) as total_fuel_cost,
+            (SELECT COALESCE(SUM(amount), 0) FROM expenses WHERE vehicle_id IN ($userVehicleIds)) as total_expenses,
+            (SELECT COALESCE(SUM(liters), 0) FROM fuel_log WHERE vehicle_id IN ($userVehicleIds)) as total_fuel
+    ")->fetch();
+}
 
 // Year Statistics
-$yearStats = $pdo->query("
-    SELECT 
-        (SELECT COALESCE(SUM(service_cost), 0) FROM service_records WHERE YEAR(service_date) = $yearFilter $whereVehicle) as service_cost,
-        (SELECT COUNT(*) FROM service_records WHERE YEAR(service_date) = $yearFilter $whereVehicle) as service_count,
-        (SELECT COALESCE(SUM(total_cost), 0) FROM fuel_log WHERE YEAR(fill_date) = $yearFilter $whereVehicle) as fuel_cost,
-        (SELECT COALESCE(SUM(liters), 0) FROM fuel_log WHERE YEAR(fill_date) = $yearFilter $whereVehicle) as fuel_liters,
-        (SELECT COALESCE(SUM(amount), 0) FROM expenses WHERE YEAR(expense_date) = $yearFilter $whereVehicle) as expense_cost
-")->fetch();
+try {
+    $yearStats = $pdo->query("
+        SELECT
+            (SELECT COALESCE(SUM(service_cost), 0) FROM service_records WHERE YEAR(service_date) = $yearFilter $whereVehicle) as service_cost,
+            (SELECT COUNT(*) FROM service_records WHERE YEAR(service_date) = $yearFilter $whereVehicle) as service_count,
+            (SELECT COALESCE(SUM(total_cost), 0) FROM fuel_log WHERE YEAR(fill_date) = $yearFilter $whereVehicle) as fuel_cost,
+            (SELECT COALESCE(SUM(liters), 0) FROM fuel_log WHERE YEAR(fill_date) = $yearFilter $whereVehicle) as fuel_liters,
+            (SELECT COALESCE(SUM(amount), 0) FROM expenses WHERE YEAR(expense_date) = $yearFilter $whereVehicle AND service_item_id IS NULL) as expense_cost
+    ")->fetch();
+} catch (PDOException $e) {
+    $yearStats = $pdo->query("
+        SELECT
+            (SELECT COALESCE(SUM(service_cost), 0) FROM service_records WHERE YEAR(service_date) = $yearFilter $whereVehicle) as service_cost,
+            (SELECT COUNT(*) FROM service_records WHERE YEAR(service_date) = $yearFilter $whereVehicle) as service_count,
+            (SELECT COALESCE(SUM(total_cost), 0) FROM fuel_log WHERE YEAR(fill_date) = $yearFilter $whereVehicle) as fuel_cost,
+            (SELECT COALESCE(SUM(liters), 0) FROM fuel_log WHERE YEAR(fill_date) = $yearFilter $whereVehicle) as fuel_liters,
+            (SELECT COALESCE(SUM(amount), 0) FROM expenses WHERE YEAR(expense_date) = $yearFilter $whereVehicle) as expense_cost
+    ")->fetch();
+}
 
 $yearStats['total'] = $yearStats['service_cost'] + $yearStats['fuel_cost'] + $yearStats['expense_cost'];
 
 // Monthly breakdown for the year
-$monthlyData = $pdo->query("
-    SELECT 
-        months.month,
-        COALESCE(services.cost, 0) as service_cost,
-        COALESCE(fuel.cost, 0) as fuel_cost,
-        COALESCE(expenses.cost, 0) as expense_cost
-    FROM (
-        SELECT 1 as month UNION SELECT 2 UNION SELECT 3 UNION SELECT 4 UNION SELECT 5 UNION SELECT 6
-        UNION SELECT 7 UNION SELECT 8 UNION SELECT 9 UNION SELECT 10 UNION SELECT 11 UNION SELECT 12
-    ) months
-    LEFT JOIN (
-        SELECT MONTH(service_date) as month, SUM(service_cost) as cost 
-        FROM service_records WHERE YEAR(service_date) = $yearFilter $whereVehicle GROUP BY MONTH(service_date)
-    ) services ON months.month = services.month
-    LEFT JOIN (
-        SELECT MONTH(fill_date) as month, SUM(total_cost) as cost 
-        FROM fuel_log WHERE YEAR(fill_date) = $yearFilter $whereVehicle GROUP BY MONTH(fill_date)
-    ) fuel ON months.month = fuel.month
-    LEFT JOIN (
-        SELECT MONTH(expense_date) as month, SUM(amount) as cost 
-        FROM expenses WHERE YEAR(expense_date) = $yearFilter $whereVehicle GROUP BY MONTH(expense_date)
-    ) expenses ON months.month = expenses.month
-    ORDER BY months.month
-")->fetchAll();
+try {
+    $monthlyData = $pdo->query("
+        SELECT
+            months.month,
+            COALESCE(services.cost, 0) as service_cost,
+            COALESCE(fuel.cost, 0) as fuel_cost,
+            COALESCE(expenses.cost, 0) as expense_cost
+        FROM (
+            SELECT 1 as month UNION SELECT 2 UNION SELECT 3 UNION SELECT 4 UNION SELECT 5 UNION SELECT 6
+            UNION SELECT 7 UNION SELECT 8 UNION SELECT 9 UNION SELECT 10 UNION SELECT 11 UNION SELECT 12
+        ) months
+        LEFT JOIN (
+            SELECT MONTH(service_date) as month, SUM(service_cost) as cost
+            FROM service_records WHERE YEAR(service_date) = $yearFilter $whereVehicle GROUP BY MONTH(service_date)
+        ) services ON months.month = services.month
+        LEFT JOIN (
+            SELECT MONTH(fill_date) as month, SUM(total_cost) as cost
+            FROM fuel_log WHERE YEAR(fill_date) = $yearFilter $whereVehicle GROUP BY MONTH(fill_date)
+        ) fuel ON months.month = fuel.month
+        LEFT JOIN (
+            SELECT MONTH(expense_date) as month, SUM(amount) as cost
+            FROM expenses WHERE YEAR(expense_date) = $yearFilter $whereVehicle AND service_item_id IS NULL GROUP BY MONTH(expense_date)
+        ) expenses ON months.month = expenses.month
+        ORDER BY months.month
+    ")->fetchAll();
+} catch (PDOException $e) {
+    $monthlyData = $pdo->query("
+        SELECT
+            months.month,
+            COALESCE(services.cost, 0) as service_cost,
+            COALESCE(fuel.cost, 0) as fuel_cost,
+            COALESCE(expenses.cost, 0) as expense_cost
+        FROM (
+            SELECT 1 as month UNION SELECT 2 UNION SELECT 3 UNION SELECT 4 UNION SELECT 5 UNION SELECT 6
+            UNION SELECT 7 UNION SELECT 8 UNION SELECT 9 UNION SELECT 10 UNION SELECT 11 UNION SELECT 12
+        ) months
+        LEFT JOIN (
+            SELECT MONTH(service_date) as month, SUM(service_cost) as cost
+            FROM service_records WHERE YEAR(service_date) = $yearFilter $whereVehicle GROUP BY MONTH(service_date)
+        ) services ON months.month = services.month
+        LEFT JOIN (
+            SELECT MONTH(fill_date) as month, SUM(total_cost) as cost
+            FROM fuel_log WHERE YEAR(fill_date) = $yearFilter $whereVehicle GROUP BY MONTH(fill_date)
+        ) fuel ON months.month = fuel.month
+        LEFT JOIN (
+            SELECT MONTH(expense_date) as month, SUM(amount) as cost
+            FROM expenses WHERE YEAR(expense_date) = $yearFilter $whereVehicle GROUP BY MONTH(expense_date)
+        ) expenses ON months.month = expenses.month
+        ORDER BY months.month
+    ")->fetchAll();
+}
 
-// Service items breakdown
-$serviceItems = $pdo->query("
-    SELECT 
-        si.item_type,
-        COUNT(*) as count,
-        COALESCE(SUM(si.cost * si.quantity), 0) as total_cost
-    FROM service_items si
-    JOIN service_records sr ON si.service_record_id = sr.id
-    WHERE YEAR(sr.service_date) = $yearFilter $whereVehicle
-    GROUP BY si.item_type
-    ORDER BY count DESC
-    LIMIT 10
-")->fetchAll();
+// Service items breakdown — labeled via item_type_id (the FK) when a row has one,
+// falling back to the legacy item_type text for older rows saved before it existed.
+try {
+    $serviceItems = $pdo->query("
+        SELECT
+            COALESCE(it.name, si.item_type) as item_type_label,
+            COUNT(*) as count,
+            COALESCE(SUM(si.cost * si.quantity), 0) as total_cost
+        FROM service_items si
+        JOIN service_records sr ON si.service_record_id = sr.id
+        LEFT JOIN item_types it ON si.item_type_id = it.id
+        WHERE YEAR(sr.service_date) = $yearFilter $whereVehicle
+        GROUP BY COALESCE(it.name, si.item_type)
+        ORDER BY count DESC
+        LIMIT 10
+    ")->fetchAll();
+} catch (PDOException $e) {
+    // service_items.item_type_id may not exist yet on environments that haven't picked up the schema change
+    $serviceItems = $pdo->query("
+        SELECT
+            si.item_type as item_type_label,
+            COUNT(*) as count,
+            COALESCE(SUM(si.cost * si.quantity), 0) as total_cost
+        FROM service_items si
+        JOIN service_records sr ON si.service_record_id = sr.id
+        WHERE YEAR(sr.service_date) = $yearFilter $whereVehicle
+        GROUP BY si.item_type
+        ORDER BY count DESC
+        LIMIT 10
+    ")->fetchAll();
+}
 
 // Expense categories
 $expenseCategories = $pdo->query("
     SELECT
+        ec.id,
         ec.name,
         ec.icon,
         COUNT(e.id) as count,
@@ -96,22 +169,57 @@ $expenseCategories = $pdo->query("
     ORDER BY total DESC
 ")->fetchAll();
 
+// Individual transactions per category, for the Expense Categories breakdown modals
+$itemTypesById = [];
+foreach (ItemTypeService::all($pdo) as $it) {
+    $itemTypesById[$it['id']] = $it['name'];
+}
+$categoryTxStmt = $pdo->query("
+    SELECT e.*, v.make, v.model
+    FROM expenses e
+    JOIN vehicles v ON e.vehicle_id = v.id
+    WHERE YEAR(e.expense_date) = $yearFilter AND e.vehicle_id IN ($userVehicleIds) " . ($vehicleFilter ? "AND e.vehicle_id = $vehicleFilter" : "") . "
+    ORDER BY e.expense_date DESC
+");
+$categoryTransactions = [];
+foreach ($categoryTxStmt->fetchAll() as $tx) {
+    $categoryTransactions[$tx['category_id']][] = $tx;
+}
+
 // Per vehicle stats
-$vehicleStats = $pdo->query("
-    SELECT
-        v.id, v.make, v.model, v.year,
-        COALESCE((SELECT SUM(service_cost) FROM service_records WHERE vehicle_id = v.id AND YEAR(service_date) = $yearFilter), 0) as service_cost,
-        COALESCE((SELECT SUM(total_cost) FROM fuel_log WHERE vehicle_id = v.id AND YEAR(fill_date) = $yearFilter), 0) as fuel_cost,
-        COALESCE((SELECT SUM(amount) FROM expenses WHERE vehicle_id = v.id AND YEAR(expense_date) = $yearFilter), 0) as expense_cost,
-        COALESCE((SELECT SUM(liters) FROM fuel_log WHERE vehicle_id = v.id AND YEAR(fill_date) = $yearFilter), 0) as fuel_liters
-    FROM vehicles v
-    WHERE v.is_active = 1 AND v.user_id = " . (int)$userId . "
-    ORDER BY (
-        COALESCE((SELECT SUM(service_cost) FROM service_records WHERE vehicle_id = v.id AND YEAR(service_date) = $yearFilter), 0) +
-        COALESCE((SELECT SUM(total_cost) FROM fuel_log WHERE vehicle_id = v.id AND YEAR(fill_date) = $yearFilter), 0) +
-        COALESCE((SELECT SUM(amount) FROM expenses WHERE vehicle_id = v.id AND YEAR(expense_date) = $yearFilter), 0)
-    ) DESC
-")->fetchAll();
+try {
+    $vehicleStats = $pdo->query("
+        SELECT
+            v.id, v.make, v.model, v.year,
+            COALESCE((SELECT SUM(service_cost) FROM service_records WHERE vehicle_id = v.id AND YEAR(service_date) = $yearFilter), 0) as service_cost,
+            COALESCE((SELECT SUM(total_cost) FROM fuel_log WHERE vehicle_id = v.id AND YEAR(fill_date) = $yearFilter), 0) as fuel_cost,
+            COALESCE((SELECT SUM(amount) FROM expenses WHERE vehicle_id = v.id AND YEAR(expense_date) = $yearFilter AND service_item_id IS NULL), 0) as expense_cost,
+            COALESCE((SELECT SUM(liters) FROM fuel_log WHERE vehicle_id = v.id AND YEAR(fill_date) = $yearFilter), 0) as fuel_liters
+        FROM vehicles v
+        WHERE v.is_active = 1 AND v.user_id = " . (int)$userId . "
+        ORDER BY (
+            COALESCE((SELECT SUM(service_cost) FROM service_records WHERE vehicle_id = v.id AND YEAR(service_date) = $yearFilter), 0) +
+            COALESCE((SELECT SUM(total_cost) FROM fuel_log WHERE vehicle_id = v.id AND YEAR(fill_date) = $yearFilter), 0) +
+            COALESCE((SELECT SUM(amount) FROM expenses WHERE vehicle_id = v.id AND YEAR(expense_date) = $yearFilter AND service_item_id IS NULL), 0)
+        ) DESC
+    ")->fetchAll();
+} catch (PDOException $e) {
+    $vehicleStats = $pdo->query("
+        SELECT
+            v.id, v.make, v.model, v.year,
+            COALESCE((SELECT SUM(service_cost) FROM service_records WHERE vehicle_id = v.id AND YEAR(service_date) = $yearFilter), 0) as service_cost,
+            COALESCE((SELECT SUM(total_cost) FROM fuel_log WHERE vehicle_id = v.id AND YEAR(fill_date) = $yearFilter), 0) as fuel_cost,
+            COALESCE((SELECT SUM(amount) FROM expenses WHERE vehicle_id = v.id AND YEAR(expense_date) = $yearFilter), 0) as expense_cost,
+            COALESCE((SELECT SUM(liters) FROM fuel_log WHERE vehicle_id = v.id AND YEAR(fill_date) = $yearFilter), 0) as fuel_liters
+        FROM vehicles v
+        WHERE v.is_active = 1 AND v.user_id = " . (int)$userId . "
+        ORDER BY (
+            COALESCE((SELECT SUM(service_cost) FROM service_records WHERE vehicle_id = v.id AND YEAR(service_date) = $yearFilter), 0) +
+            COALESCE((SELECT SUM(total_cost) FROM fuel_log WHERE vehicle_id = v.id AND YEAR(fill_date) = $yearFilter), 0) +
+            COALESCE((SELECT SUM(amount) FROM expenses WHERE vehicle_id = v.id AND YEAR(expense_date) = $yearFilter), 0)
+        ) DESC
+    ")->fetchAll();
+}
 
 $monthNames = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
@@ -462,7 +570,7 @@ unset($p);
                                         <tr>
                                             <td>
                                                 <i class="fas fa-wrench text-muted me-2"></i>
-                                                <?php echo ucwords(str_replace('_', ' ', $si['item_type'])); ?>
+                                                <?php echo sanitize(ucwords(str_replace('_', ' ', $si['item_type_label']))); ?>
                                             </td>
                                             <td class="text-center">
                                                 <span class="badge bg-secondary"><?php echo $si['count']; ?></span>
@@ -580,7 +688,7 @@ unset($p);
                     <div class="row g-3">
                         <?php foreach ($expenseCategories as $ec): if ($ec['total'] > 0): ?>
                             <div class="col-md-6 col-lg-4 col-xl-3">
-                                <div class="card h-100">
+                                <div class="card h-100 cursor-pointer hover-lift" role="button" tabindex="0" data-bs-toggle="modal" data-bs-target="#categoryModal<?php echo $ec['id']; ?>">
                                     <div class="card-body">
                                         <div class="d-flex align-items-center mb-2">
                                             <div class="bg-primary bg-opacity-10 text-primary rounded p-2 me-2">
@@ -597,6 +705,64 @@ unset($p);
                             </div>
                         <?php endif; endforeach; ?>
                     </div>
+
+                    <?php foreach ($expenseCategories as $ec): if ($ec['total'] > 0):
+                        $txs = $categoryTransactions[$ec['id']] ?? [];
+                    ?>
+                        <div class="modal fade" id="categoryModal<?php echo $ec['id']; ?>" tabindex="-1" aria-labelledby="categoryModalLabel<?php echo $ec['id']; ?>" aria-hidden="true">
+                            <div class="modal-dialog modal-lg modal-dialog-scrollable">
+                                <div class="modal-content">
+                                    <div class="modal-header">
+                                        <h5 class="modal-title" id="categoryModalLabel<?php echo $ec['id']; ?>">
+                                            <i class="fas <?php echo sanitize($ec['icon']); ?> me-2"></i><?php echo sanitize($ec['name']); ?>
+                                            <span class="text-muted fs-10">(<?php echo $yearFilter; ?>)</span>
+                                        </h5>
+                                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                    </div>
+                                    <div class="modal-body">
+                                        <?php if (empty($txs)): ?>
+                                            <p class="text-muted text-center py-3 mb-0">No transactions in this category.</p>
+                                        <?php else: ?>
+                                            <div class="table-responsive">
+                                                <table class="table table-sm table-hover align-middle mb-0">
+                                                    <thead class="table-light">
+                                                        <tr>
+                                                            <th>Date</th>
+                                                            <th>Vehicle</th>
+                                                            <th>Description</th>
+                                                            <th class="text-end">Amount</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                    <?php foreach ($txs as $tx):
+                                                        $txItemLabel = !empty($tx['item_type_id']) && isset($itemTypesById[$tx['item_type_id']]) ? $itemTypesById[$tx['item_type_id']] : null;
+                                                        $txDescription = $tx['description'] ?: ($txItemLabel ?: $tx['item_name']);
+                                                    ?>
+                                                        <tr>
+                                                            <td class="text-nowrap"><?php echo formatDate($tx['expense_date']); ?></td>
+                                                            <td><?php echo sanitize($tx['make'] . ' ' . $tx['model']); ?></td>
+                                                            <td><?php echo sanitize($txDescription ?: '—'); ?></td>
+                                                            <td class="text-end"><strong>Ksh<?php echo formatNumber($tx['amount']); ?></strong></td>
+                                                        </tr>
+                                                    <?php endforeach; ?>
+                                                    </tbody>
+                                                    <tfoot>
+                                                        <tr>
+                                                            <td colspan="3" class="text-end"><strong>Total</strong></td>
+                                                            <td class="text-end"><strong>Ksh<?php echo formatNumber($ec['total']); ?></strong></td>
+                                                        </tr>
+                                                    </tfoot>
+                                                </table>
+                                            </div>
+                                        <?php endif; ?>
+                                    </div>
+                                    <div class="modal-footer">
+                                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    <?php endif; endforeach; ?>
                 <?php endif; ?>
             </div>
         </div>

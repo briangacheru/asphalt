@@ -3,7 +3,6 @@ $pageTitle = 'Maintenance Schedule';
 require_once 'includes/header.php';
 
 use App\Helpers\IdCodec;
-use App\Services\SiteSettingsService;
 use App\Services\PartMaintenanceSyncService;
 
 $vehiclesStmt = $pdo->prepare("SELECT id, make, model, year FROM vehicles WHERE is_active = 1 AND user_id = ? ORDER BY make, model");
@@ -11,67 +10,9 @@ $vehiclesStmt->execute([$userId]);
 $vehicles = $vehiclesStmt->fetchAll();
 $vehicleFilter = IdCodec::decode($_GET['vehicle_id'] ?? null);
 
-// Default maintenance items with recommended intervals — admin-configurable
-// (Admin Dashboard > Reminder & Maintenance Settings), falls back to these defaults
-$fallbackDefaultItems = [
-    'Engine Oil & Filter' => ['km' => 10000, 'months' => 12],
-    'Air Filter' => ['km' => 20000, 'months' => 24],
-    'Cabin Filter' => ['km' => 15000, 'months' => 12],
-    'Spark Plugs' => ['km' => 40000, 'months' => 48],
-    'Brake Fluid' => ['km' => 40000, 'months' => 24],
-    'Coolant' => ['km' => 50000, 'months' => 36],
-    'Transmission Fluid' => ['km' => 60000, 'months' => 48],
-    'Power Steering Fluid' => ['km' => 50000, 'months' => 36],
-    'Timing Belt' => ['km' => 100000, 'months' => 72],
-    'Serpentine Belt' => ['km' => 80000, 'months' => 60],
-    'Battery' => ['km' => null, 'months' => 48],
-    'Front Brake Pads' => ['km' => 50000, 'months' => null],
-    'Rear Brake Pads' => ['km' => 60000, 'months' => null],
-    'Tires' => ['km' => 50000, 'months' => 48],
-    'Wiper Blades' => ['km' => null, 'months' => 12],
-];
-$presetsRaw = SiteSettingsService::get($pdo, 'maintenance_presets');
-$defaultItems = $presetsRaw ? (json_decode($presetsRaw, true) ?: $fallbackDefaultItems) : $fallbackDefaultItems;
-
 // Handle form submissions
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
-
-    if ($action === 'add_schedule') {
-        if (!verifyCSRFToken($_POST['csrf_token'] ?? '')) {
-            setFlashMessage('danger', 'Invalid security token. Please try again.');
-            redirect('maintenance-schedule' . ($vehicleFilter ? '?vehicle_id=' . IdCodec::encode($vehicleFilter) : ''));
-        }
-
-        $vehicle_id = (int)$_POST['vehicle_id'];
-        $item_type = sanitize($_POST['item_type']);
-        $interval_km = !empty($_POST['interval_km']) ? (int)$_POST['interval_km'] : null;
-        $interval_months = !empty($_POST['interval_months']) ? (int)$_POST['interval_months'] : null;
-        $last_replaced_date = $_POST['last_replaced_date'] ?: null;
-        $last_replaced_mileage = !empty($_POST['last_replaced_mileage']) ? (int)$_POST['last_replaced_mileage'] : null;
-        $priority = sanitize($_POST['priority'] ?? 'medium');
-        $notes = sanitize($_POST['notes'] ?? '');
-
-        // Calculate next due
-        $next_due_mileage = $last_replaced_mileage && $interval_km ? $last_replaced_mileage + $interval_km : null;
-        $next_due_date = $last_replaced_date && $interval_months ? date('Y-m-d', strtotime("+$interval_months months", strtotime($last_replaced_date))) : null;
-
-        $ownStmt = $pdo->prepare("SELECT id FROM vehicles WHERE id = ? AND user_id = ?");
-        $ownStmt->execute([$vehicle_id, $userId]);
-
-        if (!$ownStmt->fetch()) {
-            setFlashMessage('danger', 'Vehicle not found.');
-        } else {
-            try {
-                $stmt = $pdo->prepare("INSERT INTO maintenance_schedule (vehicle_id, item_type, interval_km, interval_months, last_replaced_date, last_replaced_mileage, next_due_mileage, next_due_date, priority, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-                $stmt->execute([$vehicle_id, $item_type, $interval_km, $interval_months, $last_replaced_date, $last_replaced_mileage, $next_due_mileage, $next_due_date, $priority, $notes]);
-                setFlashMessage('success', 'Maintenance item added successfully!');
-            } catch (PDOException $e) {
-                setFlashMessage('danger', 'Error: ' . $e->getMessage());
-            }
-        }
-        redirect('maintenance-schedule' . ($vehicleFilter ? '?vehicle_id=' . IdCodec::encode($vehicleFilter) : ''));
-    }
 
     if ($action === 'edit_schedule') {
         if (!verifyCSRFToken($_POST['csrf_token'] ?? '')) {
@@ -80,74 +21,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         $id = (int)$_POST['schedule_id'];
-        $vehicle_id = (int)$_POST['vehicle_id'];
-        $item_type = sanitize($_POST['item_type']);
         $interval_km = !empty($_POST['interval_km']) ? (int)$_POST['interval_km'] : null;
         $interval_months = !empty($_POST['interval_months']) ? (int)$_POST['interval_months'] : null;
-        $last_replaced_date = $_POST['last_replaced_date'] ?: null;
-        $last_replaced_mileage = !empty($_POST['last_replaced_mileage']) ? (int)$_POST['last_replaced_mileage'] : null;
         $priority = sanitize($_POST['priority'] ?? 'medium');
-        $notes = sanitize($_POST['notes'] ?? '');
 
-        // Recalculate next due
-        $next_due_mileage = $last_replaced_mileage && $interval_km ? $last_replaced_mileage + $interval_km : null;
-        $next_due_date = $last_replaced_date && $interval_months ? date('Y-m-d', strtotime("+$interval_months months", strtotime($last_replaced_date))) : null;
-
+        // Vehicle, item type, last-replaced info, and notes come from Expenses/the
+        // auto-sync and aren't editable here — only interval and priority are, so
+        // those other fields are read from the existing row rather than trusted from POST.
         $ownScheduleStmt = $pdo->prepare("
-            SELECT ms.id FROM maintenance_schedule ms
-            JOIN vehicles v ON ms.vehicle_id = v.id
-            WHERE ms.id = ? AND v.user_id = ?
-        ");
-        $ownScheduleStmt->execute([$id, $userId]);
-
-        $ownVehicleStmt = $pdo->prepare("SELECT id FROM vehicles WHERE id = ? AND user_id = ?");
-        $ownVehicleStmt->execute([$vehicle_id, $userId]);
-
-        if (!$ownScheduleStmt->fetch() || !$ownVehicleStmt->fetch()) {
-            setFlashMessage('danger', 'Maintenance item not found.');
-        } else {
-            try {
-                $stmt = $pdo->prepare("UPDATE maintenance_schedule SET vehicle_id = ?, item_type = ?, interval_km = ?, interval_months = ?, last_replaced_date = ?, last_replaced_mileage = ?, next_due_mileage = ?, next_due_date = ?, priority = ?, notes = ? WHERE id = ?");
-                $stmt->execute([$vehicle_id, $item_type, $interval_km, $interval_months, $last_replaced_date, $last_replaced_mileage, $next_due_mileage, $next_due_date, $priority, $notes, $id]);
-                setFlashMessage('success', 'Maintenance item updated successfully!');
-            } catch (PDOException $e) {
-                setFlashMessage('danger', 'Error: ' . $e->getMessage());
-            }
-        }
-        redirect('maintenance-schedule' . ($vehicleFilter ? '?vehicle_id=' . IdCodec::encode($vehicleFilter) : ''));
-    }
-
-    if ($action === 'mark_done') {
-        if (!verifyCSRFToken($_POST['csrf_token'] ?? '')) {
-            setFlashMessage('danger', 'Invalid security token. Please try again.');
-            redirect('maintenance-schedule' . ($vehicleFilter ? '?vehicle_id=' . IdCodec::encode($vehicleFilter) : ''));
-        }
-
-        $id = (int)$_POST['schedule_id'];
-        $new_mileage = (int)$_POST['new_mileage'];
-        $new_date = date('Y-m-d');
-
-        $stmt = $pdo->prepare("
             SELECT ms.* FROM maintenance_schedule ms
             JOIN vehicles v ON ms.vehicle_id = v.id
             WHERE ms.id = ? AND v.user_id = ?
         ");
-        $stmt->execute([$id, $userId]);
-        $item = $stmt->fetch();
+        $ownScheduleStmt->execute([$id, $userId]);
+        $existing = $ownScheduleStmt->fetch();
 
-        if ($item) {
-            $next_due_mileage = $item['interval_km'] ? $new_mileage + $item['interval_km'] : null;
-            $next_due_date = $item['interval_months'] ? date('Y-m-d', strtotime("+{$item['interval_months']} months")) : null;
-
-            $stmt = $pdo->prepare("UPDATE maintenance_schedule SET last_replaced_date = ?, last_replaced_mileage = ?, next_due_mileage = ?, next_due_date = ? WHERE id = ?");
-            $stmt->execute([$new_date, $new_mileage, $next_due_mileage, $next_due_date, $id]);
-
-            // Update vehicle mileage if higher
-            $pdo->prepare("UPDATE vehicles SET current_mileage = GREATEST(current_mileage, ?) WHERE id = ? AND user_id = ?")->execute([$new_mileage, $item['vehicle_id'], $userId]);
-
-            setFlashMessage('success', 'Maintenance marked as completed!');
-        } else {
+        if (!$existing) {
             setFlashMessage('danger', 'Maintenance item not found.');
+        } else {
+            $next_due_mileage = $existing['last_replaced_mileage'] && $interval_km ? $existing['last_replaced_mileage'] + $interval_km : null;
+            $next_due_date = $existing['last_replaced_date'] && $interval_months ? date('Y-m-d', strtotime("+$interval_months months", strtotime($existing['last_replaced_date']))) : null;
+
+            try {
+                $stmt = $pdo->prepare("UPDATE maintenance_schedule SET interval_km = ?, interval_months = ?, next_due_mileage = ?, next_due_date = ?, priority = ? WHERE id = ?");
+                $stmt->execute([$interval_km, $interval_months, $next_due_mileage, $next_due_date, $priority, $id]);
+                setFlashMessage('success', 'Maintenance item updated successfully!');
+            } catch (PDOException $e) {
+                setFlashMessage('danger', 'Error: ' . $e->getMessage());
+            }
         }
         redirect('maintenance-schedule' . ($vehicleFilter ? '?vehicle_id=' . IdCodec::encode($vehicleFilter) : ''));
     }
@@ -169,22 +70,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         redirect('maintenance-schedule' . ($vehicleFilter ? '?vehicle_id=' . IdCodec::encode($vehicleFilter) : ''));
     }
 
-    if ($action === 'delete') {
-        if (!verifyCSRFToken($_POST['csrf_token'] ?? '')) {
-            setFlashMessage('danger', 'Invalid security token. Please try again.');
-            redirect('maintenance-schedule' . ($vehicleFilter ? '?vehicle_id=' . IdCodec::encode($vehicleFilter) : ''));
-        }
-
-        $id = (int)$_POST['schedule_id'];
-        $stmt = $pdo->prepare("
-            DELETE ms FROM maintenance_schedule ms
-            JOIN vehicles v ON ms.vehicle_id = v.id
-            WHERE ms.id = ? AND v.user_id = ?
-        ");
-        $stmt->execute([$id, $userId]);
-        setFlashMessage('success', 'Maintenance item deleted successfully.');
-        redirect('maintenance-schedule' . ($vehicleFilter ? '?vehicle_id=' . IdCodec::encode($vehicleFilter) : ''));
-    }
 }
 
 // Get schedules — scoped to the current user's own vehicles
@@ -256,9 +141,6 @@ $allAnnotated = array_merge($overdue, $dueSoon, $upcoming, $ok);
                             <i class="fas fa-sync"></i> Sync from Expenses
                         </button>
                     </form>
-                    <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#addScheduleModal">
-                        <i class="fas fa-plus"></i> Add Item
-                    </button>
                 </div>
             </div>
 
@@ -366,7 +248,7 @@ function renderScheduleTable($items) {
     <div class="card mb-3">
         <div class="card-header d-flex align-items-center justify-content-between bg-body-tertiary">
             <div>
-                <i class="fas fa-list-check me-2"></i>
+                <i class="fas fa-clipboard-check me-2"></i>
                 <strong>Maintenance Items</strong>
                 <span class="badge bg-secondary ms-2"><?php echo count($items); ?></span>
             </div>
@@ -466,14 +348,8 @@ function renderScheduleTable($items) {
                             </td>
                             <td class="align-middle white-space-nowrap position-relative">
                                 <div class="hover-actions bg-100">
-                                    <button class="btn icon-item rounded-3 me-2 fs-11 icon-item-sm" data-bs-toggle="modal" data-bs-target="#markDoneModal<?php echo $s['id']; ?>" title="Mark as Done">
-                                        <span class="fas fa-check"></span>
-                                    </button>
                                     <button class="btn icon-item rounded-3 me-2 fs-11 icon-item-sm" data-bs-toggle="modal" data-bs-target="#editScheduleModal<?php echo $s['id']; ?>" title="Edit">
                                         <span class="fas fa-edit"></span>
-                                    </button>
-                                    <button class="btn icon-item rounded-3 me-2 fs-11 icon-item-sm" data-bs-toggle="modal" data-bs-target="#deleteModal<?php echo $s['id']; ?>" title="Delete">
-                                        <span class="fas fa-trash"></span>
                                     </button>
                                 </div>
                                 <div class="dropdown font-sans-serif btn-reveal-trigger">
@@ -488,35 +364,6 @@ function renderScheduleTable($items) {
                         // that container on mobile browsers instead of covering the viewport.
                         ob_start();
                         ?>
-                                <!-- Mark Done Modal -->
-                                <div class="modal fade" id="markDoneModal<?php echo $s['id']; ?>" tabindex="-1" aria-labelledby="markDoneModalLabel<?php echo $s['id']; ?>" aria-hidden="true">
-                                    <div class="modal-dialog">
-                                        <div class="modal-content">
-                                            <div class="modal-header">
-                                                <h5 class="modal-title" id="markDoneModalLabel<?php echo $s['id']; ?>">Mark as Done</h5>
-                                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                                            </div>
-                                            <form method="POST">
-                                                <div class="modal-body">
-                                                    <?php echo csrfField(); ?>
-                                                    <input type="hidden" name="action" value="mark_done">
-                                                    <input type="hidden" name="schedule_id" value="<?php echo $s['id']; ?>">
-                                                    <p><strong><?php echo sanitize($s['item_type']); ?></strong> for <?php echo sanitize($s['make'] . ' ' . $s['model']); ?></p>
-                                                    <div class="mb-3">
-                                                        <label class="form-label">Current Mileage (km)</label>
-                                                        <input type="number" name="new_mileage" class="form-control" value="<?php echo $s['current_mileage']; ?>" required>
-                                                        <div class="form-text">This will update the vehicle's current mileage and calculate the next service date.</div>
-                                                    </div>
-                                                </div>
-                                                <div class="modal-footer">
-                                                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                                                    <button type="submit" class="btn btn-success"><i class="fas fa-check"></i> Mark as Done</button>
-                                                </div>
-                                            </form>
-                                        </div>
-                                    </div>
-                                </div>
-
                                 <!-- Edit Modal -->
                                 <div class="modal fade" id="editScheduleModal<?php echo $s['id']; ?>" tabindex="-1" aria-labelledby="editScheduleModalLabel<?php echo $s['id']; ?>" aria-hidden="true">
                                     <div class="modal-dialog modal-lg">
@@ -531,20 +378,22 @@ function renderScheduleTable($items) {
                                                     <input type="hidden" name="action" value="edit_schedule">
                                                     <input type="hidden" name="schedule_id" value="<?php echo $s['id']; ?>">
 
+                                                    <p class="text-muted fs-11 mb-3"><i class="fas fa-lock me-1"></i>Vehicle, item, last-replaced info, and notes come from Expenses and can only be changed there. Only the interval and priority are editable here.</p>
+
                                                     <div class="row">
                                                         <div class="col-md-6 mb-3">
-                                                            <label class="form-label">Vehicle <span class="text-danger">*</span></label>
-                                                            <select name="vehicle_id" class="form-control" required>
+                                                            <label class="form-label">Vehicle</label>
+                                                            <select class="form-control" disabled>
                                                                 <?php foreach ($vehicles as $v): ?>
-                                                                    <option value="<?php echo $v['id']; ?>" <?php echo $s['vehicle_id'] == $v['id'] ? 'selected' : ''; ?>>
+                                                                    <option <?php echo $s['vehicle_id'] == $v['id'] ? 'selected' : ''; ?>>
                                                                         <?php echo sanitize($v['make'] . ' ' . $v['model'] . ' (' . $v['year'] . ')'); ?>
                                                                     </option>
                                                                 <?php endforeach; ?>
                                                             </select>
                                                         </div>
                                                         <div class="col-md-6 mb-3">
-                                                            <label class="form-label">Maintenance Item <span class="text-danger">*</span></label>
-                                                            <input type="text" name="item_type" class="form-control" value="<?php echo sanitize($s['item_type']); ?>" required>
+                                                            <label class="form-label">Maintenance Item</label>
+                                                            <input type="text" class="form-control" value="<?php echo sanitize($s['item_type']); ?>" readonly>
                                                         </div>
                                                     </div>
 
@@ -571,17 +420,17 @@ function renderScheduleTable($items) {
                                                     <div class="row">
                                                         <div class="col-md-6 mb-3">
                                                             <label class="form-label">Last Replaced Date</label>
-                                                            <input type="date" name="last_replaced_date" class="form-control" value="<?php echo $s['last_replaced_date']; ?>">
+                                                            <input type="date" class="form-control" value="<?php echo $s['last_replaced_date']; ?>" readonly>
                                                         </div>
                                                         <div class="col-md-6 mb-3">
                                                             <label class="form-label">Last Replaced Mileage (km)</label>
-                                                            <input type="number" name="last_replaced_mileage" class="form-control" value="<?php echo $s['last_replaced_mileage']; ?>" placeholder="km">
+                                                            <input type="number" class="form-control" value="<?php echo $s['last_replaced_mileage']; ?>" placeholder="km" readonly>
                                                         </div>
                                                     </div>
 
                                                     <div class="mb-3">
                                                         <label class="form-label">Notes</label>
-                                                        <textarea name="notes" class="form-control" rows="3"><?php echo sanitize($s['notes']); ?></textarea>
+                                                        <textarea class="form-control" rows="3" readonly><?php echo sanitize($s['notes']); ?></textarea>
                                                     </div>
                                                 </div>
                                                 <div class="modal-footer">
@@ -593,36 +442,6 @@ function renderScheduleTable($items) {
                                     </div>
                                 </div>
 
-                                <!-- Delete Modal -->
-                                <div class="modal fade" id="deleteModal<?php echo $s['id']; ?>" tabindex="-1" aria-labelledby="deleteModalLabel<?php echo $s['id']; ?>" aria-hidden="true">
-                                    <div class="modal-dialog">
-                                        <div class="modal-content">
-                                            <div class="modal-header bg-danger text-white">
-                                                <h5 class="modal-title" id="deleteModalLabel<?php echo $s['id']; ?>">
-                                                    <i class="fas fa-exclamation-triangle"></i> Confirm Deletion
-                                                </h5>
-                                                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
-                                            </div>
-                                            <form method="POST">
-                                                <div class="modal-body">
-                                                    <?php echo csrfField(); ?>
-                                                    <input type="hidden" name="action" value="delete">
-                                                    <input type="hidden" name="schedule_id" value="<?php echo $s['id']; ?>">
-                                                    <p>Are you sure you want to delete this maintenance item?</p>
-                                                    <div class="alert alert-warning">
-                                                        <strong><?php echo sanitize($s['item_type']); ?></strong><br>
-                                                        <small><?php echo sanitize($s['make'] . ' ' . $s['model']); ?></small>
-                                                    </div>
-                                                    <p class="text-danger mb-0"><i class="fas fa-exclamation-circle"></i> This action cannot be undone.</p>
-                                                </div>
-                                                <div class="modal-footer">
-                                                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                                                    <button type="submit" class="btn btn-danger"><i class="fas fa-trash"></i> Delete</button>
-                                                </div>
-                                            </form>
-                                        </div>
-                                    </div>
-                                </div>
                         <?php
                         $deferredModals .= ob_get_clean();
                     endforeach; ?>
@@ -647,141 +466,11 @@ if (empty($schedules)): ?>
             <div class="empty-state text-center py-5">
                 <i class="fas fa-calendar-alt fa-4x text-muted mb-3"></i>
                 <h3>No Maintenance Items</h3>
-                <p class="text-muted">Add maintenance items to track their intervals and stay on top of vehicle servicing.</p>
-                <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addScheduleModal">
-                    <i class="fas fa-plus"></i> Add First Item
-                </button>
+                <p class="text-muted">Maintenance items are created automatically from tagged expenses — log a part replacement on the Expenses page, or use "Sync from Expenses" above to catch up on existing ones.</p>
             </div>
         </div>
     </div>
 <?php endif; ?>
-
-    <!-- Add Schedule Modal -->
-    <div class="modal fade" id="addScheduleModal" tabindex="-1" aria-labelledby="addScheduleModalLabel" aria-hidden="true">
-        <div class="modal-dialog modal-lg">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="addScheduleModalLabel">Add Maintenance Item</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                </div>
-                <form method="POST">
-                    <div class="modal-body">
-                        <?php echo csrfField(); ?>
-                        <input type="hidden" name="action" value="add_schedule">
-
-                        <div class="row">
-                            <div class="col-md-6 mb-3">
-                                <label class="form-label">Vehicle <span class="text-danger">*</span></label>
-                                <select name="vehicle_id" class="form-control" required>
-                                    <option value="">Select Vehicle...</option>
-                                    <?php foreach ($vehicles as $v): ?>
-                                        <option value="<?php echo $v['id']; ?>" <?php echo $vehicleFilter == $v['id'] ? 'selected' : ''; ?>>
-                                            <?php echo sanitize($v['make'] . ' ' . $v['model'] . ' (' . $v['year'] . ')'); ?>
-                                        </option>
-                                    <?php endforeach; ?>
-                                </select>
-                            </div>
-                            <div class="col-md-6 mb-3">
-                                <label class="form-label">Maintenance Item <span class="text-danger">*</span></label>
-                                <select name="item_type" id="itemTypeSelect" class="form-control" required>
-                                    <option value="">Select or type custom...</option>
-                                    <?php foreach ($defaultItems as $item => $intervals): ?>
-                                        <option value="<?php echo $item; ?>"
-                                                data-km="<?php echo $intervals['km'] ?? ''; ?>"
-                                                data-months="<?php echo $intervals['months'] ?? ''; ?>">
-                                            <?php echo $item; ?>
-                                        </option>
-                                    <?php endforeach; ?>
-                                    <option value="__custom__">-- Custom Item --</option>
-                                </select>
-                                <input type="text" id="customItemInput" class="form-control mt-2" style="display:none;" placeholder="Enter custom item name">
-                            </div>
-                        </div>
-
-                        <div class="row">
-                            <div class="col-md-4 mb-3">
-                                <label class="form-label">Interval (km)</label>
-                                <input type="number" name="interval_km" id="intervalKm" class="form-control" placeholder="e.g., 10000">
-                                <div class="form-text">Service interval in kilometers</div>
-                            </div>
-                            <div class="col-md-4 mb-3">
-                                <label class="form-label">Interval (months)</label>
-                                <input type="number" name="interval_months" id="intervalMonths" class="form-control" placeholder="e.g., 12">
-                                <div class="form-text">Service interval in months</div>
-                            </div>
-                            <div class="col-md-4 mb-3">
-                                <label class="form-label">Priority</label>
-                                <select name="priority" class="form-control">
-                                    <option value="low">Low</option>
-                                    <option value="medium" selected>Medium</option>
-                                    <option value="high">High</option>
-                                    <option value="critical">Critical</option>
-                                </select>
-                            </div>
-                        </div>
-
-                        <div class="row">
-                            <div class="col-md-6 mb-3">
-                                <label class="form-label">Last Replaced Date</label>
-                                <input type="date" name="last_replaced_date" class="form-control">
-                                <div class="form-text">When was this last serviced?</div>
-                            </div>
-                            <div class="col-md-6 mb-3">
-                                <label class="form-label">Last Replaced Mileage (km)</label>
-                                <input type="number" name="last_replaced_mileage" class="form-control" placeholder="km">
-                                <div class="form-text">Vehicle mileage at last service</div>
-                            </div>
-                        </div>
-
-                        <div class="mb-3">
-                            <label class="form-label">Notes</label>
-                            <textarea name="notes" class="form-control" rows="3" placeholder="Add any additional notes or specifications..."></textarea>
-                        </div>
-                    </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                        <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Add Item</button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    </div>
-
-    <script>
-        // Handle custom item type selection
-        document.getElementById('itemTypeSelect').addEventListener('change', function() {
-            const customInput = document.getElementById('customItemInput');
-            const kmInput = document.getElementById('intervalKm');
-            const monthsInput = document.getElementById('intervalMonths');
-
-            if (this.value === '__custom__') {
-                // Show custom input
-                customInput.style.display = 'block';
-                customInput.required = true;
-                customInput.name = 'item_type';
-                this.name = '';
-
-                // Clear intervals
-                kmInput.value = '';
-                monthsInput.value = '';
-            } else {
-                // Hide custom input
-                customInput.style.display = 'none';
-                customInput.required = false;
-                customInput.name = '';
-                this.name = 'item_type';
-
-                // Auto-fill intervals from data attributes
-                const option = this.options[this.selectedIndex];
-                if (option.dataset.km) {
-                    kmInput.value = option.dataset.km;
-                }
-                if (option.dataset.months) {
-                    monthsInput.value = option.dataset.months;
-                }
-            }
-        });
-    </script>
 
     <style>
         .status-filter-card { cursor: pointer; transition: box-shadow .15s ease; }

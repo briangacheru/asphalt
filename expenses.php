@@ -184,12 +184,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     $ownsExpense = false;
     $ownsNewVehicle = false;
     if ($expense_id) {
-        $ownStmt = $pdo->prepare("
-            SELECT e.id FROM expenses e
-            JOIN vehicles v ON e.vehicle_id = v.id
-            WHERE e.id = ? AND v.user_id = ?
-        ");
-        $ownStmt->execute([$expense_id, $userId]);
+        try {
+            $ownStmt = $pdo->prepare("
+                SELECT e.id FROM expenses e
+                JOIN vehicles v ON e.vehicle_id = v.id
+                WHERE e.id = ? AND v.user_id = ? AND e.service_item_id IS NULL
+            ");
+            $ownStmt->execute([$expense_id, $userId]);
+        } catch (PDOException $e) {
+            // expenses.service_item_id may not exist yet — nothing can be locked in that case
+            $ownStmt = $pdo->prepare("
+                SELECT e.id FROM expenses e
+                JOIN vehicles v ON e.vehicle_id = v.id
+                WHERE e.id = ? AND v.user_id = ?
+            ");
+            $ownStmt->execute([$expense_id, $userId]);
+        }
         $ownsExpense = (bool) $ownStmt->fetch();
     }
     if ($vehicle_id) {
@@ -244,12 +254,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 
     if ($expense_id) {
         try {
-            $stmt = $pdo->prepare("
-                DELETE e FROM expenses e
-                JOIN vehicles v ON e.vehicle_id = v.id
-                WHERE e.id = ? AND v.user_id = ?
-            ");
-            $stmt->execute([$expense_id, $userId]);
+            try {
+                $stmt = $pdo->prepare("
+                    DELETE e FROM expenses e
+                    JOIN vehicles v ON e.vehicle_id = v.id
+                    WHERE e.id = ? AND v.user_id = ? AND e.service_item_id IS NULL
+                ");
+                $stmt->execute([$expense_id, $userId]);
+            } catch (PDOException $e) {
+                // expenses.service_item_id may not exist yet — nothing can be locked in that case
+                $stmt = $pdo->prepare("
+                    DELETE e FROM expenses e
+                    JOIN vehicles v ON e.vehicle_id = v.id
+                    WHERE e.id = ? AND v.user_id = ?
+                ");
+                $stmt->execute([$expense_id, $userId]);
+            }
             setFlashMessage('success', 'Expense deleted!');
             redirect('expenses' . ($vehicleFilter ? '?vehicle_id=' . IdCodec::encode($vehicleFilter) : ''));
         } catch (PDOException $e) {
@@ -442,8 +462,13 @@ if ($flash): ?>
                                             <span class="badge rounded-pill" style="background:rgba(var(--falcon-primary-rgb),.1);color:var(--falcon-primary)">
                                                 <i class="fas <?php echo htmlspecialchars($e['icon']); ?> me-1"></i><?php echo htmlspecialchars($e['category_name']); ?>
                                             </span>
+                                            <?php if (!empty($e['service_item_id'])): ?>
+                                                <span class="badge rounded-pill badge-subtle-secondary" title="Added automatically from a service item">
+                                                    <i class="fas fa-link me-1"></i>From Service
+                                                </span>
+                                            <?php endif; ?>
                                             <p class="mb-0 text-muted mt-1 text-truncate" style="font-size:0.72rem;">
-                                                <?php echo sanitize($e['description']) ?: sanitize($e['item_name']); ?>
+                                                <?php echo sanitize($e['description']) ?: sanitize($itemLabel) ?: sanitize($e['item_name']); ?>
                                             </p>
                                         </td>
                                         <td class="align-middle">
@@ -460,12 +485,18 @@ if ($flash): ?>
                                                 <button class="btn icon-item rounded-3 me-2 fs-11 icon-item-sm" title="View Expense" onclick="event.stopPropagation(); viewExpense(<?php echo htmlspecialchars(json_encode($e)); ?>)">
                                                     <span class="fas fa-eye"></span>
                                                 </button>
-                                                <button class="btn icon-item rounded-3 me-2 fs-11 icon-item-sm" title="Edit Expense" onclick="event.stopPropagation(); editExpense(<?php echo htmlspecialchars(json_encode($e)); ?>)">
-                                                    <span class="fas fa-edit"></span>
-                                                </button>
-                                                <button class="btn icon-item rounded-3 me-2 fs-11 icon-item-sm" title="Delete Expense" onclick="event.stopPropagation(); deleteExpense(<?php echo $e['id']; ?>, '<?php echo sanitize($e['category_name']); ?>')">
-                                                    <span class="fas fa-trash"></span>
-                                                </button>
+                                                <?php if (empty($e['service_item_id'])): ?>
+                                                    <button class="btn icon-item rounded-3 me-2 fs-11 icon-item-sm" title="Edit Expense" onclick="event.stopPropagation(); editExpense(<?php echo htmlspecialchars(json_encode($e)); ?>)">
+                                                        <span class="fas fa-edit"></span>
+                                                    </button>
+                                                    <button class="btn icon-item rounded-3 me-2 fs-11 icon-item-sm" title="Delete Expense" onclick="event.stopPropagation(); deleteExpense(<?php echo $e['id']; ?>, '<?php echo sanitize($e['category_name']); ?>')">
+                                                        <span class="fas fa-trash"></span>
+                                                    </button>
+                                                <?php else: ?>
+                                                    <span class="btn icon-item rounded-3 me-2 fs-11 icon-item-sm disabled" title="Locked — edit this from the Service Items page">
+                                                        <span class="fas fa-lock"></span>
+                                                    </span>
+                                                <?php endif; ?>
                                             </div>
                                             <div class="dropdown font-sans-serif btn-reveal-trigger">
                                                 <button class="btn btn-link text-600 btn-sm dropdown-toggle dropdown-caret-none btn-reveal-sm transition-none" type="button" onclick="event.stopPropagation()" data-boundary="viewport" aria-haspopup="true" aria-expanded="false"><span class="fas fa-ellipsis-h fs-11"></span></button>
