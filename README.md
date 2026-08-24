@@ -10,6 +10,7 @@ A comprehensive web-based vehicle management system for tracking maintenance, se
 - **Fuel Log**: Track fuel consumption and mileage between fill-ups
 - **Expense Tracking**: Record and categorize vehicle-related expenses
 - **Service Reminders**: Automated email reminders for upcoming maintenance
+- **Insurance Tracking**: Record insurance policies and stickers per vehicle, with sticky in-app alerts and daily email reminders starting 14 days before expiry (and continuing daily until renewed)
 - **Monthly Reports**: Generate reports on spending and maintenance history
 - **Email Notifications**: Automated monthly check emails and service reminders
 - **Multi-user Support**: User authentication with registration and password recovery
@@ -127,6 +128,9 @@ For automated email reminders, add these cron jobs:
 
 # Service reminder emails (daily at 8:00 AM)
 0 8 * * * php /path/to/vehicle-service-tracker/cron/service-reminder-cron.php
+
+# Insurance expiry alerts (daily at 8:00 AM)
+0 8 * * * php /path/to/vehicle-service-tracker/cron/insurance-reminder-cron.php
 ```
 
 ## Project Structure
@@ -173,6 +177,7 @@ The application uses the following main tables:
 - `service_items` - Predefined service item templates
 - `email_logs` - Email notification history
 - `vehicle_documents` - Uploaded documents & photos per vehicle (insurance, bill of lading, receipts, etc.); created automatically on first request, see `includes/header.php`
+- `vehicle_insurance` - Insurance policies per vehicle (provider, policy number, coverage, premium, expiry date, sticker upload); created lazily by `App\Services\InsuranceService`. The record with the furthest-out `expiry_date` is a vehicle's "current" policy — see the Insurance page and `cron/insurance-reminder-cron.php`.
 
 ## Security Features
 

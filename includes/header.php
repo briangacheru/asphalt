@@ -45,6 +45,10 @@ $vehiclesNeedingMileageUpdate = ($currentUser['mileage_reminder_enabled'] ?? 1)
     ? \App\Services\MileageReminderService::vehiclesNeedingUpdate($pdo, $userId)
     : [];
 
+// Insurance expiring/expired — stays flagged every day until a renewed
+// policy (later expiry_date) is recorded for the vehicle.
+$vehiclesNeedingInsuranceAttention = \App\Services\InsuranceService::vehiclesNeedingAttention($pdo, $userId);
+
 // Get all active vehicles for current user
 $vehiclesStmt = $pdo->prepare("SELECT id, make, model, year, current_mileage FROM vehicles WHERE user_id = ? AND is_active = 1 ORDER BY make, model");
 $vehiclesStmt->execute([$userId]);
@@ -227,7 +231,14 @@ $currentPage = basename($_SERVER['PHP_SELF'], '.php');
                     <div class="d-flex align-items-center"><span class="nav-link-icon"><span class="fas fa-calendar-alt"></span></span><span class="nav-link-text ps-1">Maintenance Schedule</span>
                     </div>
                   </a>
-                  
+                  <!-- parent pages--><a class="nav-link <?php echo $currentPage === 'insurance' ? 'active' : ''; ?>" href="insurance" role="button">
+                    <div class="d-flex align-items-center"><span class="nav-link-icon"><span class="fas fa-shield-alt"></span></span><span class="nav-link-text ps-1">Insurance</span>
+                        <?php if (!empty($vehiclesNeedingInsuranceAttention)): ?>
+                            <span class="badge rounded-pill ms-2 badge-subtle-danger"><?php echo count($vehiclesNeedingInsuranceAttention); ?></span>
+                        <?php endif; ?>
+                    </div>
+                  </a>
+
                 </li>
                 <li class="nav-item">
                   <!-- label-->
@@ -433,6 +444,27 @@ $currentPage = basename($_SERVER['PHP_SELF'], '.php');
               Update mileage for
               <strong><?php echo implode(', ', array_map(fn($v) => sanitize($v['make'] . ' ' . $v['model']), $vehiclesNeedingMileageUpdate)); ?></strong>
               before this month wraps up — <a href="update-mileage" class="alert-link">update now</a>.
+            </div>
+          <?php endif; ?>
+
+          <?php
+          $expiredInsuranceVehicles = array_filter($vehiclesNeedingInsuranceAttention, fn($v) => $v['status'] === 'expired');
+          $expiringInsuranceVehicles = array_filter($vehiclesNeedingInsuranceAttention, fn($v) => $v['status'] === 'expiring');
+          ?>
+          <?php if (!empty($expiredInsuranceVehicles)): ?>
+            <div class="alert alert-danger alert-sticky rounded-0 mb-0 text-center">
+              <i class="fas fa-shield-alt me-1"></i>
+              Insurance <strong>expired</strong> for
+              <strong><?php echo implode(', ', array_map(fn($v) => sanitize($v['make'] . ' ' . $v['model']), $expiredInsuranceVehicles)); ?></strong>
+              — <a href="insurance" class="alert-link">renew now</a>.
+            </div>
+          <?php endif; ?>
+          <?php if (!empty($expiringInsuranceVehicles)): ?>
+            <div class="alert alert-warning alert-sticky rounded-0 mb-0 text-center">
+              <i class="fas fa-shield-alt me-1"></i>
+              Insurance expiring soon for
+              <strong><?php echo implode(', ', array_map(fn($v) => sanitize($v['make'] . ' ' . $v['model']), $expiringInsuranceVehicles)); ?></strong>
+              — <a href="insurance" class="alert-link">renew now</a>.
             </div>
           <?php endif; ?>
 

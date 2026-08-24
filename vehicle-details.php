@@ -290,6 +290,14 @@ $documentCategories = [];
 foreach ($pdo->query("SELECT slug, label, icon, color FROM vehicle_document_categories ORDER BY label")->fetchAll() as $row) {
     $documentCategories[$row['slug']] = $row;
 }
+
+// Current insurance policy (the one with the furthest-out expiry_date)
+$currentInsurance = \App\Services\InsuranceService::current($pdo, $vehicleId);
+$insuranceStatusMeta = [
+    'expired'  => ['label' => 'Expired', 'color' => 'danger', 'icon' => 'fa-exclamation-triangle'],
+    'expiring' => ['label' => 'Expiring Soon', 'color' => 'warning', 'icon' => 'fa-exclamation-circle'],
+    'ok'       => ['label' => 'Insured', 'color' => 'success', 'icon' => 'fa-check-circle'],
+];
 ?>
 
 <div class="card mb-3">
@@ -925,6 +933,48 @@ if ($flash): ?>
                                 </div>
                             </div>
                         <?php endforeach; ?>
+                    </div>
+                <?php endif; ?>
+            </div>
+        </div>
+
+        <!-- Insurance -->
+        <div class="card mt-3">
+            <div class="card-header bg-body-tertiary">
+                <div class="row align-items-center">
+                    <div class="col">
+                        <h6 class="mb-0"><i class="fas fa-shield-alt"></i> Insurance</h6>
+                    </div>
+                    <div class="col-auto text-center pe-x1">
+                        <a href="insurance?vehicle_id=<?php echo IdCodec::encode($vehicleId); ?>" class="btn btn-sm btn-outline-primary"><i class="fas fa-shield-alt"></i> Manage</a>
+                    </div>
+                </div>
+            </div>
+            <div class="card-body">
+                <?php if (!$currentInsurance): ?>
+                    <div class="empty-state text-center py-4">
+                        <i class="fas fa-shield-alt empty-state-icon fs-3 text-300 mb-3"></i>
+                        <h6 class="fs-9 mb-1">No insurance on file!</h6>
+                        <p class="fs-10 mb-3">Record the policy and upload the sticker for this vehicle.</p>
+                        <a href="insurance?vehicle_id=<?php echo IdCodec::encode($vehicleId); ?>" class="btn btn-primary btn-sm">
+                            <i class="fas fa-plus"></i> Add Insurance
+                        </a>
+                    </div>
+                <?php else: ?>
+                    <?php $meta = $insuranceStatusMeta[$currentInsurance['status']] ?? $insuranceStatusMeta['ok']; ?>
+                    <div class="row g-3 align-items-center">
+                        <div class="col">
+                            <span class="badge badge-subtle-<?php echo $meta['color']; ?> fs-11 mb-1"><i class="fas <?php echo $meta['icon']; ?> me-1"></i><?php echo $meta['label']; ?></span>
+                            <p class="fs-10 text-800 mb-0"><strong><?php echo sanitize($currentInsurance['provider']); ?></strong><?php if ($currentInsurance['policy_number']): ?> &bull; #<?php echo sanitize($currentInsurance['policy_number']); ?><?php endif; ?></p>
+                            <p class="fs-11 text-500 mb-0">
+                                Expires <?php echo formatDate($currentInsurance['expiry_date']); ?>
+                                <?php if ($currentInsurance['status'] === 'expired'): ?>
+                                    <span class="text-danger">(<?php echo abs($currentInsurance['days_remaining']); ?> day(s) ago)</span>
+                                <?php elseif ($currentInsurance['status'] === 'expiring'): ?>
+                                    <span class="text-warning">(<?php echo $currentInsurance['days_remaining']; ?> day(s) left)</span>
+                                <?php endif; ?>
+                            </p>
+                        </div>
                     </div>
                 <?php endif; ?>
             </div>
