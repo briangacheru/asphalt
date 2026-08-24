@@ -607,6 +607,89 @@ class EmailService
     }
 
     /**
+     * Send an insurance expiry alert. Fires daily starting
+     * InsuranceService::REMINDER_WINDOW_DAYS before expiry, and keeps firing
+     * daily after expiry (unbounded) until a renewal with a later
+     * expiry_date is recorded for the vehicle — the cron job decides *when*
+     * to call this, this method only renders and sends.
+     */
+    public function sendInsuranceExpiryEmail(int $vehicleId, array $insurance, int $daysRemaining): bool
+    {
+        $stmt = $this->pdo->prepare("
+            SELECT v.*, u.email, u.first_name
+            FROM vehicles v
+            JOIN users u ON v.user_id = u.id
+            WHERE v.id = ?
+        ");
+        $stmt->execute([$vehicleId]);
+        $data = $stmt->fetch();
+
+        if (!$data) {
+            return false;
+        }
+
+        $vehicleName = $data['make'] . ' ' . $data['model'] . ' (' . $data['year'] . ')';
+        $expiryLabel = date('M d, Y', strtotime($insurance['expiry_date']));
+
+        if ($daysRemaining < 0) {
+            $urgencyHtml = sprintf(
+                '<div style="background: rgba(255,59,48,0.2); border: 1px solid rgba(255,59,48,0.3); border-radius: 12px; padding: 20px; margin: 20px 0; color: #ff3b30;"><strong>🚨 EXPIRED!</strong> Insurance cover lapsed %s day(s) ago. Driving uninsured may be illegal and voids any claim.</div>',
+                number_format(abs($daysRemaining))
+            );
+            $subjectPrefix = 'EXPIRED: ';
+        } elseif ($daysRemaining === 0) {
+            $urgencyHtml = '<div style="background: rgba(255,59,48,0.2); border: 1px solid rgba(255,59,48,0.3); border-radius: 12px; padding: 20px; margin: 20px 0; color: #ff3b30;"><strong>⚠️ Expires today!</strong> Renew your cover before it lapses.</div>';
+            $subjectPrefix = 'Expires Today: ';
+        } else {
+            $urgencyHtml = sprintf(
+                '<div style="background: rgba(255,149,0,0.2); border: 1px solid rgba(255,149,0,0.3); border-radius: 12px; padding: 20px; margin: 20px 0; color: #ff9500;"><strong>📅 Insurance Expiring Soon</strong> Only %s day(s) remaining before your cover expires.</div>',
+                number_format($daysRemaining)
+            );
+            $subjectPrefix = '';
+        }
+
+        $content = sprintf('
+            <h2 style="margin: 0 0 20px; color: #ffffff; font-size: 20px;">Insurance Expiry Alert</h2>
+            <p style="margin: 0 0 20px; line-height: 1.6;">Hi %s,</p>
+            <p style="margin: 0 0 20px; line-height: 1.6;">This is a reminder about the insurance cover for <strong>%s</strong>.</p>
+
+            %s
+
+            <div style="background: rgba(0,0,0,0.3); border-radius: 12px; padding: 20px; margin: 20px 0;">
+                <table style="width: 100%%; color: #e5e5ea;">
+                    <tr><td style="padding: 8px 0; color: #86868b;">Provider:</td><td style="padding: 8px 0; text-align: right;">%s</td></tr>
+                    <tr><td style="padding: 8px 0; color: #86868b;">Policy Number:</td><td style="padding: 8px 0; text-align: right;">%s</td></tr>
+                    <tr><td style="padding: 8px 0; color: #86868b;">Expiry Date:</td><td style="padding: 8px 0; text-align: right; color: %s;">%s</td></tr>
+                </table>
+            </div>
+
+            <p style="margin: 20px 0; line-height: 1.6;">You will keep receiving this alert every day until you add a renewed policy for this vehicle.</p>
+
+            <p style="margin: 30px 0; text-align: center;">
+                <a href="%s/insurance?vehicle_id=%s" style="display: inline-block; padding: 14px 32px; background: #ffffff; color: #000000; text-decoration: none; border-radius: 8px; font-weight: 600;">Update Insurance</a>
+            </p>
+        ',
+            htmlspecialchars($data['first_name']),
+            htmlspecialchars($vehicleName),
+            $urgencyHtml,
+            htmlspecialchars($insurance['provider'] ?? '—'),
+            htmlspecialchars($insurance['policy_number'] ?? '—'),
+            $daysRemaining <= 0 ? '#ff3b30' : '#ff9500',
+            $expiryLabel,
+            APP_URL,
+            IdCodec::encode($vehicleId)
+        );
+
+        $subject = $subjectPrefix . "Insurance Alert: $vehicleName";
+        $html = $this->getEmailTemplate($content, $subject);
+
+        $sent = $this->send($data['email'], $subject, $html);
+        $this->logEmail($vehicleId, 'insurance_expiry', $data['email'], $subject, $html, $sent ? 'sent' : 'failed');
+
+        return $sent;
+    }
+
+    /**
      * Email a vehicle's full export (service history, fuel log, expenses,
      * maintenance schedule, documents/photos) as a ZIP attachment — sent as
      * a safety-net backup right before the vehicle is deleted.
