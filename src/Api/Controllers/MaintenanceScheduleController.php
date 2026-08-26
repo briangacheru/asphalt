@@ -77,23 +77,37 @@ class MaintenanceScheduleController
     private static function withStatus(array $row): array
     {
         $kmOverdue = $row['next_due_mileage'] ? $row['current_mileage'] - $row['next_due_mileage'] : null;
-        $dateOverdue = $row['next_due_date'] ? (strtotime($row['next_due_date']) < time()) : false;
 
-        if (($kmOverdue !== null && $kmOverdue > 0) || $dateOverdue) {
-            $row['status'] = 'overdue';
+        $row['status'] = self::statusFor($kmOverdue, $row['next_due_date'] ?? null);
+
+        if ($row['status'] === 'overdue') {
             $row['km_overdue'] = $kmOverdue;
-        } elseif ($kmOverdue !== null && $kmOverdue > -2000) {
-            $row['status'] = 'due_soon';
-            $row['km_remaining'] = abs($kmOverdue);
-        } elseif ($kmOverdue !== null && $kmOverdue > -5000) {
-            $row['status'] = 'upcoming';
-            $row['km_remaining'] = abs($kmOverdue);
         } else {
-            $row['status'] = 'ok';
             $row['km_remaining'] = $kmOverdue !== null ? abs($kmOverdue) : null;
         }
 
         return $row;
+    }
+
+    /**
+     * The overdue/due_soon/upcoming/ok classification on its own, reusable
+     * anywhere a caller has (current − due) already in hand — e.g.
+     * VehicleController's per-vehicle maintenance status rollup.
+     */
+    public static function statusFor(?int $kmOverdue, ?string $nextDueDate): string
+    {
+        $dateOverdue = $nextDueDate ? (strtotime($nextDueDate) < time()) : false;
+
+        if (($kmOverdue !== null && $kmOverdue > 0) || $dateOverdue) {
+            return 'overdue';
+        }
+        if ($kmOverdue !== null && $kmOverdue > -2000) {
+            return 'due_soon';
+        }
+        if ($kmOverdue !== null && $kmOverdue > -5000) {
+            return 'upcoming';
+        }
+        return 'ok';
     }
 
     private static function assertOwnsVehicle(\PDO $pdo, int $userId, int $vehicleId): void

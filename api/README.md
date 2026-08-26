@@ -55,7 +55,7 @@ isn't supported by this API — use the web app for that one case.
 | POST   | `/auth/login`                     | Public |
 | POST   | `/auth/logout`                    | |
 | GET    | `/me`                             | |
-| GET    | `/vehicles`                       | Active vehicles for the user |
+| GET    | `/vehicles`                       | Active vehicles for the user, each with a summary: `mileage_updated_at`, `next_service_mileage`/`service_km_remaining`, `last_fuel_fill_date`/`last_fuel_liters`/`last_fuel_total_cost`, `maintenance_status` (`overdue`/`due_soon`/`upcoming`/`ok`/`none`) |
 | POST   | `/vehicles`                       | `make`, `model`, `year` required |
 | GET    | `/vehicles/{id}`                  | |
 | PUT    | `/vehicles/{id}`                  | Partial update, any subset of fields |
