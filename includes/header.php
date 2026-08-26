@@ -49,6 +49,11 @@ $vehiclesNeedingMileageUpdate = ($currentUser['mileage_reminder_enabled'] ?? 1)
 // policy (later expiry_date) is recorded for the vehicle.
 $vehiclesNeedingInsuranceAttention = \App\Services\InsuranceService::vehiclesNeedingAttention($pdo, $userId);
 
+// Driving licence expiring/expired — stays flagged every day until a
+// renewed licence (later expiry_date) is recorded for the user.
+$drivingLicenseStatus = \App\Services\DrivingLicenseService::statusForUser($pdo, $userId);
+$drivingLicenseNeedsAttention = in_array($drivingLicenseStatus['status'], ['expiring', 'expired'], true);
+
 // Get all active vehicles for current user
 $vehiclesStmt = $pdo->prepare("SELECT id, make, model, year, current_mileage FROM vehicles WHERE user_id = ? AND is_active = 1 ORDER BY make, model");
 $vehiclesStmt->execute([$userId]);
@@ -235,6 +240,13 @@ $currentPage = basename($_SERVER['PHP_SELF'], '.php');
                     <div class="d-flex align-items-center"><span class="nav-link-icon"><span class="fas fa-shield-alt"></span></span><span class="nav-link-text ps-1">Insurance</span>
                         <?php if (!empty($vehiclesNeedingInsuranceAttention)): ?>
                             <span class="badge rounded-pill ms-2 badge-subtle-danger"><?php echo count($vehiclesNeedingInsuranceAttention); ?></span>
+                        <?php endif; ?>
+                    </div>
+                  </a>
+                  <!-- parent pages--><a class="nav-link <?php echo $currentPage === 'driving-license' ? 'active' : ''; ?>" href="driving-license" role="button">
+                    <div class="d-flex align-items-center"><span class="nav-link-icon"><span class="fas fa-id-card"></span></span><span class="nav-link-text ps-1">Driving Licence</span>
+                        <?php if ($drivingLicenseNeedsAttention): ?>
+                            <span class="badge rounded-pill ms-2 badge-subtle-danger">1</span>
                         <?php endif; ?>
                     </div>
                   </a>
@@ -465,6 +477,20 @@ $currentPage = basename($_SERVER['PHP_SELF'], '.php');
               Insurance expiring soon for
               <strong><?php echo implode(', ', array_map(fn($v) => sanitize($v['make'] . ' ' . $v['model']), $expiringInsuranceVehicles)); ?></strong>
               — <a href="insurance" class="alert-link">renew now</a>.
+            </div>
+          <?php endif; ?>
+
+          <?php if ($drivingLicenseStatus['status'] === 'expired'): ?>
+            <div class="alert alert-danger alert-sticky rounded-0 mb-0 text-center">
+              <i class="fas fa-id-card me-1"></i>
+              Your driving licence has <strong>expired</strong>
+              — <a href="driving-license" class="alert-link">renew now</a>.
+            </div>
+          <?php elseif ($drivingLicenseStatus['status'] === 'expiring'): ?>
+            <div class="alert alert-warning alert-sticky rounded-0 mb-0 text-center">
+              <i class="fas fa-id-card me-1"></i>
+              Your driving licence is <strong>expiring soon</strong>
+              — <a href="driving-license" class="alert-link">renew now</a>.
             </div>
           <?php endif; ?>
 

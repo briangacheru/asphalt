@@ -689,6 +689,75 @@ class EmailService
         return $sent;
     }
 
+    public function sendDrivingLicenseExpiryEmail(int $userId, array $license, int $daysRemaining): bool
+    {
+        $stmt = $this->pdo->prepare("SELECT email, first_name FROM users WHERE id = ?");
+        $stmt->execute([$userId]);
+        $data = $stmt->fetch();
+
+        if (!$data) {
+            return false;
+        }
+
+        $licenseHolder = trim(($license['other_names'] ?? '') . ' ' . ($license['surname'] ?? ''));
+        $expiryLabel = date('M d, Y', strtotime($license['expiry_date']));
+
+        if ($daysRemaining < 0) {
+            $urgencyHtml = sprintf(
+                '<div style="background: rgba(255,59,48,0.2); border: 1px solid rgba(255,59,48,0.3); border-radius: 12px; padding: 20px; margin: 20px 0; color: #ff3b30;"><strong>🚨 EXPIRED!</strong> Your driving licence lapsed %s day(s) ago. Driving on an expired licence may be illegal.</div>',
+                number_format(abs($daysRemaining))
+            );
+            $subjectPrefix = 'EXPIRED: ';
+        } elseif ($daysRemaining === 0) {
+            $urgencyHtml = '<div style="background: rgba(255,59,48,0.2); border: 1px solid rgba(255,59,48,0.3); border-radius: 12px; padding: 20px; margin: 20px 0; color: #ff3b30;"><strong>⚠️ Expires today!</strong> Renew your driving licence before it lapses.</div>';
+            $subjectPrefix = 'Expires Today: ';
+        } else {
+            $urgencyHtml = sprintf(
+                '<div style="background: rgba(255,149,0,0.2); border: 1px solid rgba(255,149,0,0.3); border-radius: 12px; padding: 20px; margin: 20px 0; color: #ff9500;"><strong>📅 Driving Licence Expiring Soon</strong> Only %s day(s) remaining before it expires.</div>',
+                number_format($daysRemaining)
+            );
+            $subjectPrefix = '';
+        }
+
+        $content = sprintf('
+            <h2 style="margin: 0 0 20px; color: #ffffff; font-size: 20px;">Driving Licence Expiry Alert</h2>
+            <p style="margin: 0 0 20px; line-height: 1.6;">Hi %s,</p>
+            <p style="margin: 0 0 20px; line-height: 1.6;">This is a reminder about your driving licence on file.</p>
+
+            %s
+
+            <div style="background: rgba(0,0,0,0.3); border-radius: 12px; padding: 20px; margin: 20px 0;">
+                <table style="width: 100%%; color: #e5e5ea;">
+                    <tr><td style="padding: 8px 0; color: #86868b;">Licence Holder:</td><td style="padding: 8px 0; text-align: right;">%s</td></tr>
+                    <tr><td style="padding: 8px 0; color: #86868b;">Licence Number:</td><td style="padding: 8px 0; text-align: right;">%s</td></tr>
+                    <tr><td style="padding: 8px 0; color: #86868b;">Expiry Date:</td><td style="padding: 8px 0; text-align: right; color: %s;">%s</td></tr>
+                </table>
+            </div>
+
+            <p style="margin: 20px 0; line-height: 1.6;">You will keep receiving this alert every day until you add a renewed licence on the website.</p>
+
+            <p style="margin: 30px 0; text-align: center;">
+                <a href="%s/driving-license" style="display: inline-block; padding: 14px 32px; background: #ffffff; color: #000000; text-decoration: none; border-radius: 8px; font-weight: 600;">Update Driving Licence</a>
+            </p>
+        ',
+            htmlspecialchars($data['first_name']),
+            $urgencyHtml,
+            htmlspecialchars($licenseHolder !== '' ? $licenseHolder : $data['first_name']),
+            htmlspecialchars($license['license_number'] ?? '—'),
+            $daysRemaining <= 0 ? '#ff3b30' : '#ff9500',
+            $expiryLabel,
+            APP_URL
+        );
+
+        $subject = $subjectPrefix . "Driving Licence Alert";
+        $html = $this->getEmailTemplate($content, $subject);
+
+        $sent = $this->send($data['email'], $subject, $html);
+        $this->logEmail(0, 'driving_license_expiry', $data['email'], $subject, $html, $sent ? 'sent' : 'failed');
+
+        return $sent;
+    }
+
     /**
      * Email a vehicle's full export (service history, fuel log, expenses,
      * maintenance schedule, documents/photos) as a ZIP attachment — sent as

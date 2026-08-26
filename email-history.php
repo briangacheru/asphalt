@@ -34,6 +34,7 @@ $emailTypes = [
     'low_mileage_warning' => ['label' => 'Low Mileage Warning', 'icon' => 'fa-tachometer-alt', 'color' => 'danger'],
     'maintenance_due' => ['label' => 'Maintenance Due', 'icon' => 'fa-tools', 'color' => 'warning'],
     'insurance_expiry' => ['label' => 'Insurance Expiry', 'icon' => 'fa-shield-alt', 'color' => 'danger'],
+    'driving_license_expiry' => ['label' => 'Driving Licence Expiry', 'icon' => 'fa-id-card', 'color' => 'danger'],
     'test_email' => ['label' => 'Test Email', 'icon' => 'fa-envelope', 'color' => 'primary'],
     'database_backup' => ['label' => 'Database Backup', 'icon' => 'fa-database', 'color' => 'dark'],
     'vehicle_export' => ['label' => 'Export File', 'icon' => 'fa-file-archive', 'color' => 'success'],
