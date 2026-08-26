@@ -12,6 +12,9 @@ use App\Api\Controllers\AuthController;
 use App\Api\Controllers\VehicleController;
 use App\Api\Controllers\InsuranceController;
 use App\Api\Controllers\DrivingLicenseController;
+use App\Api\Controllers\ServiceRecordController;
+use App\Api\Controllers\FuelLogController;
+use App\Api\Controllers\ExpenseController;
 use App\Database\Database;
 use App\Middleware\ApiAuthMiddleware;
 
@@ -92,6 +95,30 @@ try {
             break;
         case $method === 'DELETE' && count($segments) === 2 && $segments[0] === 'driving-license':
             DrivingLicenseController::destroy($pdo, $userId, (int) $segments[1]);
+            break;
+
+        case $method === 'GET' && count($segments) === 3 && $segments[0] === 'vehicles' && $segments[2] === 'service-records':
+            ServiceRecordController::index($pdo, $userId, (int) $segments[1]);
+            break;
+        case $method === 'POST' && $segments === ['service-records']:
+            ServiceRecordController::store($pdo, $userId, $body);
+            break;
+
+        case $method === 'GET' && count($segments) === 3 && $segments[0] === 'vehicles' && $segments[2] === 'fuel-logs':
+            FuelLogController::index($pdo, $userId, (int) $segments[1]);
+            break;
+        case $method === 'POST' && $segments === ['fuel-logs']:
+            FuelLogController::store($pdo, $userId, $body);
+            break;
+
+        case $method === 'GET' && $segments === ['expense-categories']:
+            ExpenseController::categories($pdo);
+            break;
+        case $method === 'GET' && count($segments) === 3 && $segments[0] === 'vehicles' && $segments[2] === 'expenses':
+            ExpenseController::index($pdo, $userId, (int) $segments[1]);
+            break;
+        case $method === 'POST' && $segments === ['expenses']:
+            ExpenseController::store($pdo, $userId, $body);
             break;
 
         default:

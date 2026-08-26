@@ -45,10 +45,27 @@ Failed attempts are rate-limited the same way (5 per 15 min per IP+email).
 | GET    | `/driving-license`                | Current licence (with status) + history |
 | POST   | `/driving-license`                | `surname`, `other_names`, `license_number`, `expiry_date` required; `categories: ["B2", "C1", ...]` optional |
 | DELETE | `/driving-license/{id}`           | |
+| GET    | `/vehicles/{id}/service-records`  | All service records for one vehicle |
+| POST   | `/service-records`                | `vehicle_id`, `mileage`, `oil_interval` required; `mileage` must be ≥ the vehicle's current mileage, `oil_interval` must be one of the admin-configured intervals (default 7000–10000 km, 500 km steps) |
+| GET    | `/vehicles/{id}/fuel-logs`        | All fuel log entries for one vehicle |
+| POST   | `/fuel-logs`                      | `vehicle_id`, `mileage`, `liters`, `price_per_liter` required; `total_cost` is computed server-side |
+| GET    | `/expense-categories`             | `{id, name, icon}` — admin-managed, not a fixed enum |
+| GET    | `/vehicles/{id}/expenses`         | All expenses for one vehicle, each joined with its category name/icon |
+| POST   | `/expenses`                       | `vehicle_id`, `category_id` required, plus `amount` OR `quantity` + `cost_per_unit` (auto-multiplied unless the category is "Mechanic") |
+
+Creating a service record, fuel log entry, or expense with a `mileage`
+bumps the vehicle's `current_mileage` the same way the web forms do (and
+logs to `mileage_log`, except fuel entries — matching an existing
+inconsistency in the web app). An expense with an `item_type_id` on a
+tracked category (anything but Mechanic/Accessories) feeds
+`maintenance_schedule` via `PartMaintenanceSyncService`, same as the web
+form.
 
 **Not yet supported in the API** (use the web pages for these): insurance
-sticker / driving licence scan upload, vehicle deletion, service records,
-fuel log, expenses, maintenance schedule, reports. These are the next
+sticker / driving licence scan upload / service dashboard photo / expense
+receipt upload, vehicle deletion, editing or deleting service
+records/fuel logs/expenses, service items (the sub-resource under a
+service record), maintenance schedule, reports. These are the next
 milestone once the core flow above is working end-to-end on the iOS side.
 
 ## Adding this to a new host
