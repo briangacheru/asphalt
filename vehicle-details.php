@@ -336,8 +336,8 @@ $insuranceStatusMeta = [
                 <a href="edit-vehicle?id=<?php echo IdCodec::encode($vehicleId); ?>" class="btn btn-sm btn-outline-primary">
                     <i class="fas fa-edit"></i> Edit
                 </a>
-                <a href="add-service?vehicle_id=<?php echo IdCodec::encode($vehicleId); ?>" class="btn btn-sm  btn-outline-success">
-                    <i class="fas fa-wrench"></i> Add Service
+                <a href="fuel-log?vehicle_id=<?php echo IdCodec::encode($vehicleId); ?>" class="btn btn-sm  btn-outline-success">
+                    <i class="fas fa-gas-pump"></i> Fuel Log
                 </a>
             </div>
         </div>
