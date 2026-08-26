@@ -13,6 +13,7 @@ use App\Api\Controllers\VehicleController;
 use App\Api\Controllers\InsuranceController;
 use App\Api\Controllers\DrivingLicenseController;
 use App\Api\Controllers\ServiceRecordController;
+use App\Api\Controllers\ServiceItemController;
 use App\Api\Controllers\FuelLogController;
 use App\Api\Controllers\ExpenseController;
 use App\Api\Controllers\MaintenanceScheduleController;
@@ -104,6 +105,22 @@ try {
             break;
         case $method === 'POST' && $segments === ['service-records']:
             ServiceRecordController::store($pdo, $userId, $body);
+            break;
+
+        case $method === 'GET' && $segments === ['item-types']:
+            ServiceItemController::itemTypes($pdo);
+            break;
+        case $method === 'GET' && count($segments) === 3 && $segments[0] === 'service-records' && $segments[2] === 'items':
+            ServiceItemController::index($pdo, $userId, (int) $segments[1]);
+            break;
+        case $method === 'POST' && count($segments) === 3 && $segments[0] === 'service-records' && $segments[2] === 'items':
+            ServiceItemController::store($pdo, $userId, (int) $segments[1], $body);
+            break;
+        case $method === 'PUT' && count($segments) === 2 && $segments[0] === 'service-items':
+            ServiceItemController::update($pdo, $userId, (int) $segments[1], $body);
+            break;
+        case $method === 'DELETE' && count($segments) === 2 && $segments[0] === 'service-items':
+            ServiceItemController::destroy($pdo, $userId, (int) $segments[1]);
             break;
 
         case $method === 'GET' && count($segments) === 3 && $segments[0] === 'vehicles' && $segments[2] === 'fuel-logs':

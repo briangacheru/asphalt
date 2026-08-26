@@ -47,6 +47,11 @@ Failed attempts are rate-limited the same way (5 per 15 min per IP+email).
 | DELETE | `/driving-license/{id}`           | |
 | GET    | `/vehicles/{id}/service-records`  | All service records for one vehicle |
 | POST   | `/service-records`                | `vehicle_id`, `mileage`, `oil_interval` required; `mileage` must be ≥ the vehicle's current mileage, `oil_interval` must be one of the admin-configured intervals (default 7000–10000 km, 500 km steps) |
+| GET    | `/item-types`                     | `{id, name, km_interval, months_interval}` — the admin-managed catalog used for `item_type_id` below |
+| GET    | `/service-records/{id}/items`     | Parts/items logged against one service record |
+| POST   | `/service-records/{id}/items`     | `item_type_id` required (must reference `/item-types`); accepts `item_name`, `brand`, `part_number`, `quantity` (default 1), `cost`, `notes` |
+| PUT    | `/service-items/{id}`             | Same fields as create |
+| DELETE | `/service-items/{id}`             | |
 | GET    | `/vehicles/{id}/fuel-logs`        | All fuel log entries for one vehicle |
 | POST   | `/fuel-logs`                      | `vehicle_id`, `mileage`, `liters`, `price_per_liter` required; `total_cost` is computed server-side |
 | PUT    | `/fuel-logs/{id}`                 | Same fields as create — `vehicle_id` may be reassigned to a different (own) vehicle |
@@ -85,11 +90,18 @@ those either (only the linked `service_items` sub-resource and its
 cascading `service_cost` can change a record after creation), so this
 matches existing behavior rather than being a gap.
 
+Adding/editing/deleting a service item recomputes its parent service
+record's `service_cost` (`SUM(cost × quantity)` across all its items) and
+mirrors the change into `expenses` via `ServiceItemExpenseSync` — so it
+shows up in `GET /vehicles/{id}/expenses` and `GET /reports` with
+`service_item_id` set, same as the web app. Those mirrored expense rows
+stay locked (see `PUT /expenses/{id}` above) — edit them through their
+service item instead.
+
 **Not yet supported in the API** (use the web pages for these): insurance
 sticker / driving licence scan upload / service dashboard photo / expense
-receipt upload, vehicle deletion, service items (the sub-resource under a
-service record). These are the next milestone once the core flow above is
-working end-to-end on the iOS side.
+receipt upload, vehicle deletion. These are the next milestone once the
+core flow above is working end-to-end on the iOS side.
 
 ## Adding this to a new host
 
