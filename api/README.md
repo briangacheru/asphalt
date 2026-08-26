@@ -23,9 +23,30 @@ Failed attempts are rate-limited the same way (5 per 15 min per IP+email).
 
 - Send a JSON body with `Content-Type: application/json` for POST/PUT.
 - Every response is JSON. Errors are `{ "error": "message" }` with a
-  matching HTTP status (401/403/404/422/429/500/503).
+  matching HTTP status (401/403/404/413/422/429/500/503).
 - Dates are `YYYY-MM-DD` strings; datetimes are whatever MySQL returns
   (`YYYY-MM-DD HH:MM:SS`).
+
+## File uploads
+
+Four `POST` endpoints double as file uploads — send
+`multipart/form-data` instead of JSON, with the other fields as regular
+form fields (arrays as repeated `key[]` fields) plus one file field:
+
+| Endpoint           | File field        | Allowed types                              | Max size |
+|---------------------|--------------------|---------------------------------------------|----------|
+| `POST /insurance`   | `sticker`          | JPG, PNG, GIF, WEBP, HEIC, HEIF, BMP, TIFF, PDF | 10MB |
+| `POST /driving-license` | `scan`         | Same as above                                | 10MB |
+| `POST /service-records` | `dashboard_image` | JPG, PNG, GIF, WEBP                     | 10MB |
+| `POST /expenses`    | `receipt`          | JPG, PNG, GIF, WEBP, PDF                    | 5MB |
+
+All four validate the file's actual bytes via `mime_content_type()` —
+never the client-supplied filename or Content-Type — same as (or, for the
+service dashboard photo, stricter than) the web app.
+
+**PUT requests stay JSON-only.** PHP only auto-populates `$_FILES` for
+`POST`, so replacing a receipt on an existing expense (`PUT /expenses/{id}`)
+isn't supported by this API — use the web app for that one case.
 
 ## Endpoints (v1 — core only)
 
@@ -98,10 +119,9 @@ shows up in `GET /vehicles/{id}/expenses` and `GET /reports` with
 stay locked (see `PUT /expenses/{id}` above) — edit them through their
 service item instead.
 
-**Not yet supported in the API** (use the web pages for these): insurance
-sticker / driving licence scan upload / service dashboard photo / expense
-receipt upload, vehicle deletion. These are the next milestone once the
-core flow above is working end-to-end on the iOS side.
+**Not yet supported in the API** (use the web pages for these): vehicle
+deletion, and replacing a receipt on an existing expense (see File
+uploads above).
 
 ## Adding this to a new host
 

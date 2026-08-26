@@ -3,16 +3,25 @@
 namespace App\Api\Controllers;
 
 use App\Api\Response;
+use App\Api\UploadHelper;
 use App\Services\SiteSettingsService;
 
 /**
  * Mirrors add-service.php's create flow (mileage validation, oil-interval
  * allow-list, next_service_mileage computation, mileage_log side effect).
- * Dashboard photo upload and the "service recorded" email aren't in v1 —
- * same JSON-only, no-side-channel-notifications scope as insurance/licence.
+ * POST /service-records accepts either a JSON body or multipart/form-data
+ * — send multipart with a "dashboard_image" file field to attach the
+ * odometer photo in the same request. The "service recorded" confirmation
+ * email isn't sent here (out of scope — no side-channel notifications
+ * from this API, matching insurance/licence).
  */
 class ServiceRecordController
 {
+    private const DASHBOARD_IMAGE_MIME_TO_EXT = [
+        'image/jpeg' => 'jpg', 'image/png' => 'png', 'image/gif' => 'gif', 'image/webp' => 'webp',
+    ];
+    private const DASHBOARD_IMAGE_FORMATS_LABEL = 'JPG, PNG, GIF, WEBP';
+
     /** GET /vehicles/{vehicleId}/service-records */
     public static function index(\PDO $pdo, int $userId, int $vehicleId): void
     {
@@ -56,16 +65,22 @@ class ServiceRecordController
 
         $nextServiceMileage = $mileage + $oilInterval;
 
+        $dashboardImage = UploadHelper::store(
+            'dashboard_image', '', 'dashboard',
+            self::DASHBOARD_IMAGE_MIME_TO_EXT, MAX_UPLOAD_SIZE, self::DASHBOARD_IMAGE_FORMATS_LABEL
+        );
+
         $stmt = $pdo->prepare("
             INSERT INTO service_records
-                (vehicle_id, service_date, mileage, mileage_source, oil_interval, next_service_mileage,
+                (vehicle_id, service_date, mileage, dashboard_image, mileage_source, oil_interval, next_service_mileage,
                  service_cost, service_location, technician_name, notes)
-            VALUES (?, ?, ?, 'manual', ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, 'manual', ?, ?, ?, ?, ?, ?)
         ");
         $stmt->execute([
             $vehicleId,
             $serviceDate,
             $mileage,
+            $dashboardImage['stored_filename'] ?? null,
             $oilInterval,
             $nextServiceMileage,
             isset($body['service_cost']) && is_numeric($body['service_cost']) ? (float) $body['service_cost'] : 0,

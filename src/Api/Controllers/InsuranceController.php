@@ -3,15 +3,24 @@
 namespace App\Api\Controllers;
 
 use App\Api\Response;
+use App\Api\UploadHelper;
 use App\Services\InsuranceService;
 
 /**
- * JSON-only insurance endpoints — sticker upload isn't supported here yet
- * (multipart handling is more involved with a bearer-token API); the web
- * page at insurance.php remains the way to attach a sticker image/PDF.
+ * POST /insurance accepts either a JSON body or multipart/form-data — send
+ * multipart with a "sticker" file field to attach a sticker image/PDF in
+ * the same request, same as insurance.php's combined add/upload form.
  */
 class InsuranceController
 {
+    private const STICKER_MIME_TO_EXT = [
+        'image/jpeg' => 'jpg', 'image/pjpeg' => 'jpg', 'image/png' => 'png',
+        'image/gif' => 'gif', 'image/webp' => 'webp', 'image/heic' => 'heic',
+        'image/heif' => 'heif', 'image/bmp' => 'bmp', 'image/tiff' => 'tiff',
+        'application/pdf' => 'pdf',
+    ];
+    private const STICKER_FORMATS_LABEL = 'JPG, PNG, GIF, WEBP, HEIC, HEIF, BMP, TIFF, PDF';
+
     /** GET /insurance — current policy + status for every active vehicle. */
     public static function index(\PDO $pdo, int $userId): void
     {
@@ -52,10 +61,13 @@ class InsuranceController
             ? (float) $body['premium_amount']
             : null;
 
+        $sticker = UploadHelper::store('sticker', 'insurance', 'ins', self::STICKER_MIME_TO_EXT, MAX_UPLOAD_SIZE, self::STICKER_FORMATS_LABEL);
+
         $stmt = $pdo->prepare("
             INSERT INTO vehicle_insurance
-                (vehicle_id, provider, policy_number, coverage_type, premium_amount, start_date, expiry_date, notes)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                (vehicle_id, provider, policy_number, coverage_type, premium_amount, start_date, expiry_date,
+                 sticker_file_name, sticker_file_path, sticker_file_type, notes)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ");
         $stmt->execute([
             $vehicleId,
@@ -65,6 +77,9 @@ class InsuranceController
             $premium,
             $body['start_date'] ?? null,
             $expiryDate,
+            $sticker['original_name'] ?? null,
+            $sticker['stored_filename'] ?? null,
+            $sticker['mime'] ?? null,
             trim($body['notes'] ?? '') ?: null,
         ]);
 

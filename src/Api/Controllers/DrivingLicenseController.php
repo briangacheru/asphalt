@@ -3,15 +3,24 @@
 namespace App\Api\Controllers;
 
 use App\Api\Response;
+use App\Api\UploadHelper;
 use App\Services\DrivingLicenseService;
 
 /**
- * JSON-only driving licence endpoints — scan upload isn't supported here
- * yet (multipart handling is more involved with a bearer-token API); the
- * web page at driving-license.php remains the way to attach a scan.
+ * POST /driving-license accepts either a JSON body or multipart/form-data
+ * — send multipart with a "scan" file field to attach a scan image/PDF in
+ * the same request, same as driving-license.php's combined form.
  */
 class DrivingLicenseController
 {
+    private const SCAN_MIME_TO_EXT = [
+        'image/jpeg' => 'jpg', 'image/pjpeg' => 'jpg', 'image/png' => 'png',
+        'image/gif' => 'gif', 'image/webp' => 'webp', 'image/heic' => 'heic',
+        'image/heif' => 'heif', 'image/bmp' => 'bmp', 'image/tiff' => 'tiff',
+        'application/pdf' => 'pdf',
+    ];
+    private const SCAN_FORMATS_LABEL = 'JPG, PNG, GIF, WEBP, HEIC, HEIF, BMP, TIFF, PDF';
+
     /** GET /driving-license — current licence (with status) + full history. */
     public static function index(\PDO $pdo, int $userId): void
     {
@@ -41,11 +50,14 @@ class DrivingLicenseController
             $categories = array_values(array_intersect($body['categories'], array_keys(DrivingLicenseService::CATEGORIES)));
         }
 
+        $scan = UploadHelper::store('scan', 'driving-license', 'dl', self::SCAN_MIME_TO_EXT, MAX_UPLOAD_SIZE, self::SCAN_FORMATS_LABEL);
+
         $stmt = $pdo->prepare("
             INSERT INTO driving_licenses
                 (user_id, surname, other_names, national_id, license_number, date_of_birth, sex, blood_group,
-                 county_of_residence, serial_number, categories, issue_date, expiry_date, notes)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 county_of_residence, serial_number, categories, issue_date, expiry_date,
+                 scan_file_name, scan_file_path, scan_file_type, notes)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ");
         $stmt->execute([
             $userId,
@@ -61,6 +73,9 @@ class DrivingLicenseController
             $categories ? implode(',', $categories) : null,
             $body['issue_date'] ?? null,
             $expiryDate,
+            $scan['original_name'] ?? null,
+            $scan['stored_filename'] ?? null,
+            $scan['mime'] ?? null,
             trim($body['notes'] ?? '') ?: null,
         ]);
 

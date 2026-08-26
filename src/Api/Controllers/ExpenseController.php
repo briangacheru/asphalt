@@ -3,6 +3,7 @@
 namespace App\Api\Controllers;
 
 use App\Api\Response;
+use App\Api\UploadHelper;
 use App\Services\ItemTypeService;
 use App\Services\PartMaintenanceSyncService;
 
@@ -10,11 +11,23 @@ use App\Services\PartMaintenanceSyncService;
  * Mirrors expenses.php's create flow: amount is auto-recomputed from
  * quantity × cost_per_unit for every category except "Mechanic", and a
  * tracked item type (anything but Mechanic/Accessories) feeds
- * PartMaintenanceSyncService the same way the web form does. Receipt
- * upload isn't in v1 — same JSON-only scope as insurance/licence/service.
+ * PartMaintenanceSyncService the same way the web form does.
+ *
+ * POST /expenses accepts either a JSON body or multipart/form-data — send
+ * multipart with a "receipt" file field to attach a receipt in the same
+ * request. PUT /expenses/{id} stays JSON-only: PHP only populates
+ * $_FILES for POST requests, so replacing a receipt on an existing
+ * expense isn't supported here — use the web app for that.
  */
 class ExpenseController
 {
+    private const RECEIPT_MIME_TO_EXT = [
+        'image/jpeg' => 'jpg', 'image/pjpeg' => 'jpg', 'image/png' => 'png',
+        'image/gif' => 'gif', 'image/webp' => 'webp', 'application/pdf' => 'pdf',
+    ];
+    private const RECEIPT_FORMATS_LABEL = 'JPG, PNG, GIF, WEBP, PDF';
+    private const RECEIPT_MAX_SIZE = 5 * 1024 * 1024;
+
     /** GET /expense-categories — categories are admin-managed, not a fixed enum. */
     public static function categories(\PDO $pdo): void
     {
@@ -53,11 +66,14 @@ class ExpenseController
         [$categoryId, $categoryName, $expenseDate, $amount, $itemTypeId, $quantity, $costPerUnit, $mileage]
             = self::resolveFields($pdo, $body);
 
+        $receipt = UploadHelper::store('receipt', 'receipts', 'receipt', self::RECEIPT_MIME_TO_EXT, self::RECEIPT_MAX_SIZE, self::RECEIPT_FORMATS_LABEL);
+        $receiptPath = $receipt ? 'uploads/receipts/' . $receipt['stored_filename'] : null;
+
         $stmt = $pdo->prepare("
             INSERT INTO expenses
                 (vehicle_id, category_id, expense_date, amount, description, item_type_id,
-                 item_name, brand, part_number, quantity, cost_per_unit, item_notes, mileage)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 item_name, brand, part_number, quantity, cost_per_unit, item_notes, receipt_path, mileage)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ");
         $stmt->execute([
             $vehicleId, $categoryId, $expenseDate, $amount,
@@ -68,6 +84,7 @@ class ExpenseController
             trim($body['part_number'] ?? '') ?: null,
             $quantity, $costPerUnit,
             trim($body['item_notes'] ?? '') ?: null,
+            $receiptPath,
             $mileage,
         ]);
         $expenseId = (int) $pdo->lastInsertId();
