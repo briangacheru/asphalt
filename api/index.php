@@ -16,6 +16,7 @@ use App\Api\Controllers\ServiceRecordController;
 use App\Api\Controllers\FuelLogController;
 use App\Api\Controllers\ExpenseController;
 use App\Api\Controllers\MaintenanceScheduleController;
+use App\Api\Controllers\ReportController;
 use App\Database\Database;
 use App\Middleware\ApiAuthMiddleware;
 
@@ -127,6 +128,10 @@ try {
             break;
         case $method === 'PUT' && count($segments) === 2 && $segments[0] === 'maintenance-schedule':
             MaintenanceScheduleController::update($pdo, $userId, (int) $segments[1], $body);
+            break;
+
+        case $method === 'GET' && $segments === ['reports']:
+            ReportController::index($pdo, $userId);
             break;
 
         default:
