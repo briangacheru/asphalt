@@ -119,20 +119,24 @@ class VehicleController
         $currentMileage = (int) $row['current_mileage'];
         $base = self::format($row);
 
-        // Most recent mileage change from either source — mileage_log covers
-        // manual/service/expense updates, fuel fill-ups only ever land in
-        // fuel_log (see FuelLogController's doc comment) — same UNION
-        // update-mileage.php's "Recent Updates" card uses.
+        // Most recent mileage-changing event, mirroring vehicle-details.php's
+        // lastMileageUpdateDate() exactly — ordered by the record's own date,
+        // not insertion time (created_at DESC would surface whichever row was
+        // entered last, not the one for the most recent actual mileage date;
+        // that's a different, activity-feed query used by update-mileage.php's
+        // "Recent Updates" card, not appropriate here).
         $stmt = $pdo->prepare("
-            SELECT update_date FROM (
-                SELECT log_date AS update_date, created_at FROM mileage_log WHERE vehicle_id = ?
+            SELECT record_date FROM (
+                SELECT log_date AS record_date FROM mileage_log WHERE vehicle_id = ?
                 UNION ALL
-                SELECT fill_date AS update_date, created_at FROM fuel_log WHERE vehicle_id = ?
+                SELECT service_date AS record_date FROM service_records WHERE vehicle_id = ? AND mileage IS NOT NULL
+                UNION ALL
+                SELECT fill_date AS record_date FROM fuel_log WHERE vehicle_id = ?
             ) combined
-            ORDER BY created_at DESC
+            ORDER BY record_date DESC
             LIMIT 1
         ");
-        $stmt->execute([$vehicleId, $vehicleId]);
+        $stmt->execute([$vehicleId, $vehicleId, $vehicleId]);
         $base['mileage_updated_at'] = $stmt->fetchColumn() ?: null;
 
         // Next service, from the latest service record (mirrors ServiceRecord::getUpcomingServices()).
