@@ -49,9 +49,13 @@ Failed attempts are rate-limited the same way (5 per 15 min per IP+email).
 | POST   | `/service-records`                | `vehicle_id`, `mileage`, `oil_interval` required; `mileage` must be ≥ the vehicle's current mileage, `oil_interval` must be one of the admin-configured intervals (default 7000–10000 km, 500 km steps) |
 | GET    | `/vehicles/{id}/fuel-logs`        | All fuel log entries for one vehicle |
 | POST   | `/fuel-logs`                      | `vehicle_id`, `mileage`, `liters`, `price_per_liter` required; `total_cost` is computed server-side |
+| PUT    | `/fuel-logs/{id}`                 | Same fields as create — `vehicle_id` may be reassigned to a different (own) vehicle |
+| DELETE | `/fuel-logs/{id}`                 | |
 | GET    | `/expense-categories`             | `{id, name, icon}` — admin-managed, not a fixed enum |
 | GET    | `/vehicles/{id}/expenses`         | All expenses for one vehicle, each joined with its category name/icon |
 | POST   | `/expenses`                       | `vehicle_id`, `category_id` required, plus `amount` OR `quantity` + `cost_per_unit` (auto-multiplied unless the category is "Mechanic") |
+| PUT    | `/expenses/{id}`                  | Same fields as create; 404s if the expense mirrors a service item (`service_item_id` set) — those are edited via their service item, not directly |
+| DELETE | `/expenses/{id}`                  | Same service-item lock as `PUT` |
 | GET    | `/vehicles/{id}/maintenance-schedule` | Every tracked part for one vehicle, each with a computed `status` (`overdue`/`due_soon`/`upcoming`/`ok`) |
 | PUT    | `/maintenance-schedule/{id}`      | Only `interval_km`, `interval_months`, `priority` (`low`/`medium`/`high`/`critical`) are editable |
 | GET    | `/reports?year=YYYY&vehicle_id={id}` | Spend summary — both query params optional (`year` defaults to the current year, omitting `vehicle_id` covers every vehicle) |
@@ -76,10 +80,14 @@ Parts Longevity — the last one substantially overlaps with
 `GET /vehicles/{id}/maintenance-schedule`, which is the mobile-friendly
 equivalent.
 
+Service records have no edit/delete endpoint — the web app doesn't offer
+those either (only the linked `service_items` sub-resource and its
+cascading `service_cost` can change a record after creation), so this
+matches existing behavior rather than being a gap.
+
 **Not yet supported in the API** (use the web pages for these): insurance
 sticker / driving licence scan upload / service dashboard photo / expense
-receipt upload, vehicle deletion, editing or deleting service
-records/fuel logs/expenses, service items (the sub-resource under a
+receipt upload, vehicle deletion, service items (the sub-resource under a
 service record). These are the next milestone once the core flow above is
 working end-to-end on the iOS side.
 

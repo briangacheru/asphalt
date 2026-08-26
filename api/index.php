@@ -112,6 +112,12 @@ try {
         case $method === 'POST' && $segments === ['fuel-logs']:
             FuelLogController::store($pdo, $userId, $body);
             break;
+        case $method === 'PUT' && count($segments) === 2 && $segments[0] === 'fuel-logs':
+            FuelLogController::update($pdo, $userId, (int) $segments[1], $body);
+            break;
+        case $method === 'DELETE' && count($segments) === 2 && $segments[0] === 'fuel-logs':
+            FuelLogController::destroy($pdo, $userId, (int) $segments[1]);
+            break;
 
         case $method === 'GET' && $segments === ['expense-categories']:
             ExpenseController::categories($pdo);
@@ -121,6 +127,12 @@ try {
             break;
         case $method === 'POST' && $segments === ['expenses']:
             ExpenseController::store($pdo, $userId, $body);
+            break;
+        case $method === 'PUT' && count($segments) === 2 && $segments[0] === 'expenses':
+            ExpenseController::update($pdo, $userId, (int) $segments[1], $body);
+            break;
+        case $method === 'DELETE' && count($segments) === 2 && $segments[0] === 'expenses':
+            ExpenseController::destroy($pdo, $userId, (int) $segments[1]);
             break;
 
         case $method === 'GET' && count($segments) === 3 && $segments[0] === 'vehicles' && $segments[2] === 'maintenance-schedule':
