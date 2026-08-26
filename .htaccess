@@ -28,6 +28,22 @@ RewriteRule \.sql$ - [F,L]
 RewriteRule ^uploads/backups/ - [F,L]
 
 # ---------------------------------------------------------
+# JSON API (iOS app) — bearer-token authenticated, separate from the web
+# app's session-cookie auth. Everything under /api/ routes to
+# api/index.php, with the remaining path passed as __path for it to parse.
+# Must come before the generic .php/clean-URL rules below so API requests
+# never fall through to the web app's own router.
+# ---------------------------------------------------------
+
+# Some hosts (mod_php/CGI) strip the Authorization header from $_SERVER by
+# default — pass it through explicitly so bearer tokens are readable.
+RewriteCond %{HTTP:Authorization} ^(.*)
+RewriteRule ^ - [E=HTTP_AUTHORIZATION:%1]
+
+RewriteRule ^api/?$ api/index.php [QSA,L]
+RewriteRule ^api/(.+)$ api/index.php?__path=$1 [QSA,L]
+
+# ---------------------------------------------------------
 # ERROR LOGGING CONFIGURATION
 # ---------------------------------------------------------
 

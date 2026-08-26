@@ -15,6 +15,7 @@ A comprehensive web-based vehicle management system for tracking maintenance, se
 - **Monthly Reports**: Generate reports on spending and maintenance history
 - **Email Notifications**: Automated monthly check emails and service reminders
 - **Multi-user Support**: User authentication with registration and password recovery
+- **JSON API**: Bearer-token authenticated API under `/api/` for the companion iOS app — see [api/README.md](api/README.md)
 
 ## Requirements
 
@@ -141,6 +142,8 @@ For automated email reminders, add these cron jobs:
 
 ```
 vehicle-service-tracker/
+├── api/                     # JSON API for the iOS app (bearer-token auth)
+│   └── index.php            # Front controller — see api/README.md
 ├── auth/                    # Authentication pages (login, register, password reset)
 ├── assets/                  # CSS, JavaScript, and image files
 ├── cron/                    # Scheduled cron job scripts
@@ -183,6 +186,7 @@ The application uses the following main tables:
 - `vehicle_documents` - Uploaded documents & photos per vehicle (insurance, bill of lading, receipts, etc.); created automatically on first request, see `includes/header.php`
 - `vehicle_insurance` - Insurance policies per vehicle (provider, policy number, coverage, premium, expiry date, sticker upload); created lazily by `App\Services\InsuranceService`. The record with the furthest-out `expiry_date` is a vehicle's "current" policy — see the Insurance page and `cron/insurance-reminder-cron.php`.
 - `driving_licenses` - Driving licence details per user (licence number, national ID, DOB, sex, blood group, county, expiry date, scan upload); created lazily by `App\Services\DrivingLicenseService`. The record with the furthest-out `expiry_date` is a user's "current" licence — see the Driving Licence page and `cron/driving-license-reminder-cron.php`.
+- `api_tokens` - Bearer tokens for the JSON API (one row per logged-in device; only a SHA-256 hash is stored); created lazily by `App\Services\ApiTokenService`. See [api/README.md](api/README.md).
 
 ## Security Features
 
