@@ -52,6 +52,8 @@ Failed attempts are rate-limited the same way (5 per 15 min per IP+email).
 | GET    | `/expense-categories`             | `{id, name, icon}` — admin-managed, not a fixed enum |
 | GET    | `/vehicles/{id}/expenses`         | All expenses for one vehicle, each joined with its category name/icon |
 | POST   | `/expenses`                       | `vehicle_id`, `category_id` required, plus `amount` OR `quantity` + `cost_per_unit` (auto-multiplied unless the category is "Mechanic") |
+| GET    | `/vehicles/{id}/maintenance-schedule` | Every tracked part for one vehicle, each with a computed `status` (`overdue`/`due_soon`/`upcoming`/`ok`) |
+| PUT    | `/maintenance-schedule/{id}`      | Only `interval_km`, `interval_months`, `priority` (`low`/`medium`/`high`/`critical`) are editable |
 
 Creating a service record, fuel log entry, or expense with a `mileage`
 bumps the vehicle's `current_mileage` the same way the web forms do (and
@@ -61,12 +63,16 @@ tracked category (anything but Mechanic/Accessories) feeds
 `maintenance_schedule` via `PartMaintenanceSyncService`, same as the web
 form.
 
+There's no `POST` for maintenance schedule — rows are created only as a
+side effect of an expense on a tracked item type (see `POST /expenses`
+above and `PartMaintenanceSyncService`), same as the web app.
+
 **Not yet supported in the API** (use the web pages for these): insurance
 sticker / driving licence scan upload / service dashboard photo / expense
 receipt upload, vehicle deletion, editing or deleting service
 records/fuel logs/expenses, service items (the sub-resource under a
-service record), maintenance schedule, reports. These are the next
-milestone once the core flow above is working end-to-end on the iOS side.
+service record), reports. These are the next milestone once the core flow
+above is working end-to-end on the iOS side.
 
 ## Adding this to a new host
 

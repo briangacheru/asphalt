@@ -15,6 +15,7 @@ use App\Api\Controllers\DrivingLicenseController;
 use App\Api\Controllers\ServiceRecordController;
 use App\Api\Controllers\FuelLogController;
 use App\Api\Controllers\ExpenseController;
+use App\Api\Controllers\MaintenanceScheduleController;
 use App\Database\Database;
 use App\Middleware\ApiAuthMiddleware;
 
@@ -119,6 +120,13 @@ try {
             break;
         case $method === 'POST' && $segments === ['expenses']:
             ExpenseController::store($pdo, $userId, $body);
+            break;
+
+        case $method === 'GET' && count($segments) === 3 && $segments[0] === 'vehicles' && $segments[2] === 'maintenance-schedule':
+            MaintenanceScheduleController::index($pdo, $userId, (int) $segments[1]);
+            break;
+        case $method === 'PUT' && count($segments) === 2 && $segments[0] === 'maintenance-schedule':
+            MaintenanceScheduleController::update($pdo, $userId, (int) $segments[1], $body);
             break;
 
         default:
