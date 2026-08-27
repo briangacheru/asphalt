@@ -5,11 +5,112 @@ namespace App\Api\Controllers;
 use App\Api\Response;
 use App\Middleware\ApiAuthMiddleware;
 use App\Services\ApiTokenService;
+use App\Services\EmailService;
+use App\Services\EmailVerificationService;
 use App\Services\RateLimiterService;
 use App\Services\SiteSettingsService;
 
 class AuthController
 {
+    /** POST /auth/register — mirrors auth/register.php. Public. */
+    public static function register(\PDO $pdo, array $body): void
+    {
+        $maintenanceMode = SiteSettingsService::get($pdo, 'maintenance_mode') === '1';
+        $registrationsEnabled = SiteSettingsService::get($pdo, 'registrations_enabled') !== '0';
+        if ($maintenanceMode) {
+            Response::error('The site is currently under maintenance. New accounts cannot be created right now.', 503);
+        }
+        if (!$registrationsEnabled) {
+            Response::error('New registrations are currently closed.', 403);
+        }
+
+        $firstName = trim($body['first_name'] ?? '');
+        $lastName = trim($body['last_name'] ?? '');
+        $email = trim($body['email'] ?? '');
+        $phone = trim($body['phone'] ?? '');
+        $password = (string) ($body['password'] ?? '');
+
+        if ($firstName === '') {
+            Response::error('First name is required.', 422);
+        }
+        if ($lastName === '') {
+            Response::error('Last name is required.', 422);
+        }
+        if ($email === '' || !isValidEmail($email)) {
+            Response::error('A valid email is required.', 422);
+        }
+        if (strlen($password) < MIN_PASSWORD_LENGTH) {
+            Response::error('Password must be at least ' . MIN_PASSWORD_LENGTH . ' characters.', 422);
+        }
+
+        $stmt = $pdo->prepare("SELECT id FROM users WHERE email = ?");
+        $stmt->execute([$email]);
+        if ($stmt->fetch()) {
+            Response::error('An account with this email already exists.', 409);
+        }
+
+        $stmt = $pdo->prepare("
+            INSERT INTO users (email, password, first_name, last_name, phone, is_verified)
+            VALUES (?, ?, ?, ?, ?, 0)
+        ");
+        $stmt->execute([$email, hashPassword($password), $firstName, $lastName, $phone ?: null]);
+        $newUserId = (int) $pdo->lastInsertId();
+
+        $verificationToken = EmailVerificationService::issue($pdo, $newUserId);
+        $emailService = new EmailService($pdo);
+        $emailService->sendWelcomeEmail($email, $verificationToken, $firstName);
+
+        // No token — the account isn't verified yet, matching login()'s
+        // is_verified check, so the app can't sign the user in until they
+        // click the emailed verification link (a web page, same as the
+        // password-reset flow below).
+        Response::json([
+            'success' => true,
+            'message' => 'Account created. Please check your email to verify your account before signing in.',
+        ], 201);
+    }
+
+    /**
+     * POST /auth/forgot-password — mirrors auth/forgot-password.php.
+     * Always responds success (even for an unknown email) to prevent
+     * account enumeration; the actual reset happens on the web via the
+     * emailed link (auth/reset-password.php), not in this API.
+     */
+    public static function forgotPassword(\PDO $pdo, array $body): void
+    {
+        $email = trim($body['email'] ?? '');
+
+        if ($email === '' || !isValidEmail($email)) {
+            Response::error('A valid email is required.', 422);
+        }
+
+        $rateLimitKey = 'forgot-password:' . RateLimiterService::clientIp() . ':' . strtolower($email);
+        if (RateLimiterService::tooManyAttempts($pdo, $rateLimitKey, 3, 3600)) {
+            Response::error('Too many reset requests for this email. Please try again later.', 429);
+        }
+        RateLimiterService::recordAttempt($pdo, $rateLimitKey);
+
+        $stmt = $pdo->prepare("SELECT id, first_name, email FROM users WHERE email = ? AND is_active = 1");
+        $stmt->execute([$email]);
+        $user = $stmt->fetch();
+
+        if ($user) {
+            $pdo->prepare("DELETE FROM password_resets WHERE user_id = ?")->execute([$user['id']]);
+
+            $token = generateToken();
+            $tokenHash = password_hash($token, PASSWORD_DEFAULT);
+            $expires = date('Y-m-d H:i:s', time() + PASSWORD_RESET_EXPIRY);
+
+            $pdo->prepare("INSERT INTO password_resets (user_id, token, expires_at) VALUES (?, ?, ?)")
+                ->execute([$user['id'], $tokenHash, $expires]);
+
+            $emailService = new EmailService($pdo);
+            $emailService->sendPasswordResetEmail($user['email'], $token, $user['first_name']);
+        }
+
+        Response::json(['success' => true, 'message' => 'If an account exists for that email, a reset link has been sent.']);
+    }
+
     /** POST /auth/login — mirrors auth/login.php's checks (active, verified, maintenance mode). */
     public static function login(\PDO $pdo, array $body): void
     {

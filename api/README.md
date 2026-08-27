@@ -11,13 +11,26 @@ rewrites for any request under `/api/`.
    iOS Keychain and send it as `Authorization: Bearer <token>` on every
    other request. A user can hold multiple tokens (one per device) — each
    is independent and only its SHA-256 hash is stored server-side.
-2. `POST /api/auth/logout` (authenticated) revokes the token used on the
+2. `POST /api/auth/register` with `{ "first_name", "last_name", "email",
+   "password", "phone"? }` (public, no token) creates an account and emails
+   a verification link — mirrors auth/register.php. **No token is
+   returned**: the account is unverified until the user clicks that link
+   (a web page), so `POST /auth/login` will 403 until then.
+3. `POST /api/auth/forgot-password` with `{ "email" }` (public, no token)
+   mirrors auth/forgot-password.php — always responds success (even for an
+   unknown email, to prevent enumeration) and, if the account exists,
+   emails a reset link. Completing the reset happens on the web
+   (auth/reset-password.php); this API has no endpoint that consumes the
+   token itself.
+4. `POST /api/auth/logout` (authenticated) revokes the token used on the
    request.
-3. `GET /api/me` (authenticated) returns the current user's profile.
+5. `GET /api/me` (authenticated) returns the current user's profile.
 
 Login mirrors the web login's checks: account must be active, email
 verified, and (if maintenance mode is on) the user must be an admin.
 Failed attempts are rate-limited the same way (5 per 15 min per IP+email).
+Registration and forgot-password are rate-limited too, matching their web
+counterparts.
 
 ## Request/response format
 

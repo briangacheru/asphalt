@@ -49,8 +49,9 @@ try {
         $body = $_POST;
     }
 
-    // Only auth/login is reachable without a token.
-    $isPublicRoute = $method === 'POST' && $segments === ['auth', 'login'];
+    // auth/login, auth/register, and auth/forgot-password are reachable without a token.
+    $publicRoutes = [['auth', 'login'], ['auth', 'register'], ['auth', 'forgot-password']];
+    $isPublicRoute = $method === 'POST' && in_array($segments, $publicRoutes, true);
     $userId = $isPublicRoute ? null : ApiAuthMiddleware::authenticate($pdo);
 
     $matched = true;
@@ -58,6 +59,12 @@ try {
     switch (true) {
         case $method === 'POST' && $segments === ['auth', 'login']:
             AuthController::login($pdo, $body);
+            break;
+        case $method === 'POST' && $segments === ['auth', 'register']:
+            AuthController::register($pdo, $body);
+            break;
+        case $method === 'POST' && $segments === ['auth', 'forgot-password']:
+            AuthController::forgotPassword($pdo, $body);
             break;
         case $method === 'POST' && $segments === ['auth', 'logout']:
             AuthController::logout($pdo);
