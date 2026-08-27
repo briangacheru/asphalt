@@ -19,6 +19,7 @@ use App\Api\Controllers\ExpenseController;
 use App\Api\Controllers\MaintenanceScheduleController;
 use App\Api\Controllers\ReportController;
 use App\Api\Controllers\DocumentController;
+use App\Api\Controllers\MileageUpdateController;
 use App\Database\Database;
 use App\Middleware\ApiAuthMiddleware;
 
@@ -181,6 +182,13 @@ try {
             break;
         case $method === 'DELETE' && count($segments) === 2 && $segments[0] === 'documents':
             DocumentController::destroy($pdo, $userId, (int) $segments[1]);
+            break;
+
+        case $method === 'POST' && $segments === ['mileage-updates']:
+            MileageUpdateController::store($pdo, $userId, $body);
+            break;
+        case $method === 'GET' && count($segments) === 2 && $segments[0] === 'mileage-updates' && $segments[1] === 'recent':
+            MileageUpdateController::recent($pdo, $userId, (int) ($_GET['limit'] ?? 15));
             break;
 
         default:

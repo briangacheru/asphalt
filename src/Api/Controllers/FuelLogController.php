@@ -18,7 +18,13 @@ class FuelLogController
     {
         self::assertOwnsVehicle($pdo, $userId, $vehicleId);
 
-        $stmt = $pdo->prepare("SELECT * FROM fuel_log WHERE vehicle_id = ? ORDER BY fill_date DESC, id DESC");
+        // Capped to the last 15 months — a mobile-friendly window rather
+        // than an unbounded history list; the web app has no such limit.
+        $stmt = $pdo->prepare("
+            SELECT * FROM fuel_log
+            WHERE vehicle_id = ? AND fill_date >= DATE_SUB(CURDATE(), INTERVAL 15 MONTH)
+            ORDER BY fill_date DESC, id DESC
+        ");
         $stmt->execute([$vehicleId]);
 
         Response::json(['fuel_logs' => $stmt->fetchAll()]);

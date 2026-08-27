@@ -40,11 +40,13 @@ class ExpenseController
     {
         self::assertOwnsVehicle($pdo, $userId, $vehicleId);
 
+        // Capped to the last 15 months — a mobile-friendly window rather
+        // than an unbounded history list; the web app has no such limit.
         $stmt = $pdo->prepare("
             SELECT e.*, ec.name AS category_name, ec.icon AS category_icon
             FROM expenses e
             JOIN expense_categories ec ON ec.id = e.category_id
-            WHERE e.vehicle_id = ?
+            WHERE e.vehicle_id = ? AND e.expense_date >= DATE_SUB(CURDATE(), INTERVAL 15 MONTH)
             ORDER BY e.expense_date DESC, e.id DESC
         ");
         $stmt->execute([$vehicleId]);

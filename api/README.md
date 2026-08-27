@@ -84,12 +84,14 @@ isn't supported by this API — use the web app for that one case.
 | POST   | `/service-records/{id}/items`     | `item_type_id` required (must reference `/item-types`); accepts `item_name`, `brand`, `part_number`, `quantity` (default 1), `cost`, `notes` |
 | PUT    | `/service-items/{id}`             | Same fields as create |
 | DELETE | `/service-items/{id}`             | |
-| GET    | `/vehicles/{id}/fuel-logs`        | All fuel log entries for one vehicle |
+| POST   | `/mileage-updates`                | `vehicle_id`, `mileage` required (must be ≥ current mileage); `notes` optional. Global — not scoped to one vehicle, mirrors update-mileage.php. No reminder email is sent (out of scope — no side-channel notifications from this API, same as service-records/insurance/licence) |
+| GET    | `/mileage-updates/recent?limit=15` | `mileage_log` ∪ `fuel_log` across every vehicle the user owns, newest-entered first; `limit` capped at 50 |
+| GET    | `/vehicles/{id}/fuel-logs`        | Last 15 months of fuel log entries for one vehicle |
 | POST   | `/fuel-logs`                      | `vehicle_id`, `mileage`, `liters`, `price_per_liter` required; `total_cost` is computed server-side |
 | PUT    | `/fuel-logs/{id}`                 | Same fields as create — `vehicle_id` may be reassigned to a different (own) vehicle |
 | DELETE | `/fuel-logs/{id}`                 | |
 | GET    | `/expense-categories`             | `{id, name, icon}` — admin-managed, not a fixed enum |
-| GET    | `/vehicles/{id}/expenses`         | All expenses for one vehicle, each joined with its category name/icon |
+| GET    | `/vehicles/{id}/expenses`         | Last 15 months of expenses for one vehicle, each joined with its category name/icon |
 | POST   | `/expenses`                       | `vehicle_id`, `category_id` required, plus `amount` OR `quantity` + `cost_per_unit` (auto-multiplied unless the category is "Mechanic") |
 | PUT    | `/expenses/{id}`                  | Same fields as create; 404s if the expense mirrors a service item (`service_item_id` set) — those are edited via their service item, not directly |
 | DELETE | `/expenses/{id}`                  | Same service-item lock as `PUT` |
