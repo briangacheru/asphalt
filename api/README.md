@@ -63,7 +63,9 @@ isn't supported by this API — use the web app for that one case.
 |--------|-----------------------------------|-------|
 | POST   | `/auth/login`                     | Public |
 | POST   | `/auth/logout`                    | |
-| GET    | `/me`                             | |
+| GET    | `/me`                             | Includes profile + preference fields: `email_notifications_enabled`, `email_frequency` (`all`/`important`/`critical`), `mileage_reminder_enabled`, `default_currency` (`USD`/`KES`/`EUR`/`GBP`/`CAD`/`AUD`), `default_distance_unit` (`km`/`mi`), `default_volume_unit` (`L`/`gal`), `timezone` (IANA identifier) |
+| PUT    | `/me`                             | Partial update — any subset of the fields above plus `first_name`, `last_name`, `phone`, `email` |
+| POST   | `/me/change-password`             | `current_password`, `new_password` (min 6 chars) required |
 | GET    | `/vehicles`                       | Active vehicles for the user, each with a summary: `mileage_updated_at`, `next_service_mileage`/`service_km_remaining`, `last_fuel_fill_date`/`last_fuel_liters`/`last_fuel_total_cost`, `maintenance_status` (`overdue`/`due_soon`/`upcoming`/`ok`/`none`) |
 | POST   | `/vehicles`                       | `make`, `model`, `year` required |
 | GET    | `/vehicles/{id}`                  | |

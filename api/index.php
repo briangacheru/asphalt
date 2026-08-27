@@ -64,6 +64,12 @@ try {
         case $method === 'GET' && $segments === ['me']:
             AuthController::me($pdo, $userId);
             break;
+        case $method === 'PUT' && $segments === ['me']:
+            AuthController::updateMe($pdo, $userId, $body);
+            break;
+        case $method === 'POST' && $segments === ['me', 'change-password']:
+            AuthController::changePassword($pdo, $userId, $body);
+            break;
 
         case $method === 'GET' && $segments === ['vehicles']:
             VehicleController::index($pdo, $userId);
