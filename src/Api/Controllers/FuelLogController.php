@@ -26,8 +26,29 @@ class FuelLogController
             ORDER BY fill_date DESC, id DESC
         ");
         $stmt->execute([$vehicleId]);
+        $fuelLogs = $stmt->fetchAll();
 
-        Response::json(['fuel_logs' => $stmt->fetchAll()]);
+        // This-month-vs-last-month fill-up count and total liters, mirroring
+        // fuel-log.php's monthStats query, scoped to this one vehicle.
+        $stmt = $pdo->prepare("
+            SELECT
+                COALESCE(SUM(CASE WHEN DATE_FORMAT(fill_date, '%Y-%m') = DATE_FORMAT(CURDATE(), '%Y-%m') THEN 1 ELSE 0 END), 0) AS this_month_count,
+                COALESCE(SUM(CASE WHEN DATE_FORMAT(fill_date, '%Y-%m') = DATE_FORMAT(CURDATE() - INTERVAL 1 MONTH, '%Y-%m') THEN 1 ELSE 0 END), 0) AS last_month_count,
+                COALESCE(SUM(CASE WHEN DATE_FORMAT(fill_date, '%Y-%m') = DATE_FORMAT(CURDATE(), '%Y-%m') THEN liters ELSE 0 END), 0) AS this_month_liters,
+                COALESCE(SUM(CASE WHEN DATE_FORMAT(fill_date, '%Y-%m') = DATE_FORMAT(CURDATE() - INTERVAL 1 MONTH, '%Y-%m') THEN liters ELSE 0 END), 0) AS last_month_liters
+            FROM fuel_log
+            WHERE vehicle_id = ?
+        ");
+        $stmt->execute([$vehicleId]);
+        $monthStats = $stmt->fetch();
+
+        Response::json([
+            'fuel_logs' => $fuelLogs,
+            'this_month_count' => (int) $monthStats['this_month_count'],
+            'last_month_count' => (int) $monthStats['last_month_count'],
+            'this_month_liters' => (float) $monthStats['this_month_liters'],
+            'last_month_liters' => (float) $monthStats['last_month_liters'],
+        ]);
     }
 
     /** POST /fuel-logs */

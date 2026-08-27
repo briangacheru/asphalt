@@ -79,7 +79,7 @@ isn't supported by this API — use the web app for that one case.
 | GET    | `/me`                             | Includes profile + preference fields: `email_notifications_enabled`, `email_frequency` (`all`/`important`/`critical`), `mileage_reminder_enabled`, `default_currency` (`USD`/`KES`/`EUR`/`GBP`/`CAD`/`AUD`), `default_distance_unit` (`km`/`mi`), `default_volume_unit` (`L`/`gal`), `timezone` (IANA identifier) |
 | PUT    | `/me`                             | Partial update — any subset of the fields above plus `first_name`, `last_name`, `phone`, `email` |
 | POST   | `/me/change-password`             | `current_password`, `new_password` (min 6 chars) required |
-| GET    | `/vehicles`                       | Active vehicles for the user, each with a summary: `mileage_updated_at`, `next_service_mileage`/`service_km_remaining`, `last_fuel_fill_date`/`last_fuel_liters`/`last_fuel_total_cost`, `maintenance_status` (`overdue`/`due_soon`/`upcoming`/`ok`/`none`) |
+| GET    | `/vehicles`                       | Active vehicles for the user, each with a summary: `mileage_updated_at`, `next_service_mileage`/`service_km_remaining`, `last_fuel_fill_date`/`last_fuel_liters`/`last_fuel_total_cost`, `maintenance_status` (`overdue`/`due_soon`/`upcoming`/`ok`/`none`), `km_this_month`/`km_last_month` (nullable — null when there's no mileage record in that window), `spent_this_month`/`spent_last_month` (service + expenses + fuel, mirrors vehicle-details.php) |
 | POST   | `/vehicles`                       | `make`, `model`, `year` required |
 | GET    | `/vehicles/{id}`                  | |
 | PUT    | `/vehicles/{id}`                  | Partial update, any subset of fields |
@@ -99,7 +99,7 @@ isn't supported by this API — use the web app for that one case.
 | DELETE | `/service-items/{id}`             | |
 | POST   | `/mileage-updates`                | `vehicle_id`, `mileage` required (must be ≥ current mileage); `notes` optional. Global — not scoped to one vehicle, mirrors update-mileage.php. No reminder email is sent (out of scope — no side-channel notifications from this API, same as service-records/insurance/licence) |
 | GET    | `/mileage-updates/recent?limit=15` | `mileage_log` ∪ `fuel_log` across every vehicle the user owns, newest-entered first; `limit` capped at 50 |
-| GET    | `/vehicles/{id}/fuel-logs`        | Last 15 months of fuel log entries for one vehicle |
+| GET    | `/vehicles/{id}/fuel-logs`        | Last 15 months of fuel log entries for one vehicle, plus `this_month_count`/`last_month_count` and `this_month_liters`/`last_month_liters` (calendar-month fill-up count and total liters, unaffected by the 15-month cap) |
 | POST   | `/fuel-logs`                      | `vehicle_id`, `mileage`, `liters`, `price_per_liter` required; `total_cost` is computed server-side |
 | PUT    | `/fuel-logs/{id}`                 | Same fields as create — `vehicle_id` may be reassigned to a different (own) vehicle |
 | DELETE | `/fuel-logs/{id}`                 | |

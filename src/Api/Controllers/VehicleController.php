@@ -171,6 +171,54 @@ class VehicleController
         }
         $base['maintenance_status'] = $worst ?? 'none';
 
+        // Month-over-month km driven and total spend, mirroring
+        // vehicle-details.php's kmDrivenInRange()/monthlyTotalSpent() exactly.
+        $firstDayThisMonth = date('Y-m-01');
+        $firstDayNextMonth = date('Y-m-01', strtotime($firstDayThisMonth . ' +1 month'));
+        $firstDayLastMonth = date('Y-m-01', strtotime($firstDayThisMonth . ' -1 month'));
+
+        $base['km_this_month'] = self::kmDrivenInRange($pdo, $vehicleId, $firstDayThisMonth, $firstDayNextMonth);
+        $base['km_last_month'] = self::kmDrivenInRange($pdo, $vehicleId, $firstDayLastMonth, $firstDayThisMonth);
+        $base['spent_this_month'] = self::monthlyTotalSpent($pdo, $vehicleId, $firstDayThisMonth, $firstDayNextMonth);
+        $base['spent_last_month'] = self::monthlyTotalSpent($pdo, $vehicleId, $firstDayLastMonth, $firstDayThisMonth);
+
         return $base;
+    }
+
+    /** Km driven within [$start, $end) — mirrors vehicle-details.php's kmDrivenInRange(). */
+    private static function kmDrivenInRange(\PDO $pdo, int $vehicleId, string $start, string $end): ?int
+    {
+        $stmt = $pdo->prepare("
+            SELECT mileage FROM (
+                SELECT log_date AS record_date, mileage FROM mileage_log WHERE vehicle_id = ? AND log_date >= ? AND log_date < ?
+                UNION ALL
+                SELECT service_date AS record_date, mileage FROM service_records WHERE vehicle_id = ? AND service_date >= ? AND service_date < ? AND mileage IS NOT NULL
+                UNION ALL
+                SELECT fill_date AS record_date, mileage FROM fuel_log WHERE vehicle_id = ? AND fill_date >= ? AND fill_date < ?
+            ) combined
+            ORDER BY record_date ASC, mileage ASC
+        ");
+        $stmt->execute([$vehicleId, $start, $end, $vehicleId, $start, $end, $vehicleId, $start, $end]);
+        $rows = $stmt->fetchAll(\PDO::FETCH_COLUMN);
+
+        if (empty($rows)) {
+            return null;
+        }
+
+        return max(0, (int) end($rows) - (int) $rows[0]);
+    }
+
+    /** Every cost incurred within [$start, $end) — mirrors vehicle-details.php's monthlyTotalSpent(). */
+    private static function monthlyTotalSpent(\PDO $pdo, int $vehicleId, string $start, string $end): float
+    {
+        $stmt = $pdo->prepare("
+            SELECT
+                (SELECT COALESCE(SUM(service_cost), 0) FROM service_records WHERE vehicle_id = ? AND service_date >= ? AND service_date < ?) +
+                (SELECT COALESCE(SUM(amount), 0) FROM expenses WHERE vehicle_id = ? AND expense_date >= ? AND expense_date < ?) +
+                (SELECT COALESCE(SUM(total_cost), 0) FROM fuel_log WHERE vehicle_id = ? AND fill_date >= ? AND fill_date < ?)
+            AS total
+        ");
+        $stmt->execute([$vehicleId, $start, $end, $vehicleId, $start, $end, $vehicleId, $start, $end]);
+        return (float) $stmt->fetchColumn();
     }
 }
