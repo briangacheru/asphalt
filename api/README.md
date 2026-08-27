@@ -29,7 +29,7 @@ Failed attempts are rate-limited the same way (5 per 15 min per IP+email).
 
 ## File uploads
 
-Four `POST` endpoints double as file uploads — send
+Five `POST` endpoints double as file uploads — send
 `multipart/form-data` instead of JSON, with the other fields as regular
 form fields (arrays as repeated `key[]` fields) plus one file field:
 
@@ -39,10 +39,19 @@ form fields (arrays as repeated `key[]` fields) plus one file field:
 | `POST /driving-license` | `scan`         | Same as above                                | 10MB |
 | `POST /service-records` | `dashboard_image` | JPG, PNG, GIF, WEBP                     | 10MB |
 | `POST /expenses`    | `receipt`          | JPG, PNG, GIF, WEBP, PDF                    | 5MB |
+| `POST /documents`   | `document`         | Same as insurance/license                    | 10MB |
 
-All four validate the file's actual bytes via `mime_content_type()` —
+All five validate the file's actual bytes via `mime_content_type()` —
 never the client-supplied filename or Content-Type — same as (or, for the
 service dashboard photo, stricter than) the web app.
+
+Downloading an uploaded file isn't done through the API itself — construct
+the URL as `{site root}/uploads/{subdir}/{file_path}`, where `{site root}`
+is the API's base URL with the trailing `/api` removed and `{subdir}` is
+`insurance`, `driving-license`, `receipts`, or `documents` to match the
+endpoint (the service record dashboard photo has no subdir — it's
+`{site root}/uploads/{file_path}` directly). This mirrors how the web app
+serves `uploads/` directly as static files.
 
 **PUT requests stay JSON-only.** PHP only auto-populates `$_FILES` for
 `POST`, so replacing a receipt on an existing expense (`PUT /expenses/{id}`)
@@ -85,6 +94,10 @@ isn't supported by this API — use the web app for that one case.
 | GET    | `/vehicles/{id}/maintenance-schedule` | Every tracked part for one vehicle, each with a computed `status` (`overdue`/`due_soon`/`upcoming`/`ok`) |
 | PUT    | `/maintenance-schedule/{id}`      | Only `interval_km`, `interval_months`, `priority` (`low`/`medium`/`high`/`critical`) are editable |
 | GET    | `/reports?year=YYYY&vehicle_id={id}` | Spend summary — both query params optional (`year` defaults to the current year, omitting `vehicle_id` covers every vehicle) |
+| GET    | `/document-categories`            | `{id, slug, label, icon, color}` — admin-managed, shared across all users |
+| GET    | `/vehicles/{id}/documents`        | General document/photo library for one vehicle (separate from the insurance sticker/licence scan/receipt uploads above) |
+| POST   | `/documents`                      | `vehicle_id` required; `category` (must match a `/document-categories` slug, else falls back to the first one) and `title` optional |
+| DELETE | `/documents/{id}`                 | Also deletes the stored file |
 
 Creating a service record, fuel log entry, or expense with a `mileage`
 bumps the vehicle's `current_mileage` the same way the web forms do (and

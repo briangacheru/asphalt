@@ -18,6 +18,7 @@ use App\Api\Controllers\FuelLogController;
 use App\Api\Controllers\ExpenseController;
 use App\Api\Controllers\MaintenanceScheduleController;
 use App\Api\Controllers\ReportController;
+use App\Api\Controllers\DocumentController;
 use App\Database\Database;
 use App\Middleware\ApiAuthMiddleware;
 
@@ -161,6 +162,19 @@ try {
 
         case $method === 'GET' && $segments === ['reports']:
             ReportController::index($pdo, $userId);
+            break;
+
+        case $method === 'GET' && $segments === ['document-categories']:
+            DocumentController::categories($pdo);
+            break;
+        case $method === 'GET' && count($segments) === 3 && $segments[0] === 'vehicles' && $segments[2] === 'documents':
+            DocumentController::index($pdo, $userId, (int) $segments[1]);
+            break;
+        case $method === 'POST' && $segments === ['documents']:
+            DocumentController::store($pdo, $userId, $body);
+            break;
+        case $method === 'DELETE' && count($segments) === 2 && $segments[0] === 'documents':
+            DocumentController::destroy($pdo, $userId, (int) $segments[1]);
             break;
 
         default:
