@@ -375,7 +375,7 @@ if ($flash): ?>
                         </div>
                     </div>
                     <h6 class="text-muted mb-2 fw-normal">Total Cost</h6>
-                    <h3 class="mb-0 fw-bold">Ksh. <?php echo number_format($totalCost, 2); ?></h3>
+                    <h3 class="mb-0 fw-bold"><?php echo money($totalCost); ?></h3>
                 </div>
             </div>
         </div>
@@ -426,7 +426,7 @@ if ($flash): ?>
                                    min="1" value="1">
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label">Cost per Unit (Ksh)</label>
+                            <label class="form-label">Cost per Unit (<?php echo currencySymbol(); ?>)</label>
                             <input type="number" name="cost" class="form-control"
                                    min="0" step="1" placeholder="0.00">
                         </div>
@@ -539,7 +539,7 @@ if ($flash): ?>
                                         <td><?php echo $item['quantity']; ?>
                                         <td>
                                             <?php if ($item['cost'] > 0): ?>
-                                                <strong>Ksh. <?php echo number_format($item['cost'] * $item['quantity'], 0); ?></strong>
+                                                <strong><?php echo money($item['cost'] * $item['quantity'], 0); ?></strong>
                                             <?php else: ?>
                                                 <span class="text-muted">-</span>
                                             <?php endif; ?>
@@ -566,7 +566,7 @@ if ($flash): ?>
                                 <tfoot>
                                 <tr>
                                     <td colspan="2" class="text-right"><strong>Total:</strong></td>
-                                    <td colspan="3" class="text-end"><strong>Ksh. <?php echo number_format($totalCost, 2); ?></strong></td>
+                                    <td colspan="3" class="text-end"><strong><?php echo money($totalCost); ?></strong></td>
                                 </tr>
                                 </tfoot>
                             </table>
@@ -622,13 +622,13 @@ if ($flash): ?>
 
                                                 <div class="col-6">
                                                     <label class="form-label fw-bold text-700 fs-10">Unit Cost</label>
-                                                    <p class="mb-0">Ksh. <?php echo number_format($item['cost'], 2); ?></p>
+                                                    <p class="mb-0"><?php echo money($item['cost']); ?></p>
                                                 </div>
 
                                                 <div class="col-12">
                                                     <div class="bg-success bg-opacity-10 rounded p-2 text-center">
                                                         <label class="form-label fw-bold text-700 fs-10 mb-1">Total Cost</label>
-                                                        <h5 class="mb-0 text-success">Ksh. <?php echo number_format($item['cost'] * $item['quantity'], 2); ?></h5>
+                                                        <h5 class="mb-0 text-success"><?php echo money($item['cost'] * $item['quantity']); ?></h5>
                                                     </div>
                                                 </div>
 
@@ -700,7 +700,7 @@ if ($flash): ?>
                                                         <input type="number" name="quantity" class="form-control" value="<?php echo $item['quantity']; ?>" min="1" required>
                                                     </div>
                                                     <div class="col-md-6 mb-3">
-                                                        <label class="form-label">Cost per Unit (Ksh)</label>
+                                                        <label class="form-label">Cost per Unit (<?php echo currencySymbol(); ?>)</label>
                                                         <input type="number" name="cost" class="form-control" value="<?php echo $item['cost']; ?>" step="0.01" min="0">
                                                     </div>
                                                 </div>
@@ -754,7 +754,7 @@ if ($flash): ?>
                                                     <?php if ($item['brand']): ?>
                                                         <p class="mb-1 text-muted fs-10">Brand: <?php echo sanitize($item['brand']); ?></p>
                                                     <?php endif; ?>
-                                                    <p class="mb-0 fw-bold text-danger">Cost: Ksh. <?php echo number_format($item['cost'] * $item['quantity'], 2); ?></p>
+                                                    <p class="mb-0 fw-bold text-danger">Cost: <?php echo money($item['cost'] * $item['quantity']); ?></p>
                                                 </div>
                                             </div>
                                             <div class="modal-footer">

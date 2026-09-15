@@ -323,7 +323,7 @@ if ($flash): ?>
                                         <?php endif; ?>
                                     </p>
                                     <?php if ($v['premium_amount']): ?>
-                                        <p class="fs-11 text-600 mb-0">Premium: Ksh. <?php echo formatNumber($v['premium_amount']); ?></p>
+                                        <p class="fs-11 text-600 mb-0">Premium: <?php echo money($v['premium_amount'], 0); ?></p>
                                     <?php endif; ?>
                                 </div>
                             </div>
@@ -418,7 +418,7 @@ if ($flash): ?>
                             </select>
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label">Premium (Ksh.)</label>
+                            <label class="form-label">Premium (<?php echo currencySymbol(); ?>)</label>
                             <input type="number" step="0.01" min="0" name="premium_amount" class="form-control">
                         </div>
                         <div class="col-md-6">

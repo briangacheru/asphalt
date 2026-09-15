@@ -395,7 +395,7 @@ if ($flash): ?>
                             <i class="fas fa-money-bill-wave fs-4"></i>
                         </div>
                         <div class="col-auto">
-                            <h4 class="fs-6 fw-normal text-warning">Ksh. <?php echo formatNumber($stats['total']); ?></h4>
+                            <h4 class="fs-6 fw-normal text-warning"><?php echo money($stats['total'], 0); ?></h4>
                         </div>
                     </div>
                 </div>
@@ -410,7 +410,7 @@ if ($flash): ?>
                             <i class="fas fa-calendar fs-4"></i>
                         </div>
                         <div class="col-auto">
-                            <h4 class="fs-6 fw-normal text-warning">Ksh. <?php echo formatNumber($stats['this_month']); ?></h4>
+                            <h4 class="fs-6 fw-normal text-warning"><?php echo money($stats['this_month'], 0); ?></h4>
                         </div>
                     </div>
                 </div>
@@ -475,9 +475,9 @@ if ($flash): ?>
                                             <i class="fas fa-car me-1 text-muted"></i><?php echo sanitize($e['make'] . ' ' . $e['model']); ?>
                                         </td>
                                         <td class="align-middle">
-                                            <strong class="text-success">Ksh <?php echo number_format($e['amount'], 2); ?></strong>
+                                            <strong class="text-success"><?php echo money($e['amount']); ?></strong>
                                             <?php if ($isItemCat && !empty($e['cost_per_unit']) && !empty($e['quantity']) && $e['quantity'] > 1): ?>
-                                                <p class="mb-0 text-muted" style="font-size:0.72rem;">@ Ksh <?php echo number_format($e['cost_per_unit'], 2); ?>/unit</p>
+                                                <p class="mb-0 text-muted" style="font-size:0.72rem;">@ <?php echo money($e['cost_per_unit']); ?>/unit</p>
                                             <?php endif; ?>
                                         </td>
                                         <td class="align-middle white-space-nowrap text-end position-relative">
@@ -547,7 +547,7 @@ if ($flash): ?>
                                         <small class="text-muted"><?php echo $pct; ?>%</small>
                                     </td>
                                     <td class="py-2 pe-3 text-end fw-semibold">
-                                        Ksh <?php echo formatNumber($cat['total']); ?>
+                                        <?php echo money($cat['total'], 0); ?>
                                     </td>
                                 </tr>
                             <?php endif; endforeach; ?>
@@ -603,7 +603,7 @@ if ($flash): ?>
                                         <small class="text-muted"><?php echo $m['count']; ?> record<?php echo $m['count'] != 1 ? 's' : ''; ?></small>
                                     </td>
                                     <td class="py-2 pe-3 text-end fw-semibold text-warning">
-                                        Ksh <?php echo formatNumber($m['total']); ?>
+                                        <?php echo money($m['total'], 0); ?>
                                     </td>
                                 </tr>
                             <?php endforeach; ?>
@@ -677,7 +677,7 @@ if ($flash): ?>
                                 <input type="date" name="expense_date" class="form-control" value="<?php echo date('Y-m-d'); ?>">
                             </div>
                             <div class="col-md-4 mb-3" id="add_amount_group">
-                                <label class="form-label">Amount (Ksh) <span class="text-danger">*</span></label>
+                                <label class="form-label">Amount (<?php echo currencySymbol(); ?>) <span class="text-danger">*</span></label>
                                 <input type="number" name="amount" id="add_amount" step="1" class="form-control" placeholder="0.00">
                                 <small class="text-muted d-none" id="add_amount_note">Auto-calculated from Qty × Cost/unit</small>
                             </div>
@@ -727,7 +727,7 @@ if ($flash): ?>
                                     <input type="number" name="quantity" id="add_quantity" min="1" class="form-control" placeholder="1" value="1">
                                 </div>
                                 <div class="col-md-4 mb-3">
-                                    <label class="form-label">Cost per Unit (Ksh)</label>
+                                    <label class="form-label">Cost per Unit (<?php echo currencySymbol(); ?>)</label>
                                     <input type="number" name="cost_per_unit" id="add_cost_per_unit" step="1" min="0" class="form-control" placeholder="0.00">
                                 </div>
                                 <div class="col-md-4 mb-3">
@@ -805,7 +805,7 @@ if ($flash): ?>
                                 <input type="date" name="expense_date" id="edit_expense_date" class="form-control">
                             </div>
                             <div class="col-md-4 mb-3">
-                                <label class="form-label">Amount (Ksh) <span class="text-danger">*</span></label>
+                                <label class="form-label">Amount (<?php echo currencySymbol(); ?>) <span class="text-danger">*</span></label>
                                 <input type="number" name="amount" id="edit_amount" step="1" class="form-control" required>
                                 <small class="text-muted d-none" id="edit_amount_note">Auto-calculated from Qty × Cost/unit</small>
                             </div>
@@ -854,7 +854,7 @@ if ($flash): ?>
                                     <input type="number" name="quantity" id="edit_quantity" min="1" class="form-control" placeholder="1">
                                 </div>
                                 <div class="col-md-4 mb-3">
-                                    <label class="form-label">Cost per Unit (Ksh)</label>
+                                    <label class="form-label">Cost per Unit (<?php echo currencySymbol(); ?>)</label>
                                     <input type="number" name="cost_per_unit" id="edit_cost_per_unit" step="1" min="0" class="form-control" placeholder="0.00">
                                 </div>
                                 <div class="col-md-4 mb-3">
@@ -938,6 +938,9 @@ if ($flash): ?>
     </div>
 
     <script>
+        // Currency prefix matching the money() PHP helper's spacing convention.
+        const currencyPrefix = <?php echo json_encode(in_array(currencySymbol(), ['$', '€', '£', 'CA$', 'AU$'], true) ? currencySymbol() : currencySymbol() . ' '); ?>;
+
         // Item Details section shows for every category except Mechanic
         function isItemCategory(catName) {
             return (catName || '').trim().toLowerCase() !== 'mechanic';
@@ -1139,7 +1142,7 @@ if ($flash): ?>
                 <div class="col-sm-6">
                     <div class="p-3 rounded bg-success bg-opacity-10">
                         <p class="mb-1 text-500 fs-11 text-uppercase fw-semibold">Total Amount</p>
-                        <p class="mb-0 fw-bold text-success fs-5">Ksh ${parseFloat(e.amount || 0).toLocaleString('en-KE', {minimumFractionDigits: 2})}</p>
+                        <p class="mb-0 fw-bold text-success fs-5">${currencyPrefix}${parseFloat(e.amount || 0).toLocaleString('en-KE', {minimumFractionDigits: 2})}</p>
                     </div>
                 </div>`;
 
@@ -1207,7 +1210,7 @@ if ($flash): ?>
                     html += `
                 <div class="col-sm-6 col-md-4">
                     <p class="mb-1 text-500 fs-11 text-uppercase fw-semibold">Cost per Unit</p>
-                    <p class="mb-0 fw-semibold">Ksh ${parseFloat(e.cost_per_unit).toLocaleString('en-KE', {minimumFractionDigits: 2})}</p>
+                    <p class="mb-0 fw-semibold">${currencyPrefix}${parseFloat(e.cost_per_unit).toLocaleString('en-KE', {minimumFractionDigits: 2})}</p>
                 </div>`;
                 }
 

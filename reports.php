@@ -371,7 +371,7 @@ unset($p);
                             </div>
                             <div class="flex-grow-1 ms-3">
                                 <h6 class="text-muted mb-1">Total (<?php echo $yearFilter; ?>)</h6>
-                                <h3 class="mb-0">Ksh<?php echo formatNumber($yearStats['total']); ?></h3>
+                                <h3 class="mb-0"><?php echo money($yearStats['total'], 0); ?></h3>
                             </div>
                         </div>
                     </div>
@@ -389,7 +389,7 @@ unset($p);
                             </div>
                             <div class="flex-grow-1 ms-3">
                                 <h6 class="text-muted mb-1">Services</h6>
-                                <h3 class="mb-0">Ksh<?php echo formatNumber($yearStats['service_cost']); ?></h3>
+                                <h3 class="mb-0"><?php echo money($yearStats['service_cost'], 0); ?></h3>
                                 <small class="text-muted"><?php echo $yearStats['service_count']; ?> services</small>
                             </div>
                         </div>
@@ -408,7 +408,7 @@ unset($p);
                             </div>
                             <div class="flex-grow-1 ms-3">
                                 <h6 class="text-muted mb-1">Fuel</h6>
-                                <h3 class="mb-0">Ksh<?php echo formatNumber($yearStats['fuel_cost']); ?></h3>
+                                <h3 class="mb-0"><?php echo money($yearStats['fuel_cost'], 0); ?></h3>
                                 <small class="text-muted"><?php echo number_format($yearStats['fuel_liters'], 0); ?>L consumed</small>
                             </div>
                         </div>
@@ -427,7 +427,7 @@ unset($p);
                             </div>
                             <div class="flex-grow-1 ms-3">
                                 <h6 class="text-muted mb-1">Other Expenses</h6>
-                                <h3 class="mb-0">Ksh<?php echo formatNumber($yearStats['expense_cost']); ?></h3>
+                                <h3 class="mb-0"><?php echo money($yearStats['expense_cost'], 0); ?></h3>
                             </div>
                         </div>
                     </div>
@@ -445,7 +445,7 @@ unset($p);
                             </div>
                             <div class="flex-grow-1 ms-3">
                                 <h6 class="text-muted mb-1">Avg per Month</h6>
-                                <h3 class="mb-0">Ksh<?php echo formatNumber($yearStats['total'] / 12); ?></h3>
+                                <h3 class="mb-0"><?php echo money($yearStats['total'] / 12, 0); ?></h3>
                             </div>
                         </div>
                     </div>
@@ -499,7 +499,7 @@ unset($p);
                                 <div class="mb-4">
                                     <div class="d-flex justify-content-between align-items-center mb-2">
                                         <strong><?php echo sanitize($vs['make'] . ' ' . $vs['model']); ?></strong>
-                                        <strong class="text-primary">Ksh<?php echo formatNumber($vsTotal); ?></strong>
+                                        <strong class="text-primary"><?php echo money($vsTotal, 0); ?></strong>
                                     </div>
 
                                     <div class="progress mb-2" style="height: 8px;">
@@ -512,27 +512,27 @@ unset($p);
                                         <?php if ($serviceWidth > 0): ?>
                                             <div class="progress-bar bg-success" role="progressbar"
                                                  style="width: <?php echo $serviceWidth; ?>%;"
-                                                 title="Services: Ksh<?php echo formatNumber($vs['service_cost']); ?>">
+                                                 title="Services: <?php echo money($vs['service_cost'], 0); ?>">
                                             </div>
                                         <?php endif; ?>
                                         <?php if ($fuelWidth > 0): ?>
                                             <div class="progress-bar bg-warning" role="progressbar"
                                                  style="width: <?php echo $fuelWidth; ?>%;"
-                                                 title="Fuel: Ksh<?php echo formatNumber($vs['fuel_cost']); ?>">
+                                                 title="Fuel: <?php echo money($vs['fuel_cost'], 0); ?>">
                                             </div>
                                         <?php endif; ?>
                                         <?php if ($expenseWidth > 0): ?>
                                             <div class="progress-bar bg-info" role="progressbar"
                                                  style="width: <?php echo $expenseWidth; ?>%;"
-                                                 title="Other: Ksh<?php echo formatNumber($vs['expense_cost']); ?>">
+                                                 title="Other: <?php echo money($vs['expense_cost'], 0); ?>">
                                             </div>
                                         <?php endif; ?>
                                     </div>
 
                                     <div class="d-flex justify-content-between text-muted small">
-                                        <span><i class="fas fa-circle text-success" style="font-size: 0.6rem;"></i> Services: Ksh<?php echo formatNumber($vs['service_cost']); ?></span>
-                                        <span><i class="fas fa-circle text-warning" style="font-size: 0.6rem;"></i> Fuel: Ksh<?php echo formatNumber($vs['fuel_cost']); ?></span>
-                                        <span><i class="fas fa-circle text-info" style="font-size: 0.6rem;"></i> Other: Ksh<?php echo formatNumber($vs['expense_cost']); ?></span>
+                                        <span><i class="fas fa-circle text-success" style="font-size: 0.6rem;"></i> Services: <?php echo money($vs['service_cost'], 0); ?></span>
+                                        <span><i class="fas fa-circle text-warning" style="font-size: 0.6rem;"></i> Fuel: <?php echo money($vs['fuel_cost'], 0); ?></span>
+                                        <span><i class="fas fa-circle text-info" style="font-size: 0.6rem;"></i> Other: <?php echo money($vs['expense_cost'], 0); ?></span>
                                     </div>
                                 </div>
                             <?php endforeach; ?>
@@ -576,7 +576,7 @@ unset($p);
                                                 <span class="badge bg-secondary"><?php echo $si['count']; ?></span>
                                             </td>
                                             <td class="text-end">
-                                                <strong>Ksh<?php echo number_format($si['total_cost'], 2); ?></strong>
+                                                <strong><?php echo money($si['total_cost']); ?></strong>
                                             </td>
                                         </tr>
                                     <?php endforeach; ?>
@@ -696,7 +696,7 @@ unset($p);
                                             </div>
                                             <h6 class="mb-0"><?php echo $ec['name']; ?></h6>
                                         </div>
-                                        <h3 class="mb-1">Ksh<?php echo formatNumber($ec['total']); ?></h3>
+                                        <h3 class="mb-1"><?php echo money($ec['total'], 0); ?></h3>
                                         <small class="text-muted">
                                             <i class="fas fa-receipt me-1"></i><?php echo $ec['count']; ?> transaction<?php echo $ec['count'] != 1 ? 's' : ''; ?>
                                         </small>
@@ -742,14 +742,14 @@ unset($p);
                                                             <td class="text-nowrap"><?php echo formatDate($tx['expense_date']); ?></td>
                                                             <td><?php echo sanitize($tx['make'] . ' ' . $tx['model']); ?></td>
                                                             <td><?php echo sanitize($txDescription ?: '—'); ?></td>
-                                                            <td class="text-end"><strong>Ksh<?php echo formatNumber($tx['amount']); ?></strong></td>
+                                                            <td class="text-end"><strong><?php echo money($tx['amount'], 0); ?></strong></td>
                                                         </tr>
                                                     <?php endforeach; ?>
                                                     </tbody>
                                                     <tfoot>
                                                         <tr>
                                                             <td colspan="3" class="text-end"><strong>Total</strong></td>
-                                                            <td class="text-end"><strong>Ksh<?php echo formatNumber($ec['total']); ?></strong></td>
+                                                            <td class="text-end"><strong><?php echo money($ec['total'], 0); ?></strong></td>
                                                         </tr>
                                                     </tfoot>
                                                 </table>
@@ -771,6 +771,10 @@ unset($p);
     <!-- ApexCharts JavaScript -->
     <script>
         document.addEventListener('DOMContentLoaded', function() {
+            // Currency prefix matching the money() PHP helper's spacing convention
+            // ("Ksh. 1,234" vs "$1,234") for the chart's own labels/tooltips.
+            const currencyPrefix = <?php echo json_encode(in_array(currencySymbol(), ['$', '€', '£', 'CA$', 'AU$'], true) ? currencySymbol() : currencySymbol() . ' '); ?>;
+
             // Monthly Breakdown Chart Data
             const monthlyData = <?php echo json_encode($monthlyData); ?>;
             const monthNames = <?php echo json_encode(array_slice($monthNames, 1)); ?>;
@@ -840,14 +844,14 @@ unset($p);
                 },
                 yaxis: {
                     title: {
-                        text: 'Amount (Ksh)',
+                        text: 'Amount (' + currencyPrefix.trim() + ')',
                         style: {
                             fontSize: '12px'
                         }
                     },
                     labels: {
                         formatter: function (value) {
-                            return 'Ksh' + value.toFixed(0);
+                            return currencyPrefix + value.toFixed(0);
                         }
                     }
                 },
@@ -875,14 +879,14 @@ unset($p);
                             total += val;
                             rows += '<div class="apexcharts-tooltip-series-group" style="display:flex;align-items:center;padding:3px 0;">' +
                                 '<span style="width:10px;height:10px;border-radius:50%;background:' + w.globals.colors[i] + ';display:inline-block;margin-right:6px;"></span>' +
-                                '<span>' + w.globals.seriesNames[i] + ': Ksh' + val.toFixed(2) + '</span>' +
+                                '<span>' + w.globals.seriesNames[i] + ': ' + currencyPrefix + val.toFixed(2) + '</span>' +
                                 '</div>';
                         });
 
                         return '<div style="padding:8px 12px;">' +
                             '<div style="font-weight:600;margin-bottom:4px;">' + w.globals.labels[dataPointIndex] + '</div>' +
                             rows +
-                            '<div style="border-top:1px solid #e7e7e7;margin-top:4px;padding-top:4px;font-weight:700;">Total: Ksh' + total.toFixed(2) + '</div>' +
+                            '<div style="border-top:1px solid #e7e7e7;margin-top:4px;padding-top:4px;font-weight:700;">Total: ' + currencyPrefix + total.toFixed(2) + '</div>' +
                             '</div>';
                     }
                 },

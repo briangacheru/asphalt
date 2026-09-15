@@ -110,7 +110,7 @@ if ($flash): ?>
                         <i class="fas fa-money-bill-wave fs-4"></i>
                     </div>
                     <div class="col-auto">
-                        <h4 class="fs-6 fw-normal text-warning">Ksh. <?php echo formatNumber($totalCost); ?></h4>
+                        <h4 class="fs-6 fw-normal text-warning"><?php echo money($totalCost, 0); ?></h4>
                     </div>
                 </div>
             </div>
@@ -125,7 +125,7 @@ if ($flash): ?>
                         <i class="fas fa-calculator fs-4"></i>
                     </div>
                     <div class="col-auto">
-                        <h4 class="fs-6 fw-normal text-warning">Ksh<?php echo count($services) ? formatNumber($totalCost / count($services)) : '0'; ?></h4>
+                        <h4 class="fs-6 fw-normal text-warning"><?php echo money(count($services) ? $totalCost / count($services) : 0, 0); ?></h4>
                     </div>
                 </div>
             </div>
@@ -163,7 +163,7 @@ if ($flash): ?>
                             <td><strong><?php echo formatNumber($s['mileage']); ?></strong> km</td>
                             <td><?php echo formatNumber($s['next_service_mileage']); ?> km</td>
                             <td><span class="badge rounded-pill ms-2 badge-subtle-<?php echo $s['item_count'] > 0 ? 'success' : 'warning'; ?>"><?php echo $s['item_count']; ?> items</span></td>
-                            <td><?php echo $s['service_cost'] > 0 ? 'Ksh. ' . number_format($s['service_cost'], 2) : '-'; ?></td>
+                            <td><?php echo $s['service_cost'] > 0 ? money($s['service_cost']) : '-'; ?></td>
                         </tr>
                     <?php endforeach; ?>
                     </tbody>

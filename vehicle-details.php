@@ -484,9 +484,9 @@ if ($flash): ?>
                             <?php endif; ?>
                         </div>
                         <h6 class="text-muted mb-1 fw-normal fs-10">Total Spent &bull; <?php echo $thisMonthAbbr; ?></h6>
-                        <h4 class="fs-6 fw-bold mb-1">Ksh. <?php echo formatNumber($spentThisMonth); ?></h4>
+                        <h4 class="fs-6 fw-bold mb-1"><?php echo money($spentThisMonth, 0); ?></h4>
                         <p class="fs-11 text-muted mb-0">
-                            <?php echo $lastMonthAbbr; ?>: Ksh. <?php echo formatNumber($spentLastMonth); ?>
+                            <?php echo $lastMonthAbbr; ?>: <?php echo money($spentLastMonth, 0); ?>
                         </p>
                     </div>
                 </div>
@@ -505,10 +505,10 @@ if ($flash): ?>
                             <?php endif; ?>
                         </div>
                         <h6 class="text-muted mb-1 fw-normal fs-10">Cost per KM &bull; <?php echo $thisMonthAbbr; ?></h6>
-                        <h4 class="fs-6 fw-bold mb-1"><?php echo $costPerKmThisMonth !== null ? 'Ksh. ' . number_format($costPerKmThisMonth, 2) : '—'; ?></h4>
+                        <h4 class="fs-6 fw-bold mb-1"><?php echo $costPerKmThisMonth !== null ? money($costPerKmThisMonth) : '—'; ?></h4>
                         <p class="fs-11 text-muted mb-0">
                             <?php if ($costPerKmLastMonth !== null): ?>
-                                <?php echo $lastMonthAbbr; ?>: Ksh. <?php echo number_format($costPerKmLastMonth, 2); ?>
+                                <?php echo $lastMonthAbbr; ?>: <?php echo money($costPerKmLastMonth); ?>
                             <?php else: ?>
                                 &nbsp;
                             <?php endif; ?>
@@ -843,7 +843,7 @@ if ($flash): ?>
                                             </h6>
                                             <p class="fs-10 text-600 mb-0">
                                                 <?php if ($service['service_cost'] > 0): ?>
-                                                    Ksh. <?php echo number_format($service['service_cost'], 2); ?>
+                                                    <?php echo money($service['service_cost']); ?>
                                                 <?php endif; ?>
                                                 <?php if ($service['service_location']): ?>
                                                     &bull; <?php echo sanitize($service['service_location']); ?>
@@ -906,8 +906,8 @@ if ($flash): ?>
                                                 <span class="badge rounded-pill ms-2 badge-subtle-info"><?php echo number_format($f['liters'], 2); ?> L</span>
                                             </h6>
                                             <p class="fs-10 text-600 mb-0">
-                                                <strong>Ksh. <?php echo number_format($f['total_cost'], 2); ?></strong>
-                                                &bull; Ksh. <?php echo number_format($f['price_per_liter'], 2); ?>/L
+                                                <strong><?php echo money($f['total_cost']); ?></strong>
+                                                &bull; <?php echo money($f['price_per_liter']); ?>/L
                                                 <?php if ($f['station_name']): ?>
                                                     &bull; <?php echo sanitize($f['station_name']); ?>
                                                 <?php endif; ?>
@@ -961,7 +961,7 @@ if ($flash): ?>
                                 <div class="col">
                                     <div class="row gx-0 border-bottom pb-x1">
                                         <div class="col">
-                                            <h6 class="text-800 mb-1">Ksh. <?php echo number_format($e['amount'], 2); ?>
+                                            <h6 class="text-800 mb-1"><?php echo money($e['amount']); ?>
                                                 <span class="badge rounded-pill ms-2 badge-subtle-warning"><?php echo sanitize($e['category_name']); ?></span>
                                             </h6>
                                             <p class="fs-10 text-600 mb-0">

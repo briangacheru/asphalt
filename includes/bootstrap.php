@@ -138,6 +138,50 @@ function formatNumber(int|float $number): string {
 }
 
 /**
+ * Format an amount using the current user's preferred currency (Settings >
+ * Preferences > Currency — users.default_currency). Purely a display label:
+ * amounts are stored and summed as plain decimals throughout the app, there's
+ * no live FX conversion between currencies.
+ */
+function currencySymbol(): string {
+    static $symbol = null;
+
+    if ($symbol === null) {
+        $currency = 'KES';
+        if (isLoggedIn()) {
+            try {
+                $stmt = getDBConnection()->prepare("SELECT default_currency FROM users WHERE id = ?");
+                $stmt->execute([getCurrentUserId()]);
+                $currency = $stmt->fetchColumn() ?: 'KES';
+            } catch (PDOException $e) {
+                // default_currency column may not exist yet on older schemas — fall back silently.
+            }
+        }
+
+        $symbols = [
+            'KES' => 'Ksh.',
+            'USD' => '$',
+            'EUR' => '€',
+            'GBP' => '£',
+            'CAD' => 'CA$',
+            'AUD' => 'AU$',
+        ];
+        $symbol = $symbols[$currency] ?? ($currency . ' ');
+    }
+
+    return $symbol;
+}
+
+function money(int|float $amount, int $decimals = 2): string {
+    $symbol = currencySymbol();
+    $formatted = number_format($amount, $decimals);
+
+    // Symbol-style currencies ($, €, £) sit flush against the number; "Ksh."
+    // and bare ISO-code fallbacks keep a space, matching existing usage.
+    return in_array($symbol, ['$', '€', '£', 'CA$', 'AU$'], true) ? $symbol . $formatted : $symbol . ' ' . $formatted;
+}
+
+/**
  * Validate email (legacy function)
  */
 function isValidEmail(string $email): bool {

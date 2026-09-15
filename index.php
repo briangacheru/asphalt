@@ -353,7 +353,7 @@ $recentServiceCount = count($recentServices);
                                             <p class="fs-10 text-600 mb-0">
                                                 <?php echo formatNumber($service['mileage']); ?> km
                                                 <?php if ($service['service_cost'] > 0): ?>
-                                                    &bull; Ksh <?php echo number_format($service['service_cost'], 2); ?>
+                                                    &bull; <?php echo money($service['service_cost']); ?>
                                                 <?php endif; ?>
                                             </p>
                                         </div>
@@ -729,7 +729,7 @@ $recentServiceCount = count($recentServices);
                                                     <p class="fs-10 text-600 mb-0">
                                                         <?php echo formatNumber($service['mileage']); ?> km
                                                         <?php if ($service['service_cost'] > 0): ?>
-                                                            &bull; Ksh <?php echo number_format($service['service_cost'], 2); ?>
+                                                            &bull; <?php echo money($service['service_cost']); ?>
                                                         <?php endif; ?>
                                                     </p>
                                                 </div>

@@ -354,8 +354,8 @@ if ($flash): ?>
                         <?php echo renderTrendBadge($spentTrend, 'down'); ?>
                     </div>
                     <h6 class="text-muted mb-1 fw-normal fs-10">Total Spent &bull; <?php echo $thisMonthLabel; ?></h6>
-                    <h4 class="fs-6 fw-bold mb-1">Ksh. <?php echo number_format($monthStats['this_spent'], 2); ?></h4>
-                    <p class="fs-11 text-muted mb-0">vs <?php echo $lastMonthLabel; ?>: Ksh. <?php echo number_format($monthStats['last_spent'], 2); ?></p>
+                    <h4 class="fs-6 fw-bold mb-1"><?php echo money($monthStats['this_spent']); ?></h4>
+                    <p class="fs-11 text-muted mb-0">vs <?php echo $lastMonthLabel; ?>: <?php echo money($monthStats['last_spent']); ?></p>
                 </div>
             </div>
         </div>
@@ -369,8 +369,8 @@ if ($flash): ?>
                         <?php echo renderTrendBadge($priceTrend, 'down'); ?>
                     </div>
                     <h6 class="text-muted mb-1 fw-normal fs-10">Avg Price/L &bull; <?php echo $thisMonthLabel; ?></h6>
-                    <h4 class="fs-6 fw-bold mb-1">Ksh. <?php echo number_format($monthStats['this_avg_price'], 2); ?></h4>
-                    <p class="fs-11 text-muted mb-0">vs <?php echo $lastMonthLabel; ?>: Ksh. <?php echo number_format($monthStats['last_avg_price'], 2); ?></p>
+                    <h4 class="fs-6 fw-bold mb-1"><?php echo money($monthStats['this_avg_price']); ?></h4>
+                    <p class="fs-11 text-muted mb-0">vs <?php echo $lastMonthLabel; ?>: <?php echo money($monthStats['last_avg_price']); ?></p>
                 </div>
             </div>
         </div>
@@ -433,8 +433,8 @@ if ($flash): ?>
                                     <td><?php echo sanitize($l['make'] . ' ' . $l['model']); ?></td>
                                     <td><?php echo formatNumber($l['mileage']); ?> km</td>
                                     <td><?php echo number_format($l['liters'], 2); ?> L</td>
-                                    <td>Ksh. <?php echo number_format($l['price_per_liter'], 2); ?></td>
-                                    <td><strong>Ksh. <?php echo number_format($l['total_cost'], 2); ?></strong></td>
+                                    <td><?php echo money($l['price_per_liter']); ?></td>
+                                    <td><strong><?php echo money($l['total_cost']); ?></strong></td>
                                     <td><?php echo $l['station_name'] ? sanitize($l['station_name']) : '-'; ?></td>
                                     <td class="align-middle white-space-nowrap text-end position-relative">
                                         <div class="hover-actions bg-100">
@@ -499,7 +499,7 @@ if ($flash): ?>
                                 <div class="form-text">Enter this or the total amount</div>
                             </div>
                             <div class="col-md-4 mb-3">
-                                <label class="form-label">Total Amount (Ksh)</label>
+                                <label class="form-label">Total Amount (<?php echo currencySymbol(); ?>)</label>
                                 <input type="number" id="add_total_amount" step="0.01" class="form-control">
                                 <div class="form-text">Auto-fills liters</div>
                             </div>
@@ -560,7 +560,7 @@ if ($flash): ?>
                                 <div class="form-text">Enter this or the total amount</div>
                             </div>
                             <div class="col-md-4 mb-3">
-                                <label class="form-label">Total Amount (Ksh)</label>
+                                <label class="form-label">Total Amount (<?php echo currencySymbol(); ?>)</label>
                                 <input type="number" id="edit_total_amount" step="0.01" class="form-control">
                                 <div class="form-text">Auto-fills liters</div>
                             </div>
@@ -766,7 +766,7 @@ if ($flash): ?>
                 chart: { type: 'line', height: 300, toolbar: { show: false }, zoom: { enabled: false } },
                 series: [
                     { name: 'Fuel Economy (km/L)', data: <?php echo json_encode($trendEconomy); ?> },
-                    { name: 'Avg Price/L (Ksh)', data: <?php echo json_encode($trendPrice); ?> }
+                    { name: 'Avg Price/L (<?php echo currencySymbol(); ?>)', data: <?php echo json_encode($trendPrice); ?> }
                 ],
                 xaxis: { categories: <?php echo json_encode($trendLabels); ?> },
                 colors: ['#198754', '#0dcaf0'],
