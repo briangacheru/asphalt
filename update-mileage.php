@@ -19,10 +19,32 @@ $vehicles = $vehiclesStmt->fetchAll();
 
 $selectedVehicleId = IdCodec::decode($_GET['vehicle_id'] ?? null);
 
+// Optional odometer photo column — lazy-added the same defensive way
+// DocumentExpiryService adds vehicle_documents.expiry_date, since mileage_log
+// predates this app's lazy-table-creation convention.
+function ensureOdometerPhotoColumn(PDO $pdo): void
+{
+    static $checked = false;
+    if ($checked) {
+        return;
+    }
+    try {
+        $columnExists = $pdo->query("SHOW COLUMNS FROM mileage_log LIKE 'photo_path'")->fetch();
+        if (!$columnExists) {
+            $pdo->exec("ALTER TABLE mileage_log ADD COLUMN photo_path VARCHAR(255) NULL AFTER notes");
+        }
+        $checked = true;
+    } catch (PDOException $e) {
+        // mileage_log itself may not exist — nothing to do here.
+    }
+}
+ensureOdometerPhotoColumn($pdo);
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $vehicle_id = (int)($_POST['vehicle_id'] ?? 0);
     $new_mileage = (int)($_POST['mileage'] ?? 0);
     $notes = sanitize($_POST['notes'] ?? '');
+    $photoPath = null;
 
     $errors = [];
 
@@ -40,13 +62,46 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
+    // Odometer photo — optional proof of reading. Same server-side MIME
+    // detection approach as vehicle-documents.php (never trust the browser's
+    // declared $_FILES[...]['type']).
+    if (empty($errors) && !empty($_FILES['odometer_photo']['name']) && $_FILES['odometer_photo']['error'] === UPLOAD_ERR_OK) {
+        $photoFile = $_FILES['odometer_photo'];
+        if ($photoFile['size'] > MAX_UPLOAD_SIZE) {
+            $errors[] = 'Odometer photo too large. Maximum size: ' . (int)(MAX_UPLOAD_SIZE / 1024 / 1024) . 'MB.';
+        } else {
+            $mimeToExt = ['image/jpeg' => 'jpg', 'image/pjpeg' => 'jpg', 'image/png' => 'png', 'image/webp' => 'webp', 'image/heic' => 'heic', 'image/heif' => 'heif'];
+            $detectedMime = mime_content_type($photoFile['tmp_name']);
+            if (!array_key_exists($detectedMime, $mimeToExt)) {
+                $errors[] = 'Unsupported photo type. Please use JPG, PNG, WEBP, HEIC or HEIF.';
+            } else {
+                $uploadDir = UPLOAD_DIR . 'odometer/';
+                if (!is_dir($uploadDir)) {
+                    mkdir($uploadDir, 0755, true);
+                }
+                $filename = 'odo_' . time() . '_' . uniqid() . '.' . $mimeToExt[$detectedMime];
+                if (move_uploaded_file($photoFile['tmp_name'], $uploadDir . $filename)) {
+                    $photoPath = $filename;
+                } else {
+                    $errors[] = 'Failed to upload odometer photo.';
+                }
+            }
+        }
+    }
+
     if (empty($errors)) {
         try {
             $stmt = $pdo->prepare("UPDATE vehicles SET current_mileage = ? WHERE id = ? AND user_id = ?");
             $stmt->execute([$new_mileage, $vehicle_id, $userId]);
 
-            $stmt = $pdo->prepare("INSERT INTO mileage_log (vehicle_id, mileage, log_date, source, notes) VALUES (?, ?, CURDATE(), 'manual', ?)");
-            $stmt->execute([$vehicle_id, $new_mileage, $notes]);
+            try {
+                $stmt = $pdo->prepare("INSERT INTO mileage_log (vehicle_id, mileage, log_date, source, notes, photo_path) VALUES (?, ?, CURDATE(), 'manual', ?, ?)");
+                $stmt->execute([$vehicle_id, $new_mileage, $notes, $photoPath]);
+            } catch (PDOException $e) {
+                // photo_path column failed to add (e.g. no ALTER privilege) — save without it.
+                $stmt = $pdo->prepare("INSERT INTO mileage_log (vehicle_id, mileage, log_date, source, notes) VALUES (?, ?, CURDATE(), 'manual', ?)");
+                $stmt->execute([$vehicle_id, $new_mileage, $notes]);
+            }
 
             $stmt = $pdo->prepare("SELECT next_service_mileage FROM service_records WHERE vehicle_id = ? ORDER BY service_date DESC LIMIT 1");
             $stmt->execute([$vehicle_id]);
@@ -162,6 +217,14 @@ if ($flash): ?>
                         <label class="form-label" for="exampleFormControlInput1">Notes (optional)</label>
                         <textarea name="notes" id="notes" class="form-control" rows="2" placeholder="e.g., Monthly check..." disabled></textarea>
                     </div>
+                    <div>
+                        <label class="form-label">Odometer Photo (optional)</label>
+                        <input type="file" name="odometer_photo" id="odometer_photo" class="form-control" accept="image/*" capture="environment" disabled>
+                        <div class="form-text">Snap a photo of the dashboard as proof of this reading.</div>
+                        <div id="odometer-photo-preview" class="mt-2 d-none">
+                            <img src="" alt="Odometer preview" class="img-thumbnail" style="max-height:140px;">
+                        </div>
+                    </div>
                     <button type="submit" class="btn rounded-sm-pill btn-outline-primary btn-sm"><i class="fas fa-save"></i> Update Mileage</button>
                 </form>
             </div>
@@ -178,33 +241,48 @@ if ($flash): ?>
                 </div>
             </div>
             <div class="card-body ps-2"><?php
-                // Get mileage updates from both mileage_log and fuel_log
-                $logs = $pdo->query("
-                SELECT 
+                // Get mileage updates from both mileage_log and fuel_log — scoped to
+                // the current user's own vehicles on both branches (previously this
+                // query had no such scope and leaked every user's log entries).
+                $logsStmt = $pdo->prepare("
+                SELECT
                     ml.mileage,
                     ml.log_date as update_date,
                     ml.source,
                     ml.created_at,
+                    ml.photo_path,
                     v.make,
                     v.model
                 FROM mileage_log ml
                 JOIN vehicles v ON ml.vehicle_id = v.id
-                
+                WHERE v.user_id = ?
+
                 UNION ALL
-                
-                SELECT 
+
+                SELECT
                     fl.mileage,
                     fl.fill_date as update_date,
                     'fuel' as source,
                     fl.created_at,
+                    NULL as photo_path,
                     v.make,
                     v.model
                 FROM fuel_log fl
                 JOIN vehicles v ON fl.vehicle_id = v.id
-                
+                WHERE v.user_id = ?
+
                 ORDER BY created_at DESC
                 LIMIT 10
-            ")->fetchAll();
+            ");
+                try {
+                    $logsStmt->execute([$userId, $userId]);
+                    $logs = $logsStmt->fetchAll();
+                } catch (PDOException $e) {
+                    // mileage_log.photo_path may not exist if the ALTER above couldn't run — retry without it.
+                    $logsStmt = $pdo->prepare(str_replace("ml.photo_path,", "NULL as photo_path,", $logsStmt->queryString));
+                    $logsStmt->execute([$userId, $userId]);
+                    $logs = $logsStmt->fetchAll();
+                }
 
                 if (empty($logs)): ?>
                     <p class="text-muted text-center">No updates yet.</p>
@@ -214,9 +292,15 @@ if ($flash): ?>
                             <div class="row g-3 timeline timeline-primary timeline-current pb-x1">
                                 <div class="col-auto ps-4 ms-2">
                                     <div class="ps-2">
-                                        <div class="icon-item icon-item-sm rounded-circle bg-soft-primary shadow-none">
-                                            <i class="fas fa-<?php echo $log['source'] === 'fuel' ? 'gas-pump' : 'wrench'; ?> text-primary"></i>
-                                        </div>
+                                        <?php if (!empty($log['photo_path'])): ?>
+                                            <a href="uploads/odometer/<?php echo rawurlencode($log['photo_path']); ?>" target="_blank" title="View odometer photo">
+                                                <img src="uploads/odometer/<?php echo rawurlencode($log['photo_path']); ?>" class="rounded-circle icon-item-sm" style="width:32px;height:32px;object-fit:cover;" alt="Odometer photo">
+                                            </a>
+                                        <?php else: ?>
+                                            <div class="icon-item icon-item-sm rounded-circle bg-soft-primary shadow-none">
+                                                <i class="fas fa-<?php echo $log['source'] === 'fuel' ? 'gas-pump' : 'wrench'; ?> text-primary"></i>
+                                            </div>
+                                        <?php endif; ?>
                                     </div>
                                 </div>
                                 <div class="col">
@@ -258,6 +342,7 @@ if ($flash): ?>
             const opt = this.options[this.selectedIndex];
             const mileageInput = document.getElementById('mileage');
             const notesInput = document.getElementById('notes');
+            const photoInput = document.getElementById('odometer_photo');
             const hintElement = document.getElementById('mileage-hint');
 
             if (this.value) {
@@ -267,6 +352,7 @@ if ($flash): ?>
                 // Enable inputs
                 mileageInput.disabled = false;
                 notesInput.disabled = false;
+                photoInput.disabled = false;
 
                 // Set min value
                 mileageInput.min = cur;
@@ -287,11 +373,30 @@ if ($flash): ?>
                 // Disable inputs
                 mileageInput.disabled = true;
                 notesInput.disabled = true;
+                photoInput.disabled = true;
                 mileageInput.value = '';
                 notesInput.value = '';
+                photoInput.value = '';
+                document.getElementById('odometer-photo-preview').classList.add('d-none');
                 hintElement.textContent = '';
                 document.getElementById('service-warning').style.display = 'none';
             }
+        });
+
+        document.getElementById('odometer_photo').addEventListener('change', function () {
+            const preview = document.getElementById('odometer-photo-preview');
+            const img = preview.querySelector('img');
+            const file = this.files && this.files[0];
+            if (!file) {
+                preview.classList.add('d-none');
+                return;
+            }
+            const reader = new FileReader();
+            reader.onload = function (e) {
+                img.src = e.target.result;
+                preview.classList.remove('d-none');
+            };
+            reader.readAsDataURL(file);
         });
 
         document.getElementById('mileage').addEventListener('input', function() {

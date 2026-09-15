@@ -190,6 +190,7 @@ The application uses the following main tables:
 - `push_subscriptions` - Browser push subscriptions (one row per device a user enabled notifications on in Settings); created lazily by `App\Services\PushSubscriptionService`. Sent to alongside the reminder emails — see `App\Services\PushService`.
 - `feedback` - In-app feedback submitted via the user menu's "Feedback" link; created lazily by `App\Services\FeedbackService`.
 - `vehicle_documents.expiry_date` - Optional expiry date on an uploaded document (inspection certificate, road tax, etc.), added lazily to the existing table by `App\Services\DocumentExpiryService`. Feeds the same header bell as insurance/licence expiry.
+- `mileage_log.photo_path` - Optional odometer photo captured/uploaded on the Update Mileage page, added lazily the same defensive way.
 
 ## Browser Push Notifications
 
