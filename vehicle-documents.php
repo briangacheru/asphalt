@@ -3,6 +3,9 @@ $pageTitle = 'Documents & Photos';
 require_once 'includes/header.php';
 
 use App\Helpers\IdCodec;
+use App\Services\DocumentExpiryService;
+
+DocumentExpiryService::ensureExpiryColumn($pdo);
 
 $vehicleId = IdCodec::decode($_GET['vehicle_id'] ?? null) ?? 0;
 
@@ -63,6 +66,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $category = array_key_first($documentCategories) ?? 'other';
         }
         $title = sanitize($_POST['title'] ?? '');
+        $expiryDate = trim($_POST['expiry_date'] ?? '');
+        $expiryDate = ($expiryDate !== '' && preg_match('/^\d{4}-\d{2}-\d{2}$/', $expiryDate)) ? $expiryDate : null;
 
         $file = $_FILES['document'] ?? null;
         if (!$file || $file['error'] !== UPLOAD_ERR_OK) {
@@ -84,14 +89,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $filename = 'doc_' . time() . '_' . uniqid() . '.' . $ext;
 
                 if (move_uploaded_file($file['tmp_name'], $uploadDir . $filename)) {
-                    $stmt = $pdo->prepare("
-                        INSERT INTO vehicle_documents (vehicle_id, category, title, file_name, file_path, file_type, file_size)
-                        VALUES (?, ?, ?, ?, ?, ?, ?)
-                    ");
-                    $stmt->execute([
-                        $vehicleId, $category, $title ?: null,
-                        $file['name'], $filename, $detectedMime, $file['size'],
-                    ]);
+                    try {
+                        $stmt = $pdo->prepare("
+                            INSERT INTO vehicle_documents (vehicle_id, category, title, expiry_date, file_name, file_path, file_type, file_size)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                        ");
+                        $stmt->execute([
+                            $vehicleId, $category, $title ?: null, $expiryDate,
+                            $file['name'], $filename, $detectedMime, $file['size'],
+                        ]);
+                    } catch (PDOException $e) {
+                        // expiry_date column failed to add (e.g. no ALTER privilege) — save without it.
+                        $stmt = $pdo->prepare("
+                            INSERT INTO vehicle_documents (vehicle_id, category, title, file_name, file_path, file_type, file_size)
+                            VALUES (?, ?, ?, ?, ?, ?, ?)
+                        ");
+                        $stmt->execute([
+                            $vehicleId, $category, $title ?: null,
+                            $file['name'], $filename, $detectedMime, $file['size'],
+                        ]);
+                    }
                     setFlashMessage('success', 'Document uploaded successfully!');
                 } else {
                     setFlashMessage('danger', 'Failed to upload document.');
@@ -225,6 +242,15 @@ if ($flash): ?>
                                 <span class="badge badge-subtle-<?php echo sanitize($cat['color']); ?> fs-11 mb-1"><?php echo sanitize($cat['label']); ?></span>
                                 <p class="fs-11 text-700 mb-0 text-truncate" title="<?php echo sanitize($displayTitle); ?>"><?php echo sanitize($displayTitle); ?></p>
                                 <p class="fs-11 text-muted mb-0"><?php echo formatDate($doc['uploaded_at']); ?></p>
+                                <?php if (!empty($doc['expiry_date'])):
+                                    $daysLeft = (int) floor((strtotime($doc['expiry_date']) - strtotime('today')) / 86400);
+                                    $expiryClass = $daysLeft < 0 ? 'text-danger' : ($daysLeft <= 14 ? 'text-warning' : 'text-muted');
+                                ?>
+                                    <p class="fs-11 <?php echo $expiryClass; ?> mb-0">
+                                        <i class="fas fa-clock"></i>
+                                        <?php echo $daysLeft < 0 ? 'Expired ' . date('M d, Y', strtotime($doc['expiry_date'])) : 'Expires ' . date('M d, Y', strtotime($doc['expiry_date'])); ?>
+                                    </p>
+                                <?php endif; ?>
                             </div>
                         </div>
                     </div>
@@ -257,6 +283,11 @@ if ($flash): ?>
                     <div class="mb-3">
                         <label class="form-label">Title (optional)</label>
                         <input type="text" name="title" class="form-control" placeholder="e.g. Comprehensive Cover 2026">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Expiry date (optional)</label>
+                        <input type="date" name="expiry_date" class="form-control">
+                        <small class="text-muted">For documents like inspection certificates or road tax — you'll get a reminder before it expires.</small>
                     </div>
                     <div class="mb-3">
                         <label class="form-label">File <span class="text-danger">*</span></label>

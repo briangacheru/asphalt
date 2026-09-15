@@ -106,6 +106,18 @@ foreach ($vehiclesNeedingMileageUpdate as $v) {
         'url' => 'update-mileage?vehicle_id=' . \App\Helpers\IdCodec::encode($v['id']),
     ];
 }
+foreach (\App\Services\DocumentExpiryService::documentsNeedingAttention($pdo, $userId) as $d) {
+    $expired = (int) $d['days_remaining'] < 0;
+    $docLabel = $d['title'] ?: 'Document';
+    $notificationAlerts[] = [
+        'id' => 'document-' . $d['id'],
+        'icon' => 'fa-file-alt',
+        'variant' => $expired ? 'danger' : 'warning',
+        'text' => '<strong>' . sanitize($docLabel) . '</strong> for ' . sanitize($d['make'] . ' ' . $d['model']) . ' ' . ($expired ? 'has expired' : 'expires in ' . (int) $d['days_remaining'] . ' days'),
+        'time' => $expired ? 'Expired' : 'Expiring soon',
+        'url' => 'vehicle-documents?vehicle_id=' . \App\Helpers\IdCodec::encode($d['vehicle_id']),
+    ];
+}
 if ($drivingLicenseNeedsAttention) {
     $expired = ($drivingLicenseStatus['status'] ?? '') === 'expired';
     $notificationAlerts[] = [
