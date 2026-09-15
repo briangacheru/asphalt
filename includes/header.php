@@ -261,6 +261,10 @@ $currentPage = basename($_SERVER['PHP_SELF'], '.php');
                     <div class="d-flex align-items-center"><span class="nav-link-icon"><span class="fas fa-car"></span></span><span class="nav-link-text ps-1">My Vehicles</span>
                     </div>
                   </a>
+                  <!-- parent pages--><a class="nav-link <?php echo $currentPage === 'vehicle-compare' ? 'active' : ''; ?>" href="vehicle-compare" role="button">
+                    <div class="d-flex align-items-center"><span class="nav-link-icon"><span class="fas fa-balance-scale"></span></span><span class="nav-link-text ps-1">Compare Vehicles</span>
+                    </div>
+                  </a>
                   <!-- parent pages--><a class="nav-link <?php echo $currentPage === 'add-service' ? 'active' : ''; ?>" href="add-service" role="button">
                     <div class="d-flex align-items-center"><span class="nav-link-icon"><span class="fas fa-wrench"></span></span><span class="nav-link-text ps-1">Add Service</span>
                     </div>
