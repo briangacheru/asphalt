@@ -62,6 +62,88 @@ if (!in_array($quickAddPage, ['login', 'register', 'forgot-password', 'reset-pas
 </script>
 <?php endif; ?>
 
+<div class="modal fade" id="feedbackModal" tabindex="-1" aria-labelledby="feedbackModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form id="feedbackForm">
+        <div class="modal-header">
+          <h5 class="modal-title" id="feedbackModalLabel">Send Feedback</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div id="feedbackFormAlert" class="alert d-none" role="alert"></div>
+          <div class="mb-3">
+            <label class="form-label">Type</label>
+            <select name="category" class="form-select">
+              <option value="general">General feedback</option>
+              <option value="idea">Feature idea</option>
+              <option value="bug">Something's broken</option>
+            </select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Message <span class="text-danger">*</span></label>
+            <textarea name="message" class="form-control" rows="4" required minlength="5" maxlength="4000" placeholder="What's on your mind?"></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-primary" id="feedbackSubmitBtn">Send</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+<script>
+    (function () {
+        var form = document.getElementById('feedbackForm');
+        if (!form) return;
+        var alertBox = document.getElementById('feedbackFormAlert');
+        var submitBtn = document.getElementById('feedbackSubmitBtn');
+
+        form.addEventListener('submit', function (e) {
+            e.preventDefault();
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Sending…';
+
+            var data = new URLSearchParams();
+            data.set('csrf_token', <?php echo json_encode(generateCSRFToken()); ?>);
+            data.set('category', form.category.value);
+            data.set('message', form.message.value);
+            data.set('page_url', window.location.pathname + window.location.search);
+
+            fetch('feedback-submit.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: data.toString()
+            })
+                .then(function (r) { return r.json(); })
+                .then(function (json) {
+                    alertBox.classList.remove('d-none', 'alert-success', 'alert-danger');
+                    alertBox.classList.add(json.success ? 'alert-success' : 'alert-danger');
+                    alertBox.textContent = json.message;
+                    if (json.success) {
+                        form.reset();
+                        setTimeout(function () {
+                            var modalEl = document.getElementById('feedbackModal');
+                            var instance = bootstrap.Modal.getInstance(modalEl);
+                            if (instance) instance.hide();
+                            alertBox.classList.add('d-none');
+                        }, 1200);
+                    }
+                })
+                .catch(function () {
+                    alertBox.classList.remove('d-none', 'alert-success');
+                    alertBox.classList.add('alert-danger');
+                    alertBox.textContent = 'Network error — please try again.';
+                })
+                .finally(function () {
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = 'Send';
+                });
+        });
+    })();
+</script>
+
 </div>
 </div>
 </main>

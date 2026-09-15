@@ -546,7 +546,7 @@ $currentPage = basename($_SERVER['PHP_SELF'], '.php');
 
                     <div class="dropdown-divider"></div>
                     <a class="dropdown-item" href="#!">Set status</a>
-                    <a class="dropdown-item" href="#!">Feedback</a>
+                    <a class="dropdown-item" href="#" data-bs-toggle="modal" data-bs-target="#feedbackModal">Feedback</a>
 
                     <div class="dropdown-divider"></div>
                     <a class="dropdown-item" href="settings">Settings</a>

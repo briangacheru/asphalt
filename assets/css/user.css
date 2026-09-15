@@ -158,3 +158,8 @@
     width: 56px;
     height: 56px;
 }
+
+/* Keyboard-highlighted result in the topbar search dropdown */
+#topbarSearchResults a.dropdown-item.search-item-active {
+    background-color: var(--falcon-dropdown-link-hover-bg, rgba(0, 0, 0, 0.05));
+}
