@@ -60,6 +60,84 @@ if (!in_array($quickAddPage, ['login', 'register', 'forgot-password', 'reset-pas
         });
     })();
 </script>
+
+<script>
+    // Service worker registration + a small push-subscription helper used by
+    // the Push Notifications card in Settings. No-ops gracefully wherever
+    // the browser lacks support or VAPID isn't configured server-side.
+    window.iVehiclePush = (function () {
+        var VAPID_PUBLIC_KEY = <?php echo json_encode(\App\Services\PushService::isConfigured() ? VAPID_PUBLIC_KEY : ''); ?>;
+        var CSRF_TOKEN = <?php echo json_encode(generateCSRFToken()); ?>;
+
+        function urlBase64ToUint8Array(base64String) {
+            var padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+            var base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+            var rawData = window.atob(base64);
+            var outputArray = new Uint8Array(rawData.length);
+            for (var i = 0; i < rawData.length; ++i) {
+                outputArray[i] = rawData.charCodeAt(i);
+            }
+            return outputArray;
+        }
+
+        function isSupported() {
+            return 'serviceWorker' in navigator && 'PushManager' in window && !!VAPID_PUBLIC_KEY;
+        }
+
+        function getRegistration() {
+            return navigator.serviceWorker.register('sw.js');
+        }
+
+        function status() {
+            if (!isSupported()) return Promise.resolve('unsupported');
+            return getRegistration().then(function (reg) {
+                return reg.pushManager.getSubscription();
+            }).then(function (sub) {
+                return sub ? 'subscribed' : 'unsubscribed';
+            });
+        }
+
+        function subscribe() {
+            return getRegistration().then(function (reg) {
+                return reg.pushManager.subscribe({
+                    userVisibleOnly: true,
+                    applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
+                });
+            }).then(function (sub) {
+                var json = sub.toJSON();
+                json.csrf_token = CSRF_TOKEN;
+                return fetch('push-subscribe.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(json)
+                }).then(function (r) { return r.json(); });
+            });
+        }
+
+        function unsubscribe() {
+            return getRegistration().then(function (reg) {
+                return reg.pushManager.getSubscription();
+            }).then(function (sub) {
+                if (!sub) return { success: true };
+                var endpoint = sub.endpoint;
+                return sub.unsubscribe().then(function () {
+                    return fetch('push-unsubscribe.php', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ endpoint: endpoint, csrf_token: CSRF_TOKEN })
+                    }).then(function (r) { return r.json(); });
+                });
+            });
+        }
+
+        if ('serviceWorker' in navigator) {
+            // Register early (installability), independent of push permission.
+            navigator.serviceWorker.register('sw.js').catch(function () {});
+        }
+
+        return { isSupported: isSupported, status: status, subscribe: subscribe, unsubscribe: unsubscribe };
+    })();
+</script>
 <?php endif; ?>
 
 <div class="modal fade" id="feedbackModal" tabindex="-1" aria-labelledby="feedbackModalLabel" aria-hidden="true">

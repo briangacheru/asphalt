@@ -458,6 +458,14 @@ class EmailService
         $sent = $this->send($data['email'], $subject, $html);
         $this->logEmail($vehicleId, 'service_reminder', $data['email'], $subject, $html, $sent ? 'sent' : 'failed');
 
+        PushService::notifyUser(
+            $this->pdo,
+            (int) $data['user_id'],
+            $subjectPrefix !== '' ? trim($subjectPrefix, ': ') . ': Service Reminder' : 'Service Reminder',
+            $vehicleName . ' — ' . ($kmRemaining < 0 ? number_format(abs($kmRemaining)) . ' km overdue' : number_format($kmRemaining) . ' km remaining'),
+            '/update-mileage?vehicle_id=' . IdCodec::encode($vehicleId)
+        );
+
         return $sent;
     }
 
@@ -603,6 +611,14 @@ class EmailService
         $sent = $this->send($data['email'], $subject, $html);
         $this->logEmail($vehicleId, 'maintenance_due', $data['email'], $subject, $html, $sent ? 'sent' : 'failed');
 
+        PushService::notifyUser(
+            $this->pdo,
+            (int) $data['user_id'],
+            $hasOverdue ? 'Maintenance Overdue' : 'Maintenance Due Soon',
+            $vehicleName . ' has ' . count($items) . ' item(s) needing attention',
+            '/maintenance-schedule?vehicle_id=' . IdCodec::encode($vehicleId)
+        );
+
         return $sent;
     }
 
@@ -686,6 +702,14 @@ class EmailService
         $sent = $this->send($data['email'], $subject, $html);
         $this->logEmail($vehicleId, 'insurance_expiry', $data['email'], $subject, $html, $sent ? 'sent' : 'failed');
 
+        PushService::notifyUser(
+            $this->pdo,
+            (int) $data['user_id'],
+            $daysRemaining < 0 ? 'Insurance Expired' : 'Insurance Expiring Soon',
+            $vehicleName . ' — cover ' . ($daysRemaining < 0 ? 'expired ' . number_format(abs($daysRemaining)) . ' day(s) ago' : 'expires in ' . number_format($daysRemaining) . ' day(s)'),
+            '/insurance?vehicle_id=' . IdCodec::encode($vehicleId)
+        );
+
         return $sent;
     }
 
@@ -754,6 +778,14 @@ class EmailService
 
         $sent = $this->send($data['email'], $subject, $html);
         $this->logEmail(0, 'driving_license_expiry', $data['email'], $subject, $html, $sent ? 'sent' : 'failed');
+
+        PushService::notifyUser(
+            $this->pdo,
+            $userId,
+            $daysRemaining < 0 ? 'Driving Licence Expired' : 'Driving Licence Expiring Soon',
+            'Your driving licence ' . ($daysRemaining < 0 ? 'expired ' . number_format(abs($daysRemaining)) . ' day(s) ago' : 'expires in ' . number_format($daysRemaining) . ' day(s)'),
+            '/driving-license'
+        );
 
         return $sent;
     }

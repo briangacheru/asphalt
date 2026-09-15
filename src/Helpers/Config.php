@@ -95,6 +95,19 @@ class Config
             define('MIN_PASSWORD_LENGTH', 8);
         }
 
+        // Web Push (browser notifications) — VAPID key pair. Leave unset to
+        // disable the "Enable Push Notifications" option in Settings.
+        // Generate a pair with: php -r "require 'vendor/autoload.php'; print_r((new \Minishlink\WebPush\VAPID)::createVapidKeys());"
+        if (!defined('VAPID_PUBLIC_KEY')) {
+            define('VAPID_PUBLIC_KEY', Environment::get('VAPID_PUBLIC_KEY', ''));
+        }
+        if (!defined('VAPID_PRIVATE_KEY')) {
+            define('VAPID_PRIVATE_KEY', Environment::get('VAPID_PRIVATE_KEY', ''));
+        }
+        if (!defined('VAPID_SUBJECT')) {
+            define('VAPID_SUBJECT', Environment::get('VAPID_SUBJECT', 'mailto:' . Environment::get('ADMIN_EMAIL', 'admin@example.com')));
+        }
+
         // Oil Service Intervals
         if (!defined('OIL_INTERVALS')) {
             define('OIL_INTERVALS', serialize([7000, 7500, 8000, 8500, 9000, 9500, 10000]));

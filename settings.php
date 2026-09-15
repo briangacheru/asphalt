@@ -703,6 +703,36 @@ foreach ($emailStatsRaw as $stat) {
                     </div>
                 </div>
 
+                <!-- Push Notification Settings -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">
+                            <i class="fas fa-bell me-2"></i>Push Notifications
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <?php if (!\App\Services\PushService::isConfigured()): ?>
+                            <p class="text-muted mb-0">Push notifications aren't set up on this server yet.</p>
+                        <?php else: ?>
+                            <p class="text-muted">Get the same overdue/expiring alerts as email, delivered instantly to this browser or device — even when iVehicle isn't open.</p>
+                            <div id="pushStatusUnsupported" class="alert alert-warning d-none mb-0">
+                                Your browser doesn't support push notifications.
+                            </div>
+                            <div id="pushStatusKnown" class="d-none">
+                                <div class="d-flex align-items-center gap-3">
+                                    <button type="button" class="btn btn-sm btn-outline-primary" id="pushEnableBtn">
+                                        <i class="fas fa-bell"></i> Enable on this device
+                                    </button>
+                                    <button type="button" class="btn btn-sm btn-outline-danger d-none" id="pushDisableBtn">
+                                        <i class="fas fa-bell-slash"></i> Disable on this device
+                                    </button>
+                                    <span class="fs-10 text-muted" id="pushStatusLabel"></span>
+                                </div>
+                            </div>
+                        <?php endif; ?>
+                    </div>
+                </div>
+
                 <!-- Mileage Update Reminders -->
                 <div class="card mb-4">
                     <div class="card-header">
@@ -1224,5 +1254,57 @@ foreach ($emailStatsRaw as $stat) {
             }
         });
     </script>
+
+    <?php if (\App\Services\PushService::isConfigured()): ?>
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            var enableBtn = document.getElementById('pushEnableBtn');
+            var disableBtn = document.getElementById('pushDisableBtn');
+            var label = document.getElementById('pushStatusLabel');
+            var knownBox = document.getElementById('pushStatusKnown');
+            var unsupportedBox = document.getElementById('pushStatusUnsupported');
+            if (!enableBtn || !window.iVehiclePush) return;
+
+            if (!window.iVehiclePush.isSupported()) {
+                unsupportedBox.classList.remove('d-none');
+                return;
+            }
+            knownBox.classList.remove('d-none');
+
+            function refresh() {
+                window.iVehiclePush.status().then(function (state) {
+                    if (state === 'subscribed') {
+                        enableBtn.classList.add('d-none');
+                        disableBtn.classList.remove('d-none');
+                        label.textContent = 'Enabled on this device.';
+                    } else {
+                        enableBtn.classList.remove('d-none');
+                        disableBtn.classList.add('d-none');
+                        label.textContent = 'Not enabled on this device.';
+                    }
+                });
+            }
+
+            enableBtn.addEventListener('click', function () {
+                enableBtn.disabled = true;
+                window.iVehiclePush.subscribe()
+                    .then(function () { refresh(); })
+                    .catch(function (err) {
+                        label.textContent = 'Could not enable: ' + (err && err.message ? err.message : 'permission denied.');
+                    })
+                    .finally(function () { enableBtn.disabled = false; });
+            });
+
+            disableBtn.addEventListener('click', function () {
+                disableBtn.disabled = true;
+                window.iVehiclePush.unsubscribe()
+                    .then(function () { refresh(); })
+                    .finally(function () { disableBtn.disabled = false; });
+            });
+
+            refresh();
+        });
+    </script>
+    <?php endif; ?>
 
 <?php require_once 'includes/footer.php'; ?>

@@ -187,6 +187,25 @@ The application uses the following main tables:
 - `vehicle_insurance` - Insurance policies per vehicle (provider, policy number, coverage, premium, expiry date, sticker upload); created lazily by `App\Services\InsuranceService`. The record with the furthest-out `expiry_date` is a vehicle's "current" policy — see the Insurance page and `cron/insurance-reminder-cron.php`.
 - `driving_licenses` - Driving licence details per user (licence number, national ID, DOB, sex, blood group, county, expiry date, scan upload); created lazily by `App\Services\DrivingLicenseService`. The record with the furthest-out `expiry_date` is a user's "current" licence — see the Driving Licence page and `cron/driving-license-reminder-cron.php`.
 - `api_tokens` - Bearer tokens for the JSON API (one row per logged-in device; only a SHA-256 hash is stored); created lazily by `App\Services\ApiTokenService`. See [api/README.md](api/README.md).
+- `push_subscriptions` - Browser push subscriptions (one row per device a user enabled notifications on in Settings); created lazily by `App\Services\PushSubscriptionService`. Sent to alongside the reminder emails — see `App\Services\PushService`.
+- `feedback` - In-app feedback submitted via the user menu's "Feedback" link; created lazily by `App\Services\FeedbackService`.
+
+## Browser Push Notifications
+
+Service/insurance/licence reminders can also be delivered as browser push notifications, as a second channel alongside the existing emails. This is optional — the app works fine without it, and each user opts in individually from Settings > Push Notifications.
+
+To enable it, generate a VAPID key pair and add it to `.env`:
+
+```bash
+php -r "require 'vendor/autoload.php'; print_r((new Minishlink\WebPush\VAPID)::createVapidKeys());"
+```
+
+```
+VAPID_PUBLIC_KEY=...
+VAPID_PRIVATE_KEY=...
+```
+
+The app also ships a `manifest.json` and `sw.js` so it can be installed to a phone's home screen ("Add to Home Screen"/"Install app") independent of whether push is configured.
 
 ## Security Features
 
