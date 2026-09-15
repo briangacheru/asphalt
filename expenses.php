@@ -953,6 +953,20 @@ if ($flash): ?>
             <?php endforeach; ?>
         };
 
+        // Deep-linked quick-add (e.g. from the site-wide quick-add button): open
+        // the Add Expense modal automatically and drop the param so a refresh doesn't reopen it.
+        document.addEventListener('DOMContentLoaded', function () {
+            if (new URLSearchParams(window.location.search).get('quickadd') === '1') {
+                var modalEl = document.getElementById('add-expense-modal');
+                if (modalEl && window.bootstrap) {
+                    new bootstrap.Modal(modalEl).show();
+                }
+                var url = new URL(window.location.href);
+                url.searchParams.delete('quickadd');
+                window.history.replaceState({}, '', url);
+            }
+        });
+
         document.addEventListener('DOMContentLoaded', function() {
             // ── Add modal: reset on close ──────────────────────────────────────
             const addModal = document.getElementById('add-expense-modal');

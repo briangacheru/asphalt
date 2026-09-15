@@ -226,6 +226,39 @@ foreach ($vehicleIdsInView as $vid) {
 $thisEconomy = $monthStats['this_liters'] > 0 ? $kmThisMonthTotal / $monthStats['this_liters'] : 0;
 $lastEconomy = $monthStats['last_liters'] > 0 ? $kmLastMonthTotal / $monthStats['last_liters'] : 0;
 $economyTrend = monthTrend($thisEconomy, $lastEconomy);
+
+// 6-month trend for the fuel economy / price-per-litre chart.
+$trendMonths = [];
+for ($i = 5; $i >= 0; $i--) {
+    $trendMonths[] = date('Y-m-01', strtotime("-$i months", strtotime($firstDayThisMonth)));
+}
+$trendLabels = array_map(fn($m) => date('M', strtotime($m)), $trendMonths);
+$trendEconomy = [];
+$trendPrice = [];
+foreach ($trendMonths as $monthStart) {
+    $monthEnd = date('Y-m-01', strtotime($monthStart . ' +1 month'));
+
+    $kmTotal = 0;
+    foreach ($vehicleIdsInView as $vid) {
+        $mEnd = fuelMileageAsOf($pdo, $vid, $monthEnd);
+        $mStart = fuelMileageAsOf($pdo, $vid, $monthStart);
+        if ($mEnd !== null && $mStart !== null) {
+            $kmTotal += max(0, $mEnd - $mStart);
+        }
+    }
+
+    $litersStmt = $pdo->prepare("
+        SELECT COALESCE(SUM(liters), 0) AS liters, COALESCE(AVG(price_per_liter), 0) AS avg_price
+        FROM fuel_log
+        WHERE vehicle_id IN (" . implode(',', array_fill(0, max(1, count($vehicleIdsInView)), '?')) . ")
+        AND fill_date >= ? AND fill_date < ?
+    ");
+    $litersStmt->execute(array_merge($vehicleIdsInView ?: [0], [$monthStart, $monthEnd]));
+    $monthRow = $litersStmt->fetch();
+
+    $trendEconomy[] = $monthRow['liters'] > 0 ? round($kmTotal / $monthRow['liters'], 1) : 0;
+    $trendPrice[] = round((float) $monthRow['avg_price'], 2);
+}
 ?>
 
 <?php
@@ -355,6 +388,15 @@ if ($flash): ?>
                     <p class="fs-11 text-muted mb-0">vs <?php echo $lastMonthLabel; ?>: <?php echo number_format($lastEconomy, 1); ?> km/L</p>
                 </div>
             </div>
+        </div>
+    </div>
+
+    <div class="card mb-3">
+        <div class="card-header bg-body-tertiary">
+            <h6 class="mb-0"><i class="fas fa-chart-line"></i> 6-Month Trend</h6>
+        </div>
+        <div class="card-body">
+            <div id="fuelTrendChart"></div>
         </div>
     </div>
 
@@ -563,6 +605,20 @@ if ($flash): ?>
     </div>
 
     <script>
+        // Deep-linked quick-add (e.g. from the site-wide quick-add button): open
+        // the Add Fuel modal automatically and drop the param so a refresh doesn't reopen it.
+        document.addEventListener('DOMContentLoaded', function () {
+            if (new URLSearchParams(window.location.search).get('quickadd') === '1') {
+                var modalEl = document.getElementById('add-fuel-modal');
+                if (modalEl && window.bootstrap) {
+                    new bootstrap.Modal(modalEl).show();
+                }
+                var url = new URL(window.location.href);
+                url.searchParams.delete('quickadd');
+                window.history.replaceState({}, '', url);
+            }
+        });
+
         // Initialize Bootstrap modal
         document.addEventListener('DOMContentLoaded', function() {
             const addFuelModal = document.getElementById('add-fuel-modal');
@@ -698,6 +754,30 @@ if ($flash): ?>
             const deleteModal = new bootstrap.Modal(document.getElementById('delete-fuel-modal'));
             deleteModal.show();
         }
+    </script>
+
+    <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            var el = document.querySelector('#fuelTrendChart');
+            if (!el || typeof ApexCharts === 'undefined') return;
+
+            var chart = new ApexCharts(el, {
+                chart: { type: 'line', height: 300, toolbar: { show: false }, zoom: { enabled: false } },
+                series: [
+                    { name: 'Fuel Economy (km/L)', data: <?php echo json_encode($trendEconomy); ?> },
+                    { name: 'Avg Price/L (Ksh)', data: <?php echo json_encode($trendPrice); ?> }
+                ],
+                xaxis: { categories: <?php echo json_encode($trendLabels); ?> },
+                colors: ['#198754', '#0dcaf0'],
+                stroke: { curve: 'smooth', width: 3 },
+                markers: { size: 4 },
+                legend: { position: 'top', horizontalAlign: 'left' },
+                grid: { borderColor: '#e7e7e7', strokeDashArray: 4 },
+                tooltip: { shared: true }
+            });
+            chart.render();
+        });
     </script>
 
 <?php require_once 'includes/footer.php'; ?>

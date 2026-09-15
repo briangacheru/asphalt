@@ -8,6 +8,60 @@
         </div>
     </div>
 </footer>
+
+<?php
+// Site-wide quick-add floating action button — lets a signed-in user log a
+// fuel fill-up, expense, or mileage reading from any page without navigating
+// there first. Hidden on auth pages since those never include this footer.
+$quickAddPage = basename($_SERVER['SCRIPT_NAME'] ?? '', '.php');
+if (!in_array($quickAddPage, ['login', 'register', 'forgot-password', 'reset-password'], true)):
+?>
+<div class="quick-add-fab" id="quickAddFab">
+    <div class="quick-add-fab-menu" id="quickAddFabMenu">
+        <a href="update-mileage" class="quick-add-fab-item" title="Update Mileage">
+            <span class="fas fa-tachometer-alt"></span><span class="quick-add-fab-label">Update Mileage</span>
+        </a>
+        <a href="expenses?quickadd=1" class="quick-add-fab-item" title="Add Expense">
+            <span class="fas fa-receipt"></span><span class="quick-add-fab-label">Add Expense</span>
+        </a>
+        <a href="fuel-log?quickadd=1" class="quick-add-fab-item" title="Add Fuel">
+            <span class="fas fa-gas-pump"></span><span class="quick-add-fab-label">Add Fuel</span>
+        </a>
+    </div>
+    <button type="button" class="quick-add-fab-toggle" id="quickAddFabToggle" aria-label="Quick add" aria-expanded="false">
+        <span class="fas fa-plus"></span>
+    </button>
+</div>
+<style>
+    .quick-add-fab { position: fixed; right: 1.5rem; bottom: 1.5rem; z-index: 1030; display: flex; flex-direction: column; align-items: flex-end; }
+    .quick-add-fab-toggle { width: 3.25rem; height: 3.25rem; border-radius: 50%; border: none; background: var(--falcon-primary, #2a7be4); color: #fff; font-size: 1.25rem; box-shadow: 0 0.5rem 1rem rgba(0,0,0,.25); display: flex; align-items: center; justify-content: center; transition: transform .2s ease; }
+    .quick-add-fab-toggle:hover { transform: scale(1.05); }
+    .quick-add-fab.is-open .quick-add-fab-toggle { transform: rotate(45deg); }
+    .quick-add-fab-menu { display: flex; flex-direction: column; align-items: flex-end; gap: .6rem; margin-bottom: .75rem; opacity: 0; pointer-events: none; transform: translateY(.5rem); transition: opacity .15s ease, transform .15s ease; }
+    .quick-add-fab.is-open .quick-add-fab-menu { opacity: 1; pointer-events: auto; transform: translateY(0); }
+    .quick-add-fab-item { display: flex; align-items: center; gap: .5rem; background: var(--falcon-card-bg, #fff); color: var(--falcon-body-color, #333); border-radius: 2rem; padding: .5rem 1rem .5rem .5rem; box-shadow: 0 0.25rem 0.75rem rgba(0,0,0,.2); text-decoration: none; font-size: .8rem; white-space: nowrap; }
+    .quick-add-fab-item span.fas { width: 2rem; height: 2rem; border-radius: 50%; background: var(--falcon-primary, #2a7be4); color: #fff; display: flex; align-items: center; justify-content: center; font-size: .8rem; }
+    @media (max-width: 576px) { .quick-add-fab { right: 1rem; bottom: 1rem; } }
+</style>
+<script>
+    (function () {
+        var fab = document.getElementById('quickAddFab');
+        var toggle = document.getElementById('quickAddFabToggle');
+        if (!fab || !toggle) return;
+        toggle.addEventListener('click', function () {
+            var isOpen = fab.classList.toggle('is-open');
+            toggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+        });
+        document.addEventListener('click', function (e) {
+            if (!fab.contains(e.target)) {
+                fab.classList.remove('is-open');
+                toggle.setAttribute('aria-expanded', 'false');
+            }
+        });
+    })();
+</script>
+<?php endif; ?>
+
 </div>
 </div>
 </main>

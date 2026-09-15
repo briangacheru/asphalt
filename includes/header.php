@@ -54,6 +54,71 @@ $vehiclesNeedingInsuranceAttention = \App\Services\InsuranceService::vehiclesNee
 $drivingLicenseStatus = \App\Services\DrivingLicenseService::statusForUser($pdo, $userId);
 $drivingLicenseNeedsAttention = in_array($drivingLicenseStatus['status'], ['expiring', 'expired'], true);
 
+// Services due within 2000km — same query the dashboard uses, capped for the bell.
+$notifServiceStmt = $pdo->prepare("
+    SELECT v.id, v.make, v.model, sr.next_service_mileage - v.current_mileage AS km_remaining
+    FROM vehicles v
+    JOIN service_records sr ON sr.id = (
+        SELECT id FROM service_records WHERE vehicle_id = v.id ORDER BY service_date DESC LIMIT 1
+    )
+    WHERE v.user_id = ? AND v.is_active = 1 AND sr.next_service_mileage IS NOT NULL
+    AND (sr.next_service_mileage - v.current_mileage) <= 2000
+    ORDER BY km_remaining ASC
+    LIMIT 5
+");
+$notifServiceStmt->execute([$userId]);
+$vehiclesNeedingServiceForBell = $notifServiceStmt->fetchAll();
+
+// Build the unified notification feed shown in the header bell. Each item gets a
+// stable id so the front end can remember "read" state in localStorage — there's
+// no notifications table yet, so read/unread is a per-browser affordance, not
+// synced across devices.
+$notificationAlerts = [];
+foreach ($vehiclesNeedingServiceForBell as $v) {
+    $km = (int) $v['km_remaining'];
+    $notificationAlerts[] = [
+        'id' => 'service-' . $v['id'],
+        'icon' => 'fa-wrench',
+        'variant' => $km <= 0 ? 'danger' : 'warning',
+        'text' => '<strong>' . sanitize($v['make'] . ' ' . $v['model']) . '</strong> ' . ($km <= 0 ? 'is overdue for service' : 'needs service in ' . number_format($km) . ' km'),
+        'time' => $km <= 0 ? 'Overdue' : 'Due soon',
+        'url' => 'vehicle-details?id=' . \App\Helpers\IdCodec::encode($v['id']),
+    ];
+}
+foreach ($vehiclesNeedingInsuranceAttention as $v) {
+    $expired = ($v['status'] ?? '') === 'expired';
+    $notificationAlerts[] = [
+        'id' => 'insurance-' . $v['vehicle_id'],
+        'icon' => 'fa-shield-alt',
+        'variant' => $expired ? 'danger' : 'warning',
+        'text' => '<strong>' . sanitize($v['make'] . ' ' . $v['model']) . '</strong> insurance ' . ($expired ? 'has expired' : 'expires in ' . (int) $v['days_remaining'] . ' days'),
+        'time' => $expired ? 'Expired' : 'Expiring soon',
+        'url' => 'insurance',
+    ];
+}
+foreach ($vehiclesNeedingMileageUpdate as $v) {
+    $notificationAlerts[] = [
+        'id' => 'mileage-' . $v['id'],
+        'icon' => 'fa-tachometer-alt',
+        'variant' => 'info',
+        'text' => '<strong>' . sanitize($v['make'] . ' ' . $v['model']) . '</strong> needs a mileage update this month',
+        'time' => 'This month',
+        'url' => 'update-mileage?vehicle_id=' . \App\Helpers\IdCodec::encode($v['id']),
+    ];
+}
+if ($drivingLicenseNeedsAttention) {
+    $expired = ($drivingLicenseStatus['status'] ?? '') === 'expired';
+    $notificationAlerts[] = [
+        'id' => 'license',
+        'icon' => 'fa-id-card',
+        'variant' => $expired ? 'danger' : 'warning',
+        'text' => 'Your driving licence ' . ($expired ? 'has expired' : 'expires in ' . (int) $drivingLicenseStatus['days_remaining'] . ' days'),
+        'time' => $expired ? 'Expired' : 'Expiring soon',
+        'url' => 'driving-license',
+    ];
+}
+$notificationCount = count($notificationAlerts);
+
 // Get all active vehicles for current user
 $vehiclesStmt = $pdo->prepare("SELECT id, make, model, year, current_mileage FROM vehicles WHERE user_id = ? AND is_active = 1 ORDER BY make, model");
 $vehiclesStmt->execute([$userId]);
@@ -362,8 +427,11 @@ $currentPage = basename($_SERVER['PHP_SELF'], '.php');
                 <a class="nav-link px-0 notification-indicator notification-indicator-warning notification-indicator-fill fa-icon-wait" href="app/e-commerce/shopping-cart.html"><span class="fas fa-shopping-cart" data-fa-transform="shrink-7" style="font-size: 33px;"></span><span class="notification-indicator-number">1</span></a>
 
               </li>-->
-              <!--<li class="nav-item dropdown">
-                <a class="nav-link notification-indicator notification-indicator-primary px-0 fa-icon-wait" id="navbarDropdownNotification" role="button" data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false" data-hide-on-body-scroll="data-hide-on-body-scroll"><span class="fas fa-bell" data-fa-transform="shrink-6" style="font-size: 33px;"></span></a>
+              <li class="nav-item dropdown">
+                <a class="nav-link notification-indicator notification-indicator-primary px-0 fa-icon-wait<?php echo $notificationCount > 0 ? ' notification-indicator-fill' : ''; ?>" id="navbarDropdownNotification" role="button" data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false" data-hide-on-body-scroll="data-hide-on-body-scroll">
+                  <span class="fas fa-bell" data-fa-transform="shrink-6" style="font-size: 33px;"></span>
+                  <span class="notification-indicator-number" id="notificationBellCount" style="<?php echo $notificationCount > 0 ? '' : 'display:none;'; ?>"><?php echo $notificationCount; ?></span>
+                </a>
                 <div class="dropdown-menu dropdown-caret dropdown-caret dropdown-menu-end dropdown-menu-card dropdown-menu-notification dropdown-caret-bg" aria-labelledby="navbarDropdownNotification">
                   <div class="card card-notification shadow-none">
                     <div class="card-header">
@@ -371,49 +439,99 @@ $currentPage = basename($_SERVER['PHP_SELF'], '.php');
                         <div class="col-auto">
                           <h6 class="card-header-title mb-0">Notifications</h6>
                         </div>
-                        <div class="col-auto ps-0 ps-sm-3"><a class="card-link fw-normal" href="#">Mark all as read</a></div>
+                        <div class="col-auto ps-0 ps-sm-3"><a class="card-link fw-normal" href="#" id="markAllNotificationsRead">Mark all as read</a></div>
                       </div>
                     </div>
                     <div class="scrollbar-overlay" style="max-height:19rem">
-                      <div class="list-group list-group-flush fw-normal fs-10">
-                        <div class="list-group-title border-bottom">NEW</div>
-                        <div class="list-group-item">
-                          <a class="notification notification-flush notification-unread" href="#!">
-                            <div class="notification-avatar">
-                              <div class="avatar avatar-2xl me-3">
-                                <img class="rounded-circle" src="assets/img/team/1-thumb.png" alt="" />
-
-                              </div>
+                      <div class="list-group list-group-flush fw-normal fs-10" id="notificationList">
+                        <?php if (empty($notificationAlerts)): ?>
+                          <div class="list-group-item text-center text-muted py-4">
+                            <i class="fas fa-check-circle text-success mb-2" style="font-size:1.5rem;"></i>
+                            <p class="mb-0">You're all caught up!</p>
+                          </div>
+                        <?php else: ?>
+                          <div class="list-group-title border-bottom">ALERTS</div>
+                          <?php foreach ($notificationAlerts as $n): ?>
+                            <div class="list-group-item" data-notif-id="<?php echo sanitize($n['id']); ?>">
+                              <a class="notification notification-flush notification-unread" href="<?php echo htmlspecialchars($n['url']); ?>">
+                                <div class="notification-avatar">
+                                  <div class="avatar avatar-2xl me-3">
+                                    <div class="avatar-name rounded-circle bg-<?php echo $n['variant']; ?>-subtle text-<?php echo $n['variant']; ?>"><span class="fas <?php echo $n['icon']; ?>"></span></div>
+                                  </div>
+                                </div>
+                                <div class="notification-body">
+                                  <p class="mb-1"><?php echo $n['text']; ?></p>
+                                  <span class="notification-time"><span class="me-2 fas fa-circle fs-11 text-<?php echo $n['variant']; ?>"></span><?php echo sanitize($n['time']); ?></span>
+                                </div>
+                              </a>
                             </div>
-                            <div class="notification-body">
-                              <p class="mb-1"><strong>Emma Watson</strong> replied to your comment : "Hello world 😍"</p>
-                              <span class="notification-time"><span class="me-2" role="img" aria-label="Emoji">💬</span>Just now</span>
-
-                            </div>
-                          </a>
-
-                        </div>
-                        <div class="list-group-item">
-                          <a class="notification notification-flush notification-unread" href="#!">
-                            <div class="notification-avatar">
-                              <div class="avatar avatar-2xl me-3">
-                                <div class="avatar-name rounded-circle"><span>AB</span></div>
-                              </div>
-                            </div>
-                            <div class="notification-body">
-                              <p class="mb-1"><strong>Albert Brooks</strong> reacted to <strong>Mia Khalifa's</strong> status</p>
-                              <span class="notification-time"><span class="me-2 fab fa-gratipay text-danger"></span>9hr</span>
-
-                            </div>
-                          </a>
-                        </div>
+                          <?php endforeach; ?>
+                        <?php endif; ?>
                       </div>
                     </div>
-                    <div class="card-footer text-center border-top"><a class="card-link d-block" href="app/social/notifications.html">View all</a></div>
+                    <div class="card-footer text-center border-top"><a class="card-link d-block" href="maintenance-schedule">View maintenance schedule</a></div>
                   </div>
                 </div>
 
-              </li>-->
+              </li>
+              <script>
+                (function () {
+                  var STORAGE_KEY = 'ivehicle_read_notifications';
+                  function getRead() {
+                    try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]'); } catch (e) { return []; }
+                  }
+                  function setRead(ids) {
+                    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(ids)); } catch (e) {}
+                  }
+                  function applyReadState() {
+                    var read = getRead();
+                    var items = document.querySelectorAll('#notificationList [data-notif-id]');
+                    var unreadCount = 0;
+                    items.forEach(function (item) {
+                      var id = item.getAttribute('data-notif-id');
+                      var link = item.querySelector('.notification');
+                      if (read.indexOf(id) !== -1) {
+                        link.classList.remove('notification-unread');
+                      } else {
+                        unreadCount++;
+                      }
+                    });
+                    var badge = document.getElementById('notificationBellCount');
+                    if (badge) {
+                      if (unreadCount > 0) {
+                        badge.textContent = unreadCount;
+                        badge.style.display = '';
+                      } else {
+                        badge.style.display = 'none';
+                      }
+                    }
+                  }
+                  document.addEventListener('DOMContentLoaded', function () {
+                    applyReadState();
+                    var markAll = document.getElementById('markAllNotificationsRead');
+                    if (markAll) {
+                      markAll.addEventListener('click', function (e) {
+                        e.preventDefault();
+                        var ids = Array.prototype.map.call(document.querySelectorAll('#notificationList [data-notif-id]'), function (el) {
+                          return el.getAttribute('data-notif-id');
+                        });
+                        setRead(ids);
+                        applyReadState();
+                      });
+                    }
+                    document.querySelectorAll('#notificationList [data-notif-id] .notification').forEach(function (link) {
+                      link.addEventListener('click', function () {
+                        var id = link.closest('[data-notif-id]').getAttribute('data-notif-id');
+                        var read = getRead();
+                        if (read.indexOf(id) === -1) {
+                          read.push(id);
+                          setRead(read);
+                        }
+                      });
+                    });
+                  });
+                })();
+              </script>
               <li class="nav-item dropdown">
                   <a class="nav-link pe-0 ps-2" id="navbarDropdownUser" role="button" data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
                       <div class="avatar avatar-xl">
