@@ -454,11 +454,132 @@ function renderScheduleTable($items) {
     <?php
 }
 
+// View toggle: Table (default) or Timeline — sorted by urgency (overdue
+// first, then by soonest due date/mileage). A real due_date is shown as an
+// actual date; a mileage-only item shows "km remaining" instead since there's
+// no reliable way to project that onto a calendar date without knowing how
+// much the vehicle is driven.
+if (!empty($allAnnotated)): ?>
+    <div class="d-flex justify-content-end mb-2">
+        <div class="btn-group btn-group-sm" role="group" aria-label="Schedule view switcher">
+            <button type="button" class="btn btn-outline-secondary active" id="scheduleTableViewBtn">
+                <i class="fas fa-table"></i> Table
+            </button>
+            <button type="button" class="btn btn-outline-secondary" id="scheduleTimelineViewBtn">
+                <i class="fas fa-stream"></i> Timeline
+            </button>
+        </div>
+    </div>
+<?php endif;
+
 // Render schedule sections
 if (!empty($allAnnotated)) {
     renderScheduleTable($allAnnotated);
 }
 
+// Timeline view — hidden by default, toggled by the buttons above
+if (!empty($allAnnotated)):
+    $statusMeta = [
+        'overdue' => ['label' => 'Overdue', 'color' => 'danger', 'icon' => 'fa-exclamation-circle'],
+        'due_soon' => ['label' => 'Due Soon', 'color' => 'warning', 'icon' => 'fa-exclamation-triangle'],
+        'upcoming' => ['label' => 'Upcoming', 'color' => 'primary', 'icon' => 'fa-clock'],
+        'ok' => ['label' => 'OK', 'color' => 'success', 'icon' => 'fa-check-circle'],
+    ];
+?>
+    <div class="card mb-3 d-none" id="scheduleTimelineCard">
+        <div class="card-header bg-body-tertiary">
+            <i class="fas fa-stream me-2"></i><strong>Maintenance Timeline</strong>
+            <span class="fs-11 text-muted ms-2">sorted by urgency &mdash; most overdue first</span>
+        </div>
+        <div class="card-body">
+            <div class="timeline-vertical">
+                <?php foreach ($allAnnotated as $item):
+                    $meta = $statusMeta[$item['status']];
+                    $whenLabel = null;
+                    if (!empty($item['next_due_date'])) {
+                        $whenLabel = date('M d, Y', strtotime($item['next_due_date']));
+                    } elseif (isset($item['km_overdue'])) {
+                        $whenLabel = number_format(abs($item['km_overdue'])) . ' km overdue';
+                    } elseif (isset($item['km_remaining'])) {
+                        $whenLabel = $item['km_remaining'] !== null ? number_format($item['km_remaining']) . ' km remaining' : 'No estimate yet';
+                    }
+                ?>
+                    <div class="timeline-node" data-status="<?php echo sanitize($item['status']); ?>">
+                        <div class="timeline-node-marker bg-<?php echo $meta['color']; ?>-subtle text-<?php echo $meta['color']; ?>">
+                            <i class="fas <?php echo $meta['icon']; ?>"></i>
+                        </div>
+                        <div class="timeline-node-body">
+                            <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
+                                <div>
+                                    <span class="badge badge-subtle-<?php echo $meta['color']; ?> me-2"><?php echo $meta['label']; ?></span>
+                                    <strong><?php echo sanitize($item['item_type']); ?></strong>
+                                    <span class="text-muted">&bull; <?php echo sanitize($item['make'] . ' ' . $item['model']); ?></span>
+                                </div>
+                                <span class="fs-10 text-<?php echo $meta['color']; ?> fw-semibold"><?php echo sanitize($whenLabel ?? '—'); ?></span>
+                            </div>
+                        </div>
+                    </div>
+                <?php endforeach; ?>
+            </div>
+        </div>
+    </div>
+    <style>
+        .timeline-vertical { position: relative; padding-left: 2.5rem; }
+        .timeline-vertical::before { content: ''; position: absolute; left: 1.1rem; top: 0.5rem; bottom: 0.5rem; width: 2px; background: var(--falcon-border-color, #e7e7e7); }
+        .timeline-node { position: relative; padding-bottom: 1.25rem; }
+        .timeline-node:last-child { padding-bottom: 0; }
+        .timeline-node-marker { position: absolute; left: -2.5rem; top: 0; width: 2.2rem; height: 2.2rem; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.85rem; }
+        .timeline-node-body { background: var(--falcon-card-bg, #fff); border: 1px solid var(--falcon-border-color, #e7e7e7); border-radius: 0.5rem; padding: 0.75rem 1rem; font-size: 0.8rem; }
+    </style>
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            var tableBtn = document.getElementById('scheduleTableViewBtn');
+            var timelineBtn = document.getElementById('scheduleTimelineViewBtn');
+            var timelineCard = document.getElementById('scheduleTimelineCard');
+            var tableCard = document.querySelector('#maintenanceScheduleTable')?.closest('.card');
+            if (!tableBtn || !timelineBtn || !timelineCard) return;
+
+            tableBtn.addEventListener('click', function () {
+                timelineCard.classList.add('d-none');
+                if (tableCard) tableCard.classList.remove('d-none');
+                tableBtn.classList.add('active');
+                timelineBtn.classList.remove('active');
+            });
+            timelineBtn.addEventListener('click', function () {
+                if (tableCard) tableCard.classList.add('d-none');
+                timelineCard.classList.remove('d-none');
+                timelineBtn.classList.add('active');
+                tableBtn.classList.remove('active');
+            });
+
+            // Status filter cards also filter the timeline when it's the active view.
+            // Tracks its own toggle state rather than reading the table script's
+            // "active" class, since script/listener registration order isn't guaranteed.
+            var activeTimelineStatus = null;
+            function applyTimelineFilter() {
+                document.querySelectorAll('#scheduleTimelineCard .timeline-node').forEach(function (node) {
+                    node.style.display = (!activeTimelineStatus || node.dataset.status === activeTimelineStatus) ? '' : 'none';
+                });
+            }
+            document.querySelectorAll('.status-filter-card').forEach(function (card) {
+                card.addEventListener('click', function () {
+                    var status = this.dataset.statusFilter;
+                    activeTimelineStatus = (activeTimelineStatus === status) ? null : status;
+                    applyTimelineFilter();
+                });
+            });
+            var clearLink = document.getElementById('clearStatusFilter');
+            if (clearLink) {
+                clearLink.addEventListener('click', function () {
+                    activeTimelineStatus = null;
+                    applyTimelineFilter();
+                });
+            }
+        });
+    </script>
+<?php endif; ?>
+
+<?php
 // Empty state
 if (empty($schedules)): ?>
     <div class="card">
