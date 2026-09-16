@@ -4,7 +4,7 @@ require_once 'includes/header.php';
 
 use App\Helpers\IdCodec;
 
-$vehiclesStmt = $pdo->prepare("SELECT id, make, model, year, license_plate, current_mileage, purchase_mileage, vehicle_image FROM vehicles WHERE is_active = 1 AND user_id = ? ORDER BY make, model");
+$vehiclesStmt = $pdo->prepare("SELECT id, make, model, year, license_plate, current_mileage, purchase_mileage, image_path FROM vehicles WHERE is_active = 1 AND user_id = ? ORDER BY make, model");
 $vehiclesStmt->execute([$userId]);
 $allVehicles = $vehiclesStmt->fetchAll();
 
@@ -172,8 +172,8 @@ if ($flash): ?>
                             <th style="min-width:140px;">Metric</th>
                             <?php foreach ($compareVehicles as $v): ?>
                                 <th class="text-center" style="min-width:150px;">
-                                    <?php if (!empty($v['vehicle_image'])): ?>
-                                        <img src="<?php echo htmlspecialchars($v['vehicle_image']); ?>" class="rounded-circle mb-2" style="width:48px;height:48px;object-fit:cover;" alt="">
+                                    <?php if ($v['image_path'] && file_exists(UPLOAD_DIR . $v['image_path'])): ?>
+                                        <img src="uploads/<?php echo $v['image_path']; ?>" class="rounded-circle mb-2" style="width:48px;height:48px;object-fit:cover;" alt="">
                                     <?php else: ?>
                                         <div class="avatar avatar-2xl mb-2 mx-auto"><div class="avatar-name rounded-circle bg-primary-subtle text-primary"><i class="fas fa-car"></i></div></div>
                                     <?php endif; ?>
