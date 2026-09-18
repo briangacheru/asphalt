@@ -52,14 +52,6 @@ function getCurrentUserId(): ?int {
 }
 
 /**
- * Require authentication (legacy function)
- * @deprecated Use App\Middleware\AuthMiddleware::check() instead
- */
-function requireAuth(): void {
-    \App\Middleware\AuthMiddleware::check();
-}
-
-/**
  * Generate secure random token (legacy function)
  */
 function generateToken(int $length = 32): string {
@@ -197,7 +189,7 @@ function getCurrentUser(): ?array {
     }
     
     $pdo = getDBConnection();
-    $stmt = $pdo->prepare("SELECT id, email, first_name, last_name, phone, avatar FROM users WHERE id = ?");
+    $stmt = $pdo->prepare("SELECT id, email, first_name, last_name, phone, avatar, mileage_reminder_enabled FROM users WHERE id = ?");
     $stmt->execute([getCurrentUserId()]);
     return $stmt->fetch() ?: null;
 }

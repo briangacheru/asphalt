@@ -83,15 +83,6 @@ class IdCodec
         return $id > 0 ? $id : null;
     }
 
-    /**
-     * Convenience wrapper for legacy call sites that used (int)($_GET['id'] ?? 0)
-     * and want a non-nullable int back (0 = absent/invalid, never a real ID).
-     */
-    public static function decodeOrZero(mixed $token): int
-    {
-        return self::decode($token) ?? 0;
-    }
-
     private static function key(): string
     {
         if (self::$key !== null) {

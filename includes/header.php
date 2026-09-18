@@ -439,10 +439,6 @@ $currentPage = basename($_SERVER['PHP_SELF'], '.php');
                   </div>
                 </div>
               </li>
-              <!--<li class="nav-item d-none d-sm-block">
-                <a class="nav-link px-0 notification-indicator notification-indicator-warning notification-indicator-fill fa-icon-wait" href="app/e-commerce/shopping-cart.html"><span class="fas fa-shopping-cart" data-fa-transform="shrink-7" style="font-size: 33px;"></span><span class="notification-indicator-number">1</span></a>
-
-              </li>-->
               <li class="nav-item dropdown">
                 <a class="nav-link notification-indicator notification-indicator-primary px-0 fa-icon-wait<?php echo $notificationCount > 0 ? ' notification-indicator-fill' : ''; ?>" id="navbarDropdownNotification" role="button" data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false" data-hide-on-body-scroll="data-hide-on-body-scroll">
                   <span class="fas fa-bell" data-fa-transform="shrink-6" style="font-size: 33px;"></span>

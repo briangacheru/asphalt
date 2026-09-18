@@ -139,7 +139,7 @@ class VehicleController
         $stmt->execute([$vehicleId, $vehicleId, $vehicleId]);
         $base['mileage_updated_at'] = $stmt->fetchColumn() ?: null;
 
-        // Next service, from the latest service record (mirrors ServiceRecord::getUpcomingServices()).
+        // Next service, from the latest service record.
         $stmt = $pdo->prepare("SELECT next_service_mileage FROM service_records WHERE vehicle_id = ? ORDER BY id DESC LIMIT 1");
         $stmt->execute([$vehicleId]);
         $nextServiceMileage = $stmt->fetchColumn();

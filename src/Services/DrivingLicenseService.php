@@ -105,12 +105,6 @@ class DrivingLicenseService
         return self::current($pdo, $userId) ?? ['status' => 'none', 'days_remaining' => null];
     }
 
-    /** True if the user's licence needs sticky-banner/email attention. */
-    public static function needsAttention(\PDO $pdo, int $userId): bool
-    {
-        return in_array(self::statusForUser($pdo, $userId)['status'], ['expiring', 'expired'], true);
-    }
-
     /** The current licence (if any) for every active user — used by the cron job. */
     public static function statusForAllUsers(\PDO $pdo): array
     {

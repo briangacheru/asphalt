@@ -30,21 +30,6 @@ class AuthMiddleware
     }
 
     /**
-     * Check if user is a guest (not logged in)
-     */
-    public static function checkGuest(): void
-    {
-        if (session_status() === PHP_SESSION_NONE) {
-            session_start();
-        }
-
-        if (isset($_SESSION['user_id']) && !empty($_SESSION['user_id'])) {
-            header('Location: ' . APP_URL . '/');
-            exit;
-        }
-    }
-
-    /**
      * Get current user ID
      */
     public static function getCurrentUserId(): ?int

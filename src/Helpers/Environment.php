@@ -64,24 +64,4 @@ class Environment
             }
         }
     }
-
-    /**
-     * Check if an environment variable exists
-     */
-    public static function has(string $key): bool
-    {
-        if (empty(self::$loaded)) {
-            self::load();
-        }
-
-        return isset($_ENV[$key]) || array_key_exists($key, self::$loaded) || getenv($key) !== false;
-    }
-
-    /**
-     * Clear loaded environment variables (useful for testing)
-     */
-    public static function clear(): void
-    {
-        self::$loaded = [];
-    }
 }

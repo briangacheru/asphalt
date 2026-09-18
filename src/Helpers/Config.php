@@ -134,13 +134,4 @@ class Config
         
         return $default;
     }
-
-    /**
-     * Check if a configuration key exists
-     */
-    public static function has(string $key): bool
-    {
-        self::init();
-        return defined($key);
-    }
 }

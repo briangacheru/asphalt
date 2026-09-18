@@ -19,7 +19,7 @@ A comprehensive web-based vehicle management system for tracking maintenance, se
 
 ## Requirements
 
-- PHP 7.4 or higher
+- PHP 8.1 or higher
 - MySQL 5.7 or higher / MariaDB
 - Apache/Nginx web server
 - Composer (for dependency management)
@@ -51,28 +51,38 @@ Import the database schema (if a SQL file exists) or run the installation script
 
 ### 4. Configuration
 
-Edit `includes/config.php` to match your environment:
+Create a `.env` file in the project root (read by `App\Helpers\Environment`; every key has a default in `App\Helpers\Config`):
 
-```php
-// Database Configuration
-define('DB_HOST', 'localhost');
-define('DB_NAME', 'vehicle_service_tracker');
-define('DB_USER', 'your_db_user');
-define('DB_PASS', 'your_db_password');
+```ini
+# Database
+DB_HOST=localhost
+DB_NAME=vehicle_service_tracker
+DB_USER=your_db_user
+DB_PASS=your_db_password
 
-// Email Configuration (PHPMailer SMTP)
-define('SMTP_HOST', 'your_smtp_host');
-define('SMTP_PORT', 587);
-define('SMTP_SECURE', 'tls');
-define('SMTP_USER', 'your_email@example.com');
-define('SMTP_PASS', 'your_email_password');
-define('ADMIN_EMAIL', 'admin@example.com');
-define('FROM_EMAIL', 'noreply@example.com');
-define('FROM_NAME', 'iVehicle');
+# Email (PHPMailer SMTP)
+SMTP_HOST=your_smtp_host
+SMTP_PORT=587
+SMTP_SECURE=tls
+SMTP_USER=your_email@example.com
+SMTP_PASS=your_email_password
+ADMIN_EMAIL=admin@example.com
+FROM_EMAIL=noreply@example.com
+FROM_NAME=iVehicle
 
-// Application Settings
-define('APP_NAME', 'iVehicle');
-define('APP_URL', 'http://your-domain.com');
+# Application
+APP_NAME=iVehicle
+APP_URL=http://your-domain.com
+
+# Base64 32-byte key for the encrypted IDs used in URLs
+# php -r "echo base64_encode(sodium_crypto_secretbox_keygen()), PHP_EOL;"
+ID_ENCRYPTION_KEY=
+
+# Optional: Google sign-in and browser push (see sections below)
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=
+VAPID_PUBLIC_KEY=
+VAPID_PRIVATE_KEY=
 ```
 
 ### 5. Set Permissions
@@ -136,6 +146,12 @@ For automated email reminders, add these cron jobs:
 
 # Driving licence expiry alerts (daily at 8:00 AM)
 0 8 * * * php /path/to/vehicle-service-tracker/cron/driving-license-reminder-cron.php
+
+# Maintenance schedule due/overdue alerts (daily at 8:00 AM)
+0 8 * * * php /path/to/vehicle-service-tracker/cron/maintenance-reminder-cron.php
+
+# Nightly database backup to uploads/backups/ (2:00 AM)
+0 2 * * * php /path/to/vehicle-service-tracker/cron/database-backup-cron.php
 ```
 
 ## Project Structure
@@ -146,14 +162,19 @@ vehicle-service-tracker/
 │   └── index.php            # Front controller — see api/README.md
 ├── auth/                    # Authentication pages (login, register, password reset)
 ├── assets/                  # CSS, JavaScript, and image files
-├── cron/                    # Scheduled cron job scripts
-│   ├── monthly-reminder.php
-│   └── service-reminder-cron.php
-├── includes/                # Shared PHP files and configurations
-│   ├── config.php           # Application configuration
-│   ├── EmailHelper.php      # Email sending utilities
-│   ├── header.php           # Common header template
-│   └── footer.php           # Common footer template
+├── cron/                    # Scheduled cron job scripts (see "Setting Up Cron Jobs")
+├── includes/                # Shared PHP files
+│   ├── bootstrap.php        # Session, autoloader, config constants, legacy helper functions
+│   ├── header.php           # Common header template (nav, notification bell)
+│   └── footer.php           # Common footer template (quick-add FAB, push/service-worker helper)
+├── src/                     # PSR-4 classes (App namespace)
+│   ├── Api/                 # JSON API controllers, Response and upload helpers
+│   ├── Database/            # PDO singleton
+│   ├── Helpers/             # Config, Environment (.env), IdCodec (encrypted URL ids)
+│   ├── Middleware/          # Session auth and bearer-token auth
+│   ├── Models/              # Base Model and Vehicle model (used by the API)
+│   └── Services/            # Email, insurance, licence, push, backup, search, etc.
+├── tests/                   # PHPUnit tests (vendor/bin/phpunit)
 ├── uploads/                 # User uploaded files (vehicle photos, documents)
 ├── vendor/                  # Composer dependencies
 ├── vendors/                 # Additional vendor libraries
@@ -220,10 +241,7 @@ The app also ships a `manifest.json` and `sw.js` so it can be installed to a pho
 
 ## Email Templates
 
-HTML email templates are located in the `auth/` directory:
-- `confirm-mail.html` - Email verification
-- `lock-screen.html` - Account lock notification
-- `reset-password.html` - Password reset instructions
+All emails are built inline by `App\Services\EmailService` (a shared HTML wrapper plus per-message bodies). There are no separate template files.
 
 ## License
 
@@ -237,4 +255,4 @@ For issues and feature requests, please open an issue in the repository.
 
 - Built with PHP and MySQL
 - Uses PHPMailer for email functionality
-- Frontend framework: [Specify if known]
+- Frontend: Bootstrap 5 via the Falcon admin theme (`assets/css/theme.css`, `assets/js/theme.js`), Font Awesome, ECharts

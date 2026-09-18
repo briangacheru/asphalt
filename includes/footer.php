@@ -276,7 +276,6 @@ if (!in_array($quickAddPage, ['login', 'register', 'forgot-password', 'reset-pas
         <hr />
         <h5 class="fs-9 d-flex align-items-center">Vertical Navbar Style</h5>
         <p class="fs-10 mb-0">Switch between styles for your vertical navbar </p>
-        <p> <a class="fs-10" href="modules/components/navs-and-tabs/vertical-navbar.html#navbar-styles">See Documentation</a></p>
         <div class="btn-group d-block w-100 btn-group-navbar-style">
           <div class="row gx-2">
             <div class="col-6">

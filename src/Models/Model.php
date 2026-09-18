@@ -31,7 +31,7 @@ abstract class Model
     /**
      * Get all records with optional conditions
      */
-    public function all(string $orderBy = null, int $limit = null): array
+    public function all(?string $orderBy = null, ?int $limit = null): array
     {
         $sql = "SELECT * FROM {$this->table}";
         
@@ -81,21 +81,6 @@ abstract class Model
     {
         $sql = "DELETE FROM {$this->table} WHERE {$this->primaryKey} = ?";
         return $this->db->query($sql, [$id])->rowCount() > 0;
-    }
-
-    /**
-     * Count records with optional conditions
-     */
-    public function count(string $where = null, array $params = []): int
-    {
-        $sql = "SELECT COUNT(*) as count FROM {$this->table}";
-        
-        if ($where) {
-            $sql .= " WHERE {$where}";
-        }
-
-        $result = $this->db->fetchOne($sql, $params);
-        return (int) ($result['count'] ?? 0);
     }
 
     /**

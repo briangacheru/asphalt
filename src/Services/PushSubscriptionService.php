@@ -63,9 +63,4 @@ class PushSubscriptionService
 
         return $stmt->fetchAll();
     }
-
-    public static function hasAny(\PDO $pdo, int $userId): bool
-    {
-        return count(self::forUser($pdo, $userId)) > 0;
-    }
 }
