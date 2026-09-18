@@ -12,6 +12,7 @@ A comprehensive web-based vehicle management system for tracking maintenance, se
 - **Service Reminders**: Automated email reminders for upcoming maintenance
 - **Insurance Tracking**: Record insurance policies and stickers per vehicle, with sticky in-app alerts and daily email reminders starting 14 days before expiry (and continuing daily until renewed)
 - **Driving Licence Tracking**: Record driving licence details and a scan per user, with sticky in-app alerts and daily email reminders starting 60 days before expiry (and continuing daily until renewed)
+- **Document Expiry Tracking**: Give any uploaded vehicle document (inspection certificate, road tax, permit) an expiry date and get in-app alerts plus a daily per-vehicle digest email starting 14 days before expiry (and continuing daily until the document is replaced or removed)
 - **Monthly Reports**: Generate reports on spending and maintenance history
 - **Email Notifications**: Automated monthly check emails and service reminders
 - **Multi-user Support**: User authentication with registration and password recovery
@@ -147,6 +148,9 @@ For automated email reminders, add these cron jobs:
 # Driving licence expiry alerts (daily at 8:00 AM)
 0 8 * * * php /path/to/vehicle-service-tracker/cron/driving-license-reminder-cron.php
 
+# Vehicle document expiry alerts (daily at 8:00 AM)
+0 8 * * * php /path/to/vehicle-service-tracker/cron/document-expiry-reminder-cron.php
+
 # Maintenance schedule due/overdue alerts (daily at 8:00 AM)
 0 8 * * * php /path/to/vehicle-service-tracker/cron/maintenance-reminder-cron.php
 
@@ -210,12 +214,12 @@ The application uses the following main tables:
 - `api_tokens` - Bearer tokens for the JSON API (one row per logged-in device; only a SHA-256 hash is stored); created lazily by `App\Services\ApiTokenService`. See [api/README.md](api/README.md).
 - `push_subscriptions` - Browser push subscriptions (one row per device a user enabled notifications on in Settings); created lazily by `App\Services\PushSubscriptionService`. Sent to alongside the reminder emails — see `App\Services\PushService`.
 - `feedback` - In-app feedback submitted via the user menu's "Feedback" link; created lazily by `App\Services\FeedbackService`. Admins read, filter and resolve submissions in the "User Feedback" card on the Admin Dashboard.
-- `vehicle_documents.expiry_date` - Optional expiry date on an uploaded document (inspection certificate, road tax, etc.), added lazily to the existing table by `App\Services\DocumentExpiryService`. Feeds the same header bell as insurance/licence expiry.
+- `vehicle_documents.expiry_date` - Optional expiry date on an uploaded document (inspection certificate, road tax, etc.), added lazily to the existing table by `App\Services\DocumentExpiryService`. Feeds the same header bell as insurance/licence expiry, and `cron/document-expiry-reminder-cron.php` sends one digest email per vehicle per day while any of its documents is within 14 days of expiry or already expired.
 - `mileage_log.photo_path` - Optional odometer photo captured/uploaded on the Update Mileage page, added lazily the same defensive way.
 
 ## Browser Push Notifications
 
-Service/insurance/licence reminders can also be delivered as browser push notifications, as a second channel alongside the existing emails. This is optional — the app works fine without it, and each user opts in individually from Settings > Push Notifications.
+Service/insurance/licence/document reminders can also be delivered as browser push notifications, as a second channel alongside the existing emails. This is optional — the app works fine without it, and each user opts in individually from Settings > Push Notifications.
 
 To enable it, generate a VAPID key pair and add it to `.env`:
 

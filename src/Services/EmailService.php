@@ -921,4 +921,123 @@ class EmailService
 
         return $sent;
     }
+
+    /**
+     * Daily digest of a vehicle's documents that are expiring within the
+     * reminder window or already expired (inspection certificate, road tax,
+     * etc.). One email per vehicle listing every affected document; the cron
+     * job decides when to call this, the same way as the insurance alert.
+     *
+     * $documents rows: title, category_label, expiry_date, days_remaining.
+     */
+    public function sendDocumentExpiryEmail(int $vehicleId, array $documents): bool
+    {
+        if (empty($documents)) {
+            return false;
+        }
+
+        $stmt = $this->pdo->prepare("
+            SELECT v.*, u.email, u.first_name
+            FROM vehicles v
+            JOIN users u ON v.user_id = u.id
+            WHERE v.id = ?
+        ");
+        $stmt->execute([$vehicleId]);
+        $data = $stmt->fetch();
+
+        if (!$data) {
+            return false;
+        }
+
+        $vehicleName = $data['make'] . ' ' . $data['model'] . ' (' . $data['year'] . ')';
+        $expiredCount = count(array_filter($documents, fn($d) => (int) $d['days_remaining'] < 0));
+        $expiringCount = count($documents) - $expiredCount;
+
+        if ($expiredCount > 0) {
+            $urgencyHtml = sprintf(
+                '<div style="background: rgba(255,59,48,0.2); border: 1px solid rgba(255,59,48,0.3); border-radius: 12px; padding: 20px; margin: 20px 0; color: #ff3b30;"><strong>🚨 %d document%s expired</strong>%s</div>',
+                $expiredCount,
+                $expiredCount === 1 ? ' has' : 's have',
+                $expiringCount > 0 ? sprintf(' and %d more %s expiring soon.', $expiringCount, $expiringCount === 1 ? 'is' : 'are') : '.'
+            );
+            $subjectPrefix = 'EXPIRED: ';
+        } else {
+            $urgencyHtml = sprintf(
+                '<div style="background: rgba(255,149,0,0.2); border: 1px solid rgba(255,149,0,0.3); border-radius: 12px; padding: 20px; margin: 20px 0; color: #ff9500;"><strong>📅 %d document%s expiring soon</strong></div>',
+                $expiringCount,
+                $expiringCount === 1 ? ' is' : 's are'
+            );
+            $subjectPrefix = '';
+        }
+
+        $rows = '';
+        foreach ($documents as $doc) {
+            $days = (int) $doc['days_remaining'];
+            if ($days < 0) {
+                $status = sprintf('Expired %s day(s) ago', number_format(abs($days)));
+                $color = '#ff3b30';
+            } elseif ($days === 0) {
+                $status = 'Expires today';
+                $color = '#ff3b30';
+            } else {
+                $status = sprintf('%s day(s) left', number_format($days));
+                $color = '#ff9500';
+            }
+            $rows .= sprintf(
+                '<tr>
+                    <td style="padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.08);"><strong>%s</strong><br><span style="color: #86868b; font-size: 12px;">%s</span></td>
+                    <td style="padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.08); text-align: right; white-space: nowrap;">%s<br><span style="color: %s; font-size: 12px;">%s</span></td>
+                </tr>',
+                htmlspecialchars($doc['title'] ?: 'Document'),
+                htmlspecialchars($doc['category_label'] ?? ''),
+                date('M d, Y', strtotime($doc['expiry_date'])),
+                $color,
+                $status
+            );
+        }
+
+        $content = sprintf('
+            <h2 style="margin: 0 0 20px; color: #ffffff; font-size: 20px;">Document Expiry Alert</h2>
+            <p style="margin: 0 0 20px; line-height: 1.6;">Hi %s,</p>
+            <p style="margin: 0 0 20px; line-height: 1.6;">This is a reminder about documents on file for <strong>%s</strong>.</p>
+
+            %s
+
+            <div style="background: rgba(0,0,0,0.3); border-radius: 12px; padding: 20px; margin: 20px 0;">
+                <table style="width: 100%%; color: #e5e5ea; border-collapse: collapse;">
+                    %s
+                </table>
+            </div>
+
+            <p style="margin: 20px 0; line-height: 1.6;">You will keep receiving this alert every day until the renewed document is uploaded with its new expiry date, or the expired one is removed.</p>
+
+            <p style="margin: 30px 0; text-align: center;">
+                <a href="%s/vehicle-documents?vehicle_id=%s" style="display: inline-block; padding: 14px 32px; background: #ffffff; color: #000000; text-decoration: none; border-radius: 8px; font-weight: 600;">Manage Documents</a>
+            </p>
+        ',
+            htmlspecialchars($data['first_name']),
+            htmlspecialchars($vehicleName),
+            $urgencyHtml,
+            $rows,
+            APP_URL,
+            IdCodec::encode($vehicleId)
+        );
+
+        $subject = $subjectPrefix . "Document Alert: $vehicleName";
+        $html = $this->getEmailTemplate($content, $subject);
+
+        $sent = $this->send($data['email'], $subject, $html);
+        $this->logEmail($vehicleId, 'document_expiry', $data['email'], $subject, $html, $sent ? 'sent' : 'failed');
+
+        $total = count($documents);
+        PushService::notifyUser(
+            $this->pdo,
+            (int) $data['user_id'],
+            $expiredCount > 0 ? 'Document Expired' : 'Document Expiring Soon',
+            $vehicleName . ' — ' . $total . ' document' . ($total === 1 ? '' : 's') . ($expiredCount > 0 ? ' expired or expiring' : ' expiring soon'),
+            '/vehicle-documents?vehicle_id=' . IdCodec::encode($vehicleId)
+        );
+
+        return $sent;
+    }
 }
