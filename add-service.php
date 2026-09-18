@@ -118,9 +118,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             ");
             $stmt->execute([$vehicle_id, $mileage, $service_date]);
 
-            // Send email asking for service details
-            $emailService = new EmailService($pdo);
-            $emailService->sendServiceDetailsEmail($serviceRecordId);
+            // Send email asking for service details — best-effort, the record is
+            // already saved so a mail failure must not turn into a page error.
+            try {
+                $emailService = new EmailService($pdo);
+                $emailService->sendServiceDetailsEmail((int) $serviceRecordId);
+            } catch (\Throwable $e) {
+                error_log('Service details email failed: ' . $e->getMessage());
+            }
 
             setFlashMessage('success', 'Service record added successfully! Check your email for a reminder to add service item details.');
             redirect('service-items?service_id=' . IdCodec::encode($serviceRecordId));

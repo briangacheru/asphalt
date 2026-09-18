@@ -237,26 +237,30 @@ class EmailService
     }
 
     /**
-     * Send service details request email
+     * After a service record is saved: confirm it and link straight to that
+     * record's Service Items page so the owner can log what was replaced.
      */
-    public function sendServiceDetailsEmail(int $vehicleId): bool
+    public function sendServiceDetailsEmail(int $serviceRecordId): bool
     {
+        // Keyed on the service record (not "the vehicle's latest record") so the
+        // email's button opens exactly the record that was just saved, even if
+        // another service is logged for the same vehicle before it's read.
         $stmt = $this->pdo->prepare("
-            SELECT v.*, sr.service_date, sr.mileage, sr.next_service_mileage, sr.oil_interval, 
+            SELECT v.*, sr.service_date, sr.mileage, sr.next_service_mileage, sr.oil_interval,
                    u.email, u.first_name
-            FROM vehicles v
-            JOIN service_records sr ON v.id = sr.vehicle_id
+            FROM service_records sr
+            JOIN vehicles v ON v.id = sr.vehicle_id
             JOIN users u ON v.user_id = u.id
-            WHERE v.id = ?
-            ORDER BY sr.id DESC LIMIT 1
+            WHERE sr.id = ?
         ");
-        $stmt->execute([$vehicleId]);
+        $stmt->execute([$serviceRecordId]);
         $data = $stmt->fetch();
 
         if (!$data) {
             return false;
         }
 
+        $vehicleId = (int) $data['id'];
         $vehicleName = $data['make'] . ' ' . $data['model'] . ' (' . $data['year'] . ')';
 
         $content = sprintf('
@@ -276,7 +280,7 @@ class EmailService
             <p style="margin: 0 0 20px; line-height: 1.6;">Record what was changed during this service (oil filter, cabin filter, brake pads, etc.) along with brands and costs.</p>
             
             <p style="margin: 30px 0; text-align: center;">
-                <a href="%s/service-items?vehicle_id=%s" style="display: inline-block; padding: 14px 32px; background: #ffffff; color: #000000; text-decoration: none; border-radius: 8px; font-weight: 600;">Add Service Items</a>
+                <a href="%s/service-items?service_id=%s" style="display: inline-block; padding: 14px 32px; background: #ffffff; color: #000000; text-decoration: none; border-radius: 8px; font-weight: 600;">Add Service Items</a>
             </p>
         ',
             htmlspecialchars($data['first_name']),
@@ -285,7 +289,7 @@ class EmailService
             number_format($data['mileage']),
             number_format($data['next_service_mileage']),
             APP_URL,
-            IdCodec::encode($vehicleId)
+            IdCodec::encode($serviceRecordId)
         );
 
         $subject = "Service Recorded: $vehicleName - Add Details";

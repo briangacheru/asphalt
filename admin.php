@@ -6,6 +6,7 @@ use App\Middleware\AuthMiddleware;
 use App\Services\DatabaseBackupService;
 use App\Services\SiteSettingsService;
 use App\Services\ItemTypeService;
+use App\Services\FeedbackService;
 
 AuthMiddleware::requireAdmin();
 
@@ -71,6 +72,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $pdo->prepare("UPDATE users SET role = ? WHERE id = ?")->execute([$newRole, $targetId]);
         setFlashMessage('success', "User role updated to $newRole.");
         redirect('admin');
+    }
+
+    if ($action === 'update_feedback_status') {
+        $feedbackId = (int) ($_POST['feedback_id'] ?? 0);
+        $newStatus = $_POST['status'] ?? '';
+
+        if ($feedbackId > 0 && FeedbackService::updateStatus($pdo, $feedbackId, $newStatus)) {
+            setFlashMessage('success', $newStatus === 'resolved' ? 'Feedback marked as resolved.' : 'Feedback reopened.');
+        } else {
+            setFlashMessage('danger', 'Feedback item not found.');
+        }
+        redirect('admin#feedback');
     }
 
     if ($action === 'run_backup_now') {
@@ -352,6 +365,9 @@ try {
     // No cron has run yet — table may not exist. Nothing to show.
 }
 
+$feedbackItems = FeedbackService::recent($pdo, 100);
+$feedbackNewCount = count(array_filter($feedbackItems, fn($f) => $f['status'] === 'new'));
+
 $documentCategories = $pdo->query("SELECT * FROM vehicle_document_categories ORDER BY label")->fetchAll();
 $expenseCategories = $pdo->query("SELECT * FROM expense_categories ORDER BY name")->fetchAll();
 
@@ -390,7 +406,7 @@ $registrationsEnabled = SiteSettingsService::get($pdo, 'registrations_enabled') 
         <div class="row mb-4">
             <div class="col">
                 <h1 class="h3 mb-1"><span class="fas fa-user-shield me-2 text-warning"></span>Admin Dashboard</h1>
-                <p class="text-muted">Site-wide management — users, backups, and scheduled job health</p>
+                <p class="text-muted">Site-wide management — users, feedback, backups, and scheduled job health</p>
             </div>
         </div>
 
@@ -441,7 +457,7 @@ $registrationsEnabled = SiteSettingsService::get($pdo, 'registrations_enabled') 
 
         <!-- Quick Stats -->
         <div class="row g-3 mb-4">
-            <div class="col-md-4">
+            <div class="col-md-3">
                 <div class="card h-100">
                     <div class="card-body d-flex align-items-center">
                         <div class="bg-primary bg-opacity-10 text-primary rounded p-3 me-3"><i class="fas fa-users fa-2x"></i></div>
@@ -452,7 +468,7 @@ $registrationsEnabled = SiteSettingsService::get($pdo, 'registrations_enabled') 
                     </div>
                 </div>
             </div>
-            <div class="col-md-4">
+            <div class="col-md-3">
                 <div class="card h-100">
                     <div class="card-body d-flex align-items-center">
                         <div class="bg-success bg-opacity-10 text-success rounded p-3 me-3"><i class="fas fa-car fa-2x"></i></div>
@@ -463,7 +479,7 @@ $registrationsEnabled = SiteSettingsService::get($pdo, 'registrations_enabled') 
                     </div>
                 </div>
             </div>
-            <div class="col-md-4">
+            <div class="col-md-3">
                 <div class="card h-100">
                     <div class="card-body d-flex align-items-center">
                         <div class="bg-info bg-opacity-10 text-info rounded p-3 me-3"><i class="fas fa-database fa-2x"></i></div>
@@ -473,6 +489,17 @@ $registrationsEnabled = SiteSettingsService::get($pdo, 'registrations_enabled') 
                         </div>
                     </div>
                 </div>
+            </div>
+            <div class="col-md-3">
+                <a class="card h-100 text-decoration-none" href="#feedback">
+                    <div class="card-body d-flex align-items-center">
+                        <div class="bg-warning bg-opacity-10 text-warning rounded p-3 me-3"><i class="fas fa-comment-dots fa-2x"></i></div>
+                        <div>
+                            <h6 class="text-muted mb-1">New Feedback</h6>
+                            <h3 class="mb-0"><?php echo $feedbackNewCount; ?></h3>
+                        </div>
+                    </div>
+                </a>
             </div>
         </div>
 
@@ -632,6 +659,102 @@ $registrationsEnabled = SiteSettingsService::get($pdo, 'registrations_enabled') 
                 <?php endif; ?>
             </div>
         </div>
+
+        <!-- User Feedback -->
+        <?php $feedbackDefaultFilter = $feedbackNewCount > 0 ? 'new' : 'all'; ?>
+        <div class="card mb-4" id="feedback">
+            <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-comment-dots me-2"></i>User Feedback
+                    <?php if ($feedbackNewCount > 0): ?>
+                        <span class="badge bg-warning text-dark ms-2"><?php echo $feedbackNewCount; ?> new</span>
+                    <?php endif; ?>
+                </h5>
+                <?php if (!empty($feedbackItems)): ?>
+                    <div class="btn-group btn-group-sm" role="group" aria-label="Filter feedback">
+                        <input type="radio" class="btn-check" name="feedbackFilter" id="feedbackFilterNew" value="new" <?php echo $feedbackDefaultFilter === 'new' ? 'checked' : ''; ?>>
+                        <label class="btn btn-outline-secondary" for="feedbackFilterNew">New</label>
+                        <input type="radio" class="btn-check" name="feedbackFilter" id="feedbackFilterResolved" value="resolved">
+                        <label class="btn btn-outline-secondary" for="feedbackFilterResolved">Resolved</label>
+                        <input type="radio" class="btn-check" name="feedbackFilter" id="feedbackFilterAll" value="all" <?php echo $feedbackDefaultFilter === 'all' ? 'checked' : ''; ?>>
+                        <label class="btn btn-outline-secondary" for="feedbackFilterAll">All</label>
+                    </div>
+                <?php endif; ?>
+            </div>
+            <div class="card-body p-0">
+                <?php if (empty($feedbackItems)): ?>
+                    <div class="text-center py-4 text-muted">No feedback yet. Users can send some from the <strong>Feedback</strong> link in their profile menu.</div>
+                <?php else: ?>
+                    <div class="table-responsive">
+                        <table class="table table-hover table-sm align-middle mb-0" id="feedbackTable">
+                            <thead class="table-light">
+                            <tr>
+                                <th class="ps-3">From</th>
+                                <th>Type</th>
+                                <th style="min-width: 280px;">Message</th>
+                                <th>Page</th>
+                                <th>Submitted</th>
+                                <th>Status</th>
+                                <th class="pe-3 text-end">Action</th>
+                            </tr>
+                            </thead>
+                            <tbody>
+                            <?php
+                            $feedbackTypeBadges = ['bug' => 'danger', 'idea' => 'info', 'general' => 'secondary'];
+                            foreach ($feedbackItems as $fb):
+                                $isResolved = $fb['status'] === 'resolved';
+                            ?>
+                                <tr data-feedback-status="<?php echo sanitize($fb['status']); ?>">
+                                    <td class="ps-3 small">
+                                        <div class="fw-semi-bold"><?php echo sanitize(trim($fb['first_name'] . ' ' . $fb['last_name'])); ?></div>
+                                        <a class="text-muted" href="mailto:<?php echo sanitize($fb['email']); ?>"><?php echo sanitize($fb['email']); ?></a>
+                                    </td>
+                                    <td><span class="badge bg-<?php echo $feedbackTypeBadges[$fb['category']] ?? 'secondary'; ?>"><?php echo sanitize(ucfirst($fb['category'])); ?></span></td>
+                                    <td class="small" style="white-space: pre-wrap; max-width: 480px;"><?php echo sanitize($fb['message']); ?></td>
+                                    <td class="small text-muted"><?php echo $fb['page_url'] ? '<code>' . sanitize($fb['page_url']) . '</code>' : '—'; ?></td>
+                                    <td class="small text-muted text-nowrap"><?php echo date('M d, Y H:i', strtotime($fb['created_at'])); ?></td>
+                                    <td><span class="badge <?php echo $isResolved ? 'bg-success' : 'bg-warning text-dark'; ?>"><?php echo $isResolved ? 'Resolved' : 'New'; ?></span></td>
+                                    <td class="pe-3 text-end">
+                                        <form method="post" class="d-inline">
+                                            <?php echo csrfField(); ?>
+                                            <input type="hidden" name="action" value="update_feedback_status">
+                                            <input type="hidden" name="feedback_id" value="<?php echo (int) $fb['id']; ?>">
+                                            <input type="hidden" name="status" value="<?php echo $isResolved ? 'new' : 'resolved'; ?>">
+                                            <button type="submit" class="btn btn-sm <?php echo $isResolved ? 'btn-outline-secondary' : 'btn-outline-success'; ?>">
+                                                <i class="fas fa-<?php echo $isResolved ? 'undo' : 'check'; ?> me-1"></i><?php echo $isResolved ? 'Reopen' : 'Resolve'; ?>
+                                            </button>
+                                        </form>
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="text-center py-4 text-muted d-none" id="feedbackEmptyFilter">Nothing matches this filter.</div>
+                <?php endif; ?>
+            </div>
+        </div>
+        <script>
+            (function () {
+                var rows = document.querySelectorAll('#feedbackTable tbody tr[data-feedback-status]');
+                if (!rows.length) return;
+                var empty = document.getElementById('feedbackEmptyFilter');
+                function applyFilter(value) {
+                    var visible = 0;
+                    rows.forEach(function (row) {
+                        var show = value === 'all' || row.getAttribute('data-feedback-status') === value;
+                        row.classList.toggle('d-none', !show);
+                        if (show) visible++;
+                    });
+                    if (empty) empty.classList.toggle('d-none', visible > 0);
+                }
+                var radios = document.querySelectorAll('input[name="feedbackFilter"]');
+                radios.forEach(function (radio) {
+                    radio.addEventListener('change', function () { applyFilter(this.value); });
+                    if (radio.checked) applyFilter(radio.value);
+                });
+            })();
+        </script>
 
         <!-- Document Categories -->
         <div class="card mb-4">

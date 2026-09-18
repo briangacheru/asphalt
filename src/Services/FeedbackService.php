@@ -6,9 +6,14 @@ namespace App\Services;
  * Lightweight in-app feedback box, reachable from the user menu's "Feedback"
  * link. Table is created lazily on first use, the same way SiteSettingsService
  * and the insurance/driving-licence tables are — no separate migration step.
+ *
+ * Admins read and resolve submissions in the "User Feedback" card on the
+ * Admin Dashboard (admin.php).
  */
 class FeedbackService
 {
+    public const STATUSES = ['new', 'resolved'];
+
     public static function ensureTable(\PDO $pdo): void
     {
         $pdo->exec("CREATE TABLE IF NOT EXISTS feedback (
@@ -34,8 +39,12 @@ class FeedbackService
         return (int) $pdo->lastInsertId();
     }
 
-    /** Recent feedback across all users — for a future admin view. */
-    public static function recent(\PDO $pdo, int $limit = 50): array
+    /**
+     * Recent feedback across all users, newest first, with the submitter's
+     * name and email joined in. New items sort ahead of resolved ones so the
+     * admin inbox shows what still needs a look at the top.
+     */
+    public static function recent(\PDO $pdo, int $limit = 100): array
     {
         self::ensureTable($pdo);
 
@@ -43,12 +52,27 @@ class FeedbackService
             SELECT f.*, u.first_name, u.last_name, u.email
             FROM feedback f
             JOIN users u ON u.id = f.user_id
-            ORDER BY f.created_at DESC
+            ORDER BY (f.status = 'new') DESC, f.created_at DESC
             LIMIT ?
         ");
         $stmt->bindValue(1, $limit, \PDO::PARAM_INT);
         $stmt->execute();
 
         return $stmt->fetchAll();
+    }
+
+    /** Move a submission between 'new' and 'resolved'. Returns false if the id doesn't exist. */
+    public static function updateStatus(\PDO $pdo, int $id, string $status): bool
+    {
+        if (!in_array($status, self::STATUSES, true)) {
+            return false;
+        }
+
+        self::ensureTable($pdo);
+
+        $stmt = $pdo->prepare("UPDATE feedback SET status = ? WHERE id = ?");
+        $stmt->execute([$status, $id]);
+
+        return $stmt->rowCount() > 0;
     }
 }
