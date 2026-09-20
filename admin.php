@@ -81,7 +81,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // Shown inside the feedback card itself (the page-top flash would be off-screen
         // from where the admin just clicked). The redirect target must differ from the
         // current URL by more than a #fragment — headers are already sent here, so
-        // redirect() falls back to JS, and a fragment-only change never reloads the page.
+        // redirect() falls back to JS, and a same-URL or fragment-only change never reloads the
+        // page. The resolve form therefore posts to plain "admin" (not the current URL, which is
+        // already admin?feedback=updated after the first click) so this target always differs.
         if ($feedbackId > 0 && FeedbackService::updateStatus($pdo, $feedbackId, $newStatus)) {
             $_SESSION['feedback_flash'] = ['type' => 'success', 'message' => $newStatus === 'resolved' ? 'Feedback marked as resolved.' : 'Feedback reopened.'];
         } else {
@@ -728,7 +730,7 @@ $registrationsEnabled = SiteSettingsService::get($pdo, 'registrations_enabled') 
                                     <td class="small text-muted text-nowrap"><?php echo date('M d, Y H:i', strtotime($fb['created_at'])); ?></td>
                                     <td><span class="badge <?php echo $isResolved ? 'bg-success' : 'bg-warning text-dark'; ?>"><?php echo $isResolved ? 'Resolved' : 'New'; ?></span></td>
                                     <td class="pe-3 text-end">
-                                        <form method="post" class="d-inline">
+                                        <form method="post" action="admin" class="d-inline">
                                             <?php echo csrfField(); ?>
                                             <input type="hidden" name="action" value="update_feedback_status">
                                             <input type="hidden" name="feedback_id" value="<?php echo (int) $fb['id']; ?>">
