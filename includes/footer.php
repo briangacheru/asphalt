@@ -140,6 +140,8 @@ if (!in_array($quickAddPage, ['login', 'register', 'forgot-password', 'reset-pas
 </script>
 <?php endif; ?>
 
+<div class="toast-container position-fixed top-0 end-0 p-3" id="feedbackToastContainer" style="z-index: 2000;"></div>
+
 <div class="modal fade" id="feedbackModal" tabindex="-1" aria-labelledby="feedbackModalLabel" aria-hidden="true">
   <div class="modal-dialog">
     <div class="modal-content">
@@ -189,31 +191,64 @@ if (!in_array($quickAddPage, ['login', 'register', 'forgot-password', 'reset-pas
             data.set('message', form.message.value);
             data.set('page_url', window.location.pathname + window.location.search);
 
+            // Page-level toast so the outcome stays visible after the modal closes.
+            function showToast(success, message) {
+                var container = document.getElementById('feedbackToastContainer');
+                var toastEl = document.createElement('div');
+                toastEl.className = 'toast align-items-center text-white border-0 bg-' + (success ? 'success' : 'danger');
+                toastEl.setAttribute('role', success ? 'status' : 'alert');
+                toastEl.setAttribute('aria-live', success ? 'polite' : 'assertive');
+                toastEl.setAttribute('aria-atomic', 'true');
+
+                var inner = document.createElement('div');
+                inner.className = 'd-flex';
+                var body = document.createElement('div');
+                body.className = 'toast-body';
+                var icon = document.createElement('span');
+                icon.className = 'fas me-2 fa-' + (success ? 'check-circle' : 'exclamation-circle');
+                body.appendChild(icon);
+                body.appendChild(document.createTextNode(message));
+                var close = document.createElement('button');
+                close.type = 'button';
+                close.className = 'btn-close btn-close-white me-2 m-auto';
+                close.setAttribute('data-bs-dismiss', 'toast');
+                close.setAttribute('aria-label', 'Close');
+                inner.appendChild(body);
+                inner.appendChild(close);
+                toastEl.appendChild(inner);
+                container.appendChild(toastEl);
+
+                toastEl.addEventListener('hidden.bs.toast', function () { toastEl.remove(); });
+                new bootstrap.Toast(toastEl, { delay: success ? 4000 : 7000 }).show();
+            }
+
+            function finish(success, message) {
+                showToast(success, message);
+                if (success) {
+                    form.reset();
+                    alertBox.classList.add('d-none');
+                    var instance = bootstrap.Modal.getInstance(document.getElementById('feedbackModal'));
+                    if (instance) instance.hide();
+                } else {
+                    // Keep the modal open so the typed message isn't lost.
+                    alertBox.classList.remove('d-none', 'alert-success');
+                    alertBox.classList.add('alert-danger');
+                    alertBox.textContent = message;
+                }
+            }
+
             fetch('feedback-submit', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
                 body: data.toString()
             })
-                .then(function (r) { return r.json(); })
-                .then(function (json) {
-                    alertBox.classList.remove('d-none', 'alert-success', 'alert-danger');
-                    alertBox.classList.add(json.success ? 'alert-success' : 'alert-danger');
-                    alertBox.textContent = json.message;
-                    if (json.success) {
-                        form.reset();
-                        setTimeout(function () {
-                            var modalEl = document.getElementById('feedbackModal');
-                            var instance = bootstrap.Modal.getInstance(modalEl);
-                            if (instance) instance.hide();
-                            alertBox.classList.add('d-none');
-                        }, 1200);
-                    }
+                .then(function (r) {
+                    return r.json().catch(function () {
+                        return { success: false, message: 'Unexpected response from the server (' + r.status + '). Please try again.' };
+                    });
                 })
-                .catch(function () {
-                    alertBox.classList.remove('d-none', 'alert-success');
-                    alertBox.classList.add('alert-danger');
-                    alertBox.textContent = 'Network error — please try again.';
-                })
+                .then(function (json) { finish(!!json.success, json.message || (json.success ? 'Feedback sent.' : 'Something went wrong.')); })
+                .catch(function () { finish(false, 'Network error — please try again.'); })
                 .finally(function () {
                     submitBtn.disabled = false;
                     submitBtn.textContent = 'Send';
