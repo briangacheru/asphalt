@@ -78,12 +78,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $feedbackId = (int) ($_POST['feedback_id'] ?? 0);
         $newStatus = $_POST['status'] ?? '';
 
+        // Shown inside the feedback card itself (the page-top flash would be off-screen
+        // from where the admin just clicked). The redirect target must differ from the
+        // current URL by more than a #fragment — headers are already sent here, so
+        // redirect() falls back to JS, and a fragment-only change never reloads the page.
         if ($feedbackId > 0 && FeedbackService::updateStatus($pdo, $feedbackId, $newStatus)) {
-            setFlashMessage('success', $newStatus === 'resolved' ? 'Feedback marked as resolved.' : 'Feedback reopened.');
+            $_SESSION['feedback_flash'] = ['type' => 'success', 'message' => $newStatus === 'resolved' ? 'Feedback marked as resolved.' : 'Feedback reopened.'];
         } else {
-            setFlashMessage('danger', 'Feedback item not found.');
+            $_SESSION['feedback_flash'] = ['type' => 'danger', 'message' => 'Could not update that feedback item — it may no longer exist.'];
         }
-        redirect('admin#feedback');
+        redirect('admin?feedback=updated#feedback');
     }
 
     if ($action === 'run_backup_now') {
@@ -681,6 +685,15 @@ $registrationsEnabled = SiteSettingsService::get($pdo, 'registrations_enabled') 
                     </div>
                 <?php endif; ?>
             </div>
+            <?php
+            $feedbackFlash = $_SESSION['feedback_flash'] ?? null;
+            unset($_SESSION['feedback_flash']);
+            if ($feedbackFlash): ?>
+                <div class="alert alert-<?php echo $feedbackFlash['type'] === 'success' ? 'success' : 'danger'; ?> alert-dismissible fade show m-3 mb-0" role="alert">
+                    <i class="fas fa-<?php echo $feedbackFlash['type'] === 'success' ? 'check-circle' : 'exclamation-circle'; ?> me-2"></i><?php echo sanitize($feedbackFlash['message']); ?>
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+            <?php endif; ?>
             <div class="card-body p-0">
                 <?php if (empty($feedbackItems)): ?>
                     <div class="text-center py-4 text-muted">No feedback yet. Users can send some from the <strong>Feedback</strong> link in their profile menu.</div>
