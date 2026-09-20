@@ -106,7 +106,7 @@ if (!in_array($quickAddPage, ['login', 'register', 'forgot-password', 'reset-pas
             }).then(function (sub) {
                 var json = sub.toJSON();
                 json.csrf_token = CSRF_TOKEN;
-                return fetch('push-subscribe.php', {
+                return fetch('push-subscribe', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(json)
@@ -121,7 +121,7 @@ if (!in_array($quickAddPage, ['login', 'register', 'forgot-password', 'reset-pas
                 if (!sub) return { success: true };
                 var endpoint = sub.endpoint;
                 return sub.unsubscribe().then(function () {
-                    return fetch('push-unsubscribe.php', {
+                    return fetch('push-unsubscribe', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ endpoint: endpoint, csrf_token: CSRF_TOKEN })
@@ -189,7 +189,7 @@ if (!in_array($quickAddPage, ['login', 'register', 'forgot-password', 'reset-pas
             data.set('message', form.message.value);
             data.set('page_url', window.location.pathname + window.location.search);
 
-            fetch('feedback-submit.php', {
+            fetch('feedback-submit', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
                 body: data.toString()
