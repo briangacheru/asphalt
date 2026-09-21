@@ -497,60 +497,129 @@ if ($flash): ?>
         <?php endforeach; ?>
     </datalist>
 
+    <?php
+    // Add Fuel modal defaults: preselect the filtered vehicle, or the only vehicle.
+    $addModalDefaultVehicle = null;
+    foreach ($vehicles as $v) {
+        if ($vehicleFilter && (int) $v['id'] === (int) $vehicleFilter) {
+            $addModalDefaultVehicle = (int) $v['id'];
+        }
+    }
+    if ($addModalDefaultVehicle === null && count($vehicles) === 1) {
+        $addModalDefaultVehicle = (int) $vehicles[0]['id'];
+    }
+    $topStations = array_slice($stationSuggestions, 0, 5);
+    $addCurrency = currencySymbol();
+    ?>
     <div class="modal fade" id="add-fuel-modal" tabindex="-1" aria-labelledby="addFuelModalLabel" aria-hidden="true">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="addFuelModalLabel">Add Fuel Record</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                </div>
-                <form method="POST">
-                    <input type="hidden" name="action" value="add">
-                    <div class="modal-body">
-                        <div class="mb-3">
-                            <label class="form-label">Vehicle <span class="text-danger">*</span></label>
-                            <select name="vehicle_id" id="add_vehicle_id" class="form-select" required>
-                                <option value="">Select vehicle...</option>
-                                <?php foreach ($vehicles as $v): ?>
-                                    <option value="<?php echo $v['id']; ?>"><?php echo sanitize($v['make'] . ' ' . $v['model']); ?></option>
-                                <?php endforeach; ?>
-                            </select>
+        <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+            <div class="modal-content border-0 shadow-lg">
+                <div class="modal-header border-0 pb-0 align-items-start">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="rounded-circle bg-primary-subtle text-primary d-flex align-items-center justify-content-center flex-shrink-0" style="width:46px;height:46px;">
+                            <span class="fas fa-gas-pump"></span>
                         </div>
-                        <div class="row">
-                            <div class="col-md-6 mb-3">
-                                <label class="form-label">Date</label>
-                                <input type="date" name="fill_date" class="form-control" value="<?php echo date('Y-m-d'); ?>">
-                            </div>
-                            <div class="col-md-6 mb-3">
-                                <label class="form-label">Mileage (km) <span class="text-danger">*</span></label>
-                                <input type="number" name="mileage" id="add_mileage" class="form-control" required>
-                            </div>
-                        </div>
-                        <div class="row">
-                            <div class="col-md-4 mb-3">
-                                <label class="form-label">Price per Liter <span class="text-danger">*</span></label>
-                                <input type="number" name="price_per_liter" id="add_price_per_liter" step="0.01" class="form-control" required<?php echo $lastPriceOverall !== null ? ' value="' . htmlspecialchars((string) $lastPriceOverall) . '"' : ''; ?>>
-                                <div class="form-text" id="add_price_hint"><?php echo $lastPriceOverall !== null ? 'Pre-filled with your last price — edit if it changed' : ''; ?></div>
-                            </div>
-                            <div class="col-md-4 mb-3">
-                                <label class="form-label">Liters <span class="text-danger">*</span></label>
-                                <input type="number" name="liters" id="add_liters" step="0.01" class="form-control" required>
-                                <div class="form-text">Enter this or the total amount</div>
-                            </div>
-                            <div class="col-md-4 mb-3">
-                                <label class="form-label">Total Amount (<?php echo currencySymbol(); ?>)</label>
-                                <input type="number" id="add_total_amount" step="0.01" class="form-control">
-                                <div class="form-text">Auto-fills liters</div>
-                            </div>
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label">Station</label>
-                            <input type="text" name="station_name" class="form-control" placeholder="Station name" list="stationSuggestions" autocomplete="off">
+                        <div>
+                            <h5 class="modal-title mb-0" id="addFuelModalLabel">Add Fuel Record</h5>
+                            <p class="fs-10 text-muted mb-0">Log a fill-up in a few taps</p>
                         </div>
                     </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                        <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Save</button>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <form method="POST" id="addFuelForm">
+                    <input type="hidden" name="action" value="add">
+                    <div class="modal-body pt-3">
+                        <div class="mb-3">
+                            <label class="form-label fw-semi-bold" for="add_vehicle_id">Vehicle <span class="text-danger">*</span></label>
+                            <div class="input-group">
+                                <span class="input-group-text"><span class="fas fa-car"></span></span>
+                                <select name="vehicle_id" id="add_vehicle_id" class="form-select" required>
+                                    <option value="">Select vehicle...</option>
+                                    <?php foreach ($vehicles as $v): ?>
+                                        <option value="<?php echo $v['id']; ?>"<?php echo $addModalDefaultVehicle === (int) $v['id'] ? ' selected' : ''; ?>><?php echo sanitize($v['make'] . ' ' . $v['model']); ?> (<?php echo (int) $v['year']; ?>)</option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="row g-3 mb-3">
+                            <div class="col-sm-6">
+                                <div class="d-flex justify-content-between align-items-center mb-1">
+                                    <label class="form-label fw-semi-bold mb-0" for="add_fill_date">Date</label>
+                                    <div class="btn-group btn-group-sm" role="group" aria-label="Quick dates">
+                                        <button type="button" class="btn btn-outline-secondary py-0 px-2" data-date-offset="0">Today</button>
+                                        <button type="button" class="btn btn-outline-secondary py-0 px-2" data-date-offset="-1">Yesterday</button>
+                                    </div>
+                                </div>
+                                <input type="date" name="fill_date" id="add_fill_date" class="form-control" value="<?php echo date('Y-m-d'); ?>" required>
+                            </div>
+                            <div class="col-sm-6">
+                                <label class="form-label fw-semi-bold mb-1" for="add_mileage">Odometer <span class="text-danger">*</span></label>
+                                <div class="input-group">
+                                    <input type="number" name="mileage" id="add_mileage" class="form-control" inputmode="numeric" placeholder="Enter mileage" required>
+                                    <span class="input-group-text">km</span>
+                                </div>
+                                <div class="form-text" id="add_mileage_hint"></div>
+                            </div>
+                        </div>
+
+                        <div class="rounded-3 border bg-body-tertiary p-3 mb-3">
+                            <div class="d-flex justify-content-between align-items-baseline mb-2">
+                                <span class="fs-10 text-uppercase fw-bold text-muted">Fill-up details</span>
+                                <span class="fs-11 text-muted">Enter liters <em>or</em> the total &mdash; the other is calculated</span>
+                            </div>
+                            <div class="row g-3">
+                                <div class="col-sm-6">
+                                    <label class="form-label mb-1" for="add_price_per_liter">Price per liter <span class="text-danger">*</span></label>
+                                    <div class="input-group">
+                                        <span class="input-group-text"><?php echo $addCurrency; ?></span>
+                                        <input type="number" name="price_per_liter" id="add_price_per_liter" step="0.01" min="0" inputmode="decimal" class="form-control" required<?php echo $lastPriceOverall !== null ? ' value="' . htmlspecialchars((string) $lastPriceOverall) . '"' : ''; ?>>
+                                        <span class="input-group-text">/ L</span>
+                                    </div>
+                                    <div class="form-text" id="add_price_hint"><?php echo $lastPriceOverall !== null ? 'Pre-filled with your last price — edit if it changed' : ''; ?></div>
+                                </div>
+                                <div class="col-sm-6">
+                                    <label class="form-label mb-1" for="add_liters">Liters <span class="text-danger">*</span></label>
+                                    <div class="input-group">
+                                        <input type="number" name="liters" id="add_liters" step="0.01" min="0" inputmode="decimal" class="form-control" required>
+                                        <span class="input-group-text">L</span>
+                                    </div>
+                                </div>
+                                <div class="col-12">
+                                    <label class="form-label mb-1" for="add_total_amount">Total amount</label>
+                                    <div class="input-group input-group-lg">
+                                        <span class="input-group-text"><?php echo $addCurrency; ?></span>
+                                        <input type="number" id="add_total_amount" step="0.01" min="0" inputmode="decimal" class="form-control" placeholder="0.00">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="form-label fw-semi-bold mb-1" for="add_station_name">Station <span class="text-muted fw-normal">(optional)</span></label>
+                            <div class="input-group">
+                                <span class="input-group-text"><span class="fas fa-map-marker-alt"></span></span>
+                                <input type="text" name="station_name" id="add_station_name" class="form-control" placeholder="e.g. Shell Westlands" list="stationSuggestions" autocomplete="off" maxlength="100">
+                            </div>
+                            <?php if (!empty($topStations)): ?>
+                                <div class="d-flex flex-wrap gap-2 mt-2" id="add_station_chips">
+                                    <?php foreach ($topStations as $chipName): ?>
+                                        <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill py-0 px-3" data-station="<?php echo htmlspecialchars($chipName, ENT_QUOTES); ?>"><?php echo htmlspecialchars($chipName); ?></button>
+                                    <?php endforeach; ?>
+                                </div>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                    <div class="modal-footer border-0 pt-0 justify-content-between flex-nowrap">
+                        <div class="me-2">
+                            <div class="fs-11 text-uppercase fw-bold text-muted">Total</div>
+                            <div class="fw-bold lh-1" style="font-size:1.35rem;" id="add_summary_total">&mdash;</div>
+                            <div class="fs-11 text-muted" id="add_summary_detail">&nbsp;</div>
+                        </div>
+                        <div class="d-flex gap-2">
+                            <button type="button" class="btn btn-falcon-default" data-bs-dismiss="modal">Cancel</button>
+                            <button type="submit" class="btn btn-primary px-4" id="add_fuel_submit"><span class="fas fa-save me-1"></span>Save</button>
+                        </div>
                     </div>
                 </form>
             </div>
@@ -715,10 +784,12 @@ if ($flash): ?>
                     mileageInput.value = currentMileage;
                     mileageInput.min = currentMileage;
                     mileageInput.placeholder = 'Must be ≥ ' + currentMileage.toLocaleString() + ' km';
+                    document.getElementById('add_mileage_hint').textContent = 'Current odometer: ' + currentMileage.toLocaleString() + ' km';
                 } else {
                     mileageInput.value = '';
                     mileageInput.min = 0;
                     mileageInput.placeholder = 'Enter mileage';
+                    document.getElementById('add_mileage_hint').textContent = '';
                 }
             });
 
@@ -742,6 +813,10 @@ if ($flash): ?>
                     // Reset form when modal closes
                     this.querySelector('form').reset();
                     priceEditedByUser = false;
+                    document.getElementById('add_mileage_hint').textContent = '';
+                    refreshAddSummary();
+                    syncStationChips();
+                    resetSubmitButton();
                     priceHint.textContent = lastPriceOverall != null ? 'Pre-filled with your last price — edit if it changed' : '';
                     mileageInput.min = 0;
                     mileageInput.placeholder = 'Enter mileage';
@@ -767,6 +842,89 @@ if ($flash): ?>
                 document.getElementById('edit_liters'),
                 document.getElementById('edit_total_amount')
             );
+
+            // ---- Add Fuel modal polish ----
+            const addForm = document.getElementById('addFuelForm');
+            const litersInput = document.getElementById('add_liters');
+            const totalInput = document.getElementById('add_total_amount');
+            const stationInput = document.getElementById('add_station_name');
+            const submitBtn = document.getElementById('add_fuel_submit');
+            const currencySymbolJs = <?php echo json_encode($addCurrency); ?>;
+
+            // Live "Total" readout in the footer
+            function refreshAddSummary() {
+                const price = parseFloat(priceInput.value);
+                const liters = parseFloat(litersInput.value);
+                const total = parseFloat(totalInput.value);
+                const out = document.getElementById('add_summary_total');
+                const detail = document.getElementById('add_summary_detail');
+                if (total > 0) {
+                    out.textContent = currencySymbolJs + ' ' + total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                    const bits = [];
+                    if (liters > 0) bits.push(liters.toFixed(2) + ' L');
+                    if (price > 0) bits.push('@ ' + price.toFixed(2));
+                    detail.textContent = bits.join(' ') || ' ';
+                } else {
+                    out.textContent = '—';
+                    detail.textContent = ' ';
+                }
+            }
+            // The form-level listener runs after the calculator's own field listeners,
+            // so it always sees the freshly computed values.
+            addForm.addEventListener('input', refreshAddSummary);
+            refreshAddSummary();
+
+            // Today / Yesterday quick dates (local date, not UTC)
+            addForm.querySelectorAll('[data-date-offset]').forEach(function (btn) {
+                btn.addEventListener('click', function () {
+                    const d = new Date();
+                    d.setDate(d.getDate() + parseInt(this.dataset.dateOffset, 10));
+                    const pad = function (n) { return String(n).padStart(2, '0'); };
+                    document.getElementById('add_fill_date').value = d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+                });
+            });
+
+            // Station quick-pick chips
+            function syncStationChips() {
+                document.querySelectorAll('#add_station_chips [data-station]').forEach(function (chip) {
+                    const active = chip.dataset.station === stationInput.value;
+                    chip.classList.toggle('btn-primary', active);
+                    chip.classList.toggle('btn-outline-secondary', !active);
+                });
+            }
+            document.querySelectorAll('#add_station_chips [data-station]').forEach(function (chip) {
+                chip.addEventListener('click', function () {
+                    stationInput.value = this.dataset.station;
+                    syncStationChips();
+                });
+            });
+            stationInput.addEventListener('input', syncStationChips);
+
+            // Validation styling + double-submit guard
+            function resetSubmitButton() {
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = '<span class="fas fa-save me-1"></span>Save';
+                addForm.classList.remove('was-validated');
+            }
+            addForm.addEventListener('submit', function (e) {
+                if (!addForm.checkValidity()) {
+                    addForm.classList.add('was-validated');
+                    return;
+                }
+                submitBtn.disabled = true;
+                submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Saving…';
+            });
+            window.addEventListener('pageshow', resetSubmitButton); // back-button safety
+
+            // Land the cursor where the user needs to type next
+            addFuelModal.addEventListener('shown.bs.modal', function () {
+                if (vehicleSelect.value) {
+                    mileageInput.focus();
+                    mileageInput.select();
+                } else {
+                    vehicleSelect.focus();
+                }
+            });
         });
 
         // Keeps Liters and Total Amount in sync using Price per Liter, so the
