@@ -3,6 +3,7 @@
 namespace App\Api\Controllers;
 
 use App\Api\Response;
+use App\Services\FuelLogRules;
 
 /**
  * Mirrors fuel-log.php's create flow: total_cost is computed server-side
@@ -75,6 +76,11 @@ class FuelLogController
 
         $totalCost = $liters * $pricePerLiter;
 
+        $ruleError = FuelLogRules::violation($pdo, $vehicleId, $fillDate, $totalCost);
+        if ($ruleError) {
+            Response::error($ruleError, 422);
+        }
+
         $stmt = $pdo->prepare("
             INSERT INTO fuel_log (vehicle_id, fill_date, mileage, liters, price_per_liter, total_cost, fuel_type, station_name, full_tank)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)
@@ -97,12 +103,13 @@ class FuelLogController
     public static function update(\PDO $pdo, int $userId, int $fuelLogId, array $body): void
     {
         $stmt = $pdo->prepare("
-            SELECT fl.id FROM fuel_log fl
+            SELECT fl.id, fl.vehicle_id, fl.fill_date, fl.total_cost FROM fuel_log fl
             JOIN vehicles v ON fl.vehicle_id = v.id
             WHERE fl.id = ? AND v.user_id = ?
         ");
         $stmt->execute([$fuelLogId, $userId]);
-        if (!$stmt->fetch()) {
+        $existing = $stmt->fetch();
+        if (!$existing) {
             Response::error('Fuel log entry not found.', 404);
         }
 
@@ -125,6 +132,11 @@ class FuelLogController
         }
 
         $totalCost = $liters * $pricePerLiter;
+
+        $ruleError = FuelLogRules::violation($pdo, $vehicleId, $fillDate, $totalCost, $existing);
+        if ($ruleError) {
+            Response::error($ruleError, 422);
+        }
 
         $pdo->prepare("
             UPDATE fuel_log

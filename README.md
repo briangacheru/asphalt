@@ -7,7 +7,7 @@ A comprehensive web-based vehicle management system for tracking maintenance, se
 - **Dashboard**: Overview of vehicle statistics, upcoming services, and recent activity
 - **Vehicle Management**: Add, edit, and track multiple vehicles with detailed information
 - **Service Records**: Log maintenance and service history with costs and mileage
-- **Fuel Log**: Track fuel consumption and mileage between fill-ups
+- **Fuel Log**: Track fuel consumption and mileage between fill-ups (at most 3 records per vehicle per day, minimum 500 per fill-up — see `App\Services\FuelLogRules`)
 - **Expense Tracking**: Record and categorize vehicle-related expenses
 - **Service Reminders**: Automated email reminders for upcoming maintenance
 - **Insurance Tracking**: Record insurance policies and stickers per vehicle, with sticky in-app alerts and daily email reminders starting 14 days before expiry (and continuing daily until renewed)

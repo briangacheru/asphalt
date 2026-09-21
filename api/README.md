@@ -100,8 +100,8 @@ isn't supported by this API — use the web app for that one case.
 | POST   | `/mileage-updates`                | `vehicle_id`, `mileage` required (must be ≥ current mileage); `notes` optional. Global — not scoped to one vehicle, mirrors update-mileage.php. No reminder email is sent (out of scope — no side-channel notifications from this API, same as service-records/insurance/licence) |
 | GET    | `/mileage-updates/recent?limit=15` | `mileage_log` ∪ `fuel_log` across every vehicle the user owns, newest-entered first; `limit` capped at 50 |
 | GET    | `/vehicles/{id}/fuel-logs`        | Last 15 months of fuel log entries for one vehicle, plus `this_month_count`/`last_month_count` and `this_month_liters`/`last_month_liters` (calendar-month fill-up count and total liters, unaffected by the 15-month cap) |
-| POST   | `/fuel-logs`                      | `vehicle_id`, `mileage`, `liters`, `price_per_liter` required; `total_cost` is computed server-side |
-| PUT    | `/fuel-logs/{id}`                 | Same fields as create — `vehicle_id` may be reassigned to a different (own) vehicle |
+| POST   | `/fuel-logs`                      | `vehicle_id`, `mileage`, `liters`, `price_per_liter` required; `total_cost` is computed server-side. Rejected with `422` if `total_cost` is under 500 or the vehicle already has 3 entries on that `fill_date` |
+| PUT    | `/fuel-logs/{id}`                 | Same fields as create — `vehicle_id` may be reassigned to a different (own) vehicle. The same `422` limits apply, but only when the total, vehicle or date actually changes, so older entries stay editable |
 | DELETE | `/fuel-logs/{id}`                 | |
 | GET    | `/expense-categories`             | `{id, name, icon}` — admin-managed, not a fixed enum |
 | GET    | `/vehicles/{id}/expenses`         | Last 15 months of expenses for one vehicle, each joined with its category name/icon |

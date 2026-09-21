@@ -3,6 +3,7 @@ $pageTitle = 'Fuel Log';
 require_once 'includes/header.php';
 
 use App\Helpers\IdCodec;
+use App\Services\FuelLogRules;
 
 $vehicles = $pdo->prepare("SELECT id, make, model, year FROM vehicles WHERE is_active = 1 AND user_id = ? ORDER BY make, model");
 $vehicles->execute([$userId]);
@@ -34,6 +35,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             }
             $fuel_type = $vRow['fuel_type'] ?: '';
 
+            $ruleError = FuelLogRules::violation($pdo, $vehicle_id, $fill_date, $total_cost);
+            if ($ruleError) {
+                setFlashMessage('danger', $ruleError);
+                redirect('fuel-log' . ($vehicleFilter ? '?vehicle_id=' . IdCodec::encode($vehicleFilter) : ''));
+            }
+
             $stmt = $pdo->prepare("INSERT INTO fuel_log (vehicle_id, fill_date, mileage, liters, price_per_liter, total_cost, fuel_type, station_name, full_tank) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
             $stmt->execute([$vehicle_id, $fill_date, $mileage, $liters, $price_per_liter, $total_cost, $fuel_type, $station_name, $full_tank]);
 
@@ -64,12 +71,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         try {
             // Verify the record being edited belongs to one of the user's own vehicles
             $ownStmt = $pdo->prepare("
-                SELECT fl.id FROM fuel_log fl
+                SELECT fl.id, fl.vehicle_id, fl.fill_date, fl.total_cost FROM fuel_log fl
                 JOIN vehicles v ON fl.vehicle_id = v.id
                 WHERE fl.id = ? AND v.user_id = ?
             ");
             $ownStmt->execute([$fuel_id, $userId]);
-            if (!$ownStmt->fetch()) {
+            $existingFuel = $ownStmt->fetch();
+            if (!$existingFuel) {
                 setFlashMessage('danger', 'Fuel record not found.');
                 redirect('fuel-log' . ($vehicleFilter ? '?vehicle_id=' . IdCodec::encode($vehicleFilter) : ''));
             }
@@ -85,6 +93,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                 redirect('fuel-log' . ($vehicleFilter ? '?vehicle_id=' . IdCodec::encode($vehicleFilter) : ''));
             }
             $fuel_type = $vRow['fuel_type'] ?: '';
+
+            $ruleError = FuelLogRules::violation($pdo, $vehicle_id, $fill_date, $total_cost, $existingFuel);
+            if ($ruleError) {
+                setFlashMessage('danger', $ruleError);
+                redirect('fuel-log' . ($vehicleFilter ? '?vehicle_id=' . IdCodec::encode($vehicleFilter) : ''));
+            }
 
             $stmt = $pdo->prepare("UPDATE fuel_log SET vehicle_id = ?, fill_date = ?, mileage = ?, liters = ?, price_per_liter = ?, total_cost = ?, fuel_type = ?, station_name = ?, full_tank = ? WHERE id = ?");
             $stmt->execute([$vehicle_id, $fill_date, $mileage, $liters, $price_per_liter, $total_cost, $fuel_type, $station_name, $full_tank, $fuel_id]);
@@ -151,6 +165,22 @@ $stmt->execute([$userId]);
 // station_name is stored HTML-escaped (sanitize()), so decode for display in the list;
 // it is re-escaped on save like any typed value.
 $stationSuggestions = array_map(fn($r) => html_entity_decode($r['station_name'], ENT_QUOTES, 'UTF-8'), $stmt->fetchAll());
+
+// How many fill-ups each of the user's vehicles already has per day (recent window), so the
+// modals can warn about the per-day limit before submitting. The server enforces it regardless
+// (App\Services\FuelLogRules), including for dates outside this window.
+$fuelDayCounts = [];
+$stmt = $pdo->prepare("
+    SELECT fl.vehicle_id, DATE_FORMAT(fl.fill_date, '%Y-%m-%d') AS day, COUNT(*) AS n
+    FROM fuel_log fl
+    JOIN vehicles v ON v.id = fl.vehicle_id
+    WHERE v.user_id = ? AND fl.fill_date >= CURDATE() - INTERVAL 120 DAY
+    GROUP BY fl.vehicle_id, day
+");
+$stmt->execute([$userId]);
+foreach ($stmt->fetchAll() as $row) {
+    $fuelDayCounts[(int) $row['vehicle_id'] . '|' . $row['day']] = (int) $row['n'];
+}
 
 // Get fuel logs — always scoped to the current user's own vehicles
 $where = "WHERE v.user_id = " . (int)$userId;
@@ -510,58 +540,70 @@ if ($flash): ?>
     }
     $topStations = array_slice($stationSuggestions, 0, 5);
     $addCurrency = currencySymbol();
+    $minFuelTotal = \App\Services\FuelLogRules::MIN_TOTAL_AMOUNT;
+    $maxFuelPerDay = \App\Services\FuelLogRules::MAX_RECORDS_PER_VEHICLE_PER_DAY;
+
+    // The Add and Edit modals share one template so they can't drift apart.
+    // Every id is prefixed with the mode ("add_" / "edit_"); the scripts below key off that.
+    foreach (['add', 'edit'] as $mode):
+        $isEdit = $mode === 'edit';
     ?>
-    <div class="modal fade" id="add-fuel-modal" tabindex="-1" aria-labelledby="addFuelModalLabel" aria-hidden="true">
+    <div class="modal fade" id="<?php echo $mode; ?>-fuel-modal" tabindex="-1" aria-labelledby="<?php echo $mode; ?>FuelModalLabel" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
             <div class="modal-content border-0 shadow-lg">
                 <div class="modal-header border-0 pb-0 align-items-start">
                     <div class="d-flex align-items-center gap-3">
                         <div class="rounded-circle bg-primary-subtle text-primary d-flex align-items-center justify-content-center flex-shrink-0" style="width:46px;height:46px;">
-                            <span class="fas fa-gas-pump"></span>
+                            <span class="fas <?php echo $isEdit ? 'fa-edit' : 'fa-gas-pump'; ?>"></span>
                         </div>
                         <div>
-                            <h5 class="modal-title mb-0" id="addFuelModalLabel">Add Fuel Record</h5>
-                            <p class="fs-10 text-muted mb-0">Log a fill-up in a few taps</p>
+                            <h5 class="modal-title mb-0" id="<?php echo $mode; ?>FuelModalLabel"><?php echo $isEdit ? 'Edit Fuel Record' : 'Add Fuel Record'; ?></h5>
+                            <p class="fs-10 text-muted mb-0"><?php echo $isEdit ? 'Correct the details of this fill-up' : 'Log a fill-up in a few taps'; ?></p>
                         </div>
                     </div>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
-                <form method="POST" id="addFuelForm">
-                    <input type="hidden" name="action" value="add">
+                <form method="POST" id="<?php echo $mode; ?>FuelForm">
+                    <input type="hidden" name="action" value="<?php echo $mode; ?>">
+                    <?php if ($isEdit): ?>
+                        <input type="hidden" name="fuel_id" id="edit_fuel_id">
+                        <input type="hidden" name="full_tank" id="edit_full_tank">
+                    <?php endif; ?>
                     <div class="modal-body pt-3">
                         <div class="mb-3">
-                            <label class="form-label fw-semi-bold" for="add_vehicle_id">Vehicle <span class="text-danger">*</span></label>
+                            <label class="form-label fw-semi-bold" for="<?php echo $mode; ?>_vehicle_id">Vehicle <span class="text-danger">*</span></label>
                             <div class="input-group">
                                 <span class="input-group-text"><span class="fas fa-car"></span></span>
-                                <select name="vehicle_id" id="add_vehicle_id" class="form-select" required>
+                                <select name="vehicle_id" id="<?php echo $mode; ?>_vehicle_id" class="form-select" required>
                                     <option value="">Select vehicle...</option>
                                     <?php foreach ($vehicles as $v): ?>
-                                        <option value="<?php echo $v['id']; ?>"<?php echo $addModalDefaultVehicle === (int) $v['id'] ? ' selected' : ''; ?>><?php echo sanitize($v['make'] . ' ' . $v['model']); ?> (<?php echo (int) $v['year']; ?>)</option>
+                                        <option value="<?php echo $v['id']; ?>"<?php echo (!$isEdit && $addModalDefaultVehicle === (int) $v['id']) ? ' selected' : ''; ?>><?php echo sanitize($v['make'] . ' ' . $v['model']); ?> (<?php echo (int) $v['year']; ?>)</option>
                                     <?php endforeach; ?>
                                 </select>
                             </div>
                         </div>
 
-                        <div class="row g-3 mb-3">
+                        <div class="row g-3 mb-2">
                             <div class="col-sm-6">
                                 <div class="d-flex justify-content-between align-items-center mb-1">
-                                    <label class="form-label fw-semi-bold mb-0" for="add_fill_date">Date</label>
+                                    <label class="form-label fw-semi-bold mb-0" for="<?php echo $mode; ?>_fill_date">Date</label>
                                     <div class="btn-group btn-group-sm" role="group" aria-label="Quick dates">
                                         <button type="button" class="btn btn-outline-secondary py-0 px-2" data-date-offset="0">Today</button>
                                         <button type="button" class="btn btn-outline-secondary py-0 px-2" data-date-offset="-1">Yesterday</button>
                                     </div>
                                 </div>
-                                <input type="date" name="fill_date" id="add_fill_date" class="form-control" value="<?php echo date('Y-m-d'); ?>" required>
+                                <input type="date" name="fill_date" id="<?php echo $mode; ?>_fill_date" class="form-control"<?php echo $isEdit ? '' : ' value="' . date('Y-m-d') . '"'; ?> required>
                             </div>
                             <div class="col-sm-6">
-                                <label class="form-label fw-semi-bold mb-1" for="add_mileage">Odometer <span class="text-danger">*</span></label>
+                                <label class="form-label fw-semi-bold mb-1" for="<?php echo $mode; ?>_mileage">Odometer <span class="text-danger">*</span></label>
                                 <div class="input-group">
-                                    <input type="number" name="mileage" id="add_mileage" class="form-control" inputmode="numeric" placeholder="Enter mileage" required>
+                                    <input type="number" name="mileage" id="<?php echo $mode; ?>_mileage" class="form-control" inputmode="numeric" placeholder="Enter mileage" required>
                                     <span class="input-group-text">km</span>
                                 </div>
-                                <div class="form-text" id="add_mileage_hint"></div>
+                                <div class="form-text" id="<?php echo $mode; ?>_mileage_hint"></div>
                             </div>
                         </div>
+                        <div class="fs-10 mb-3 d-none" id="<?php echo $mode; ?>_rule_msg" role="status"></div>
 
                         <div class="rounded-3 border bg-body-tertiary p-3 mb-3">
                             <div class="d-flex justify-content-between align-items-baseline mb-2">
@@ -570,39 +612,39 @@ if ($flash): ?>
                             </div>
                             <div class="row g-3">
                                 <div class="col-sm-6">
-                                    <label class="form-label mb-1" for="add_price_per_liter">Price per liter <span class="text-danger">*</span></label>
+                                    <label class="form-label mb-1" for="<?php echo $mode; ?>_price_per_liter">Price per liter <span class="text-danger">*</span></label>
                                     <div class="input-group">
                                         <span class="input-group-text"><?php echo $addCurrency; ?></span>
-                                        <input type="number" name="price_per_liter" id="add_price_per_liter" step="0.01" min="0" inputmode="decimal" class="form-control" required<?php echo $lastPriceOverall !== null ? ' value="' . htmlspecialchars((string) $lastPriceOverall) . '"' : ''; ?>>
+                                        <input type="number" name="price_per_liter" id="<?php echo $mode; ?>_price_per_liter" step="0.01" min="0" inputmode="decimal" class="form-control" required<?php echo (!$isEdit && $lastPriceOverall !== null) ? ' value="' . htmlspecialchars((string) $lastPriceOverall) . '"' : ''; ?>>
                                         <span class="input-group-text">/ L</span>
                                     </div>
-                                    <div class="form-text" id="add_price_hint"><?php echo $lastPriceOverall !== null ? 'Pre-filled with your last price — edit if it changed' : ''; ?></div>
+                                    <div class="form-text" id="<?php echo $mode; ?>_price_hint"><?php echo (!$isEdit && $lastPriceOverall !== null) ? 'Pre-filled with your last price — edit if it changed' : ''; ?></div>
                                 </div>
                                 <div class="col-sm-6">
-                                    <label class="form-label mb-1" for="add_liters">Liters <span class="text-danger">*</span></label>
+                                    <label class="form-label mb-1" for="<?php echo $mode; ?>_liters">Liters <span class="text-danger">*</span></label>
                                     <div class="input-group">
-                                        <input type="number" name="liters" id="add_liters" step="0.01" min="0" inputmode="decimal" class="form-control" required>
+                                        <input type="number" name="liters" id="<?php echo $mode; ?>_liters" step="0.01" min="0" inputmode="decimal" class="form-control" required>
                                         <span class="input-group-text">L</span>
                                     </div>
                                 </div>
                                 <div class="col-12">
-                                    <label class="form-label mb-1" for="add_total_amount">Total amount</label>
+                                    <label class="form-label mb-1" for="<?php echo $mode; ?>_total_amount">Total amount <span class="fs-11 text-muted fw-normal">(minimum <?php echo $addCurrency . ' ' . number_format($minFuelTotal); ?>)</span></label>
                                     <div class="input-group input-group-lg">
                                         <span class="input-group-text"><?php echo $addCurrency; ?></span>
-                                        <input type="number" id="add_total_amount" step="0.01" min="0" inputmode="decimal" class="form-control" placeholder="0.00">
+                                        <input type="number" id="<?php echo $mode; ?>_total_amount" step="0.01" min="0" inputmode="decimal" class="form-control" placeholder="0.00">
                                     </div>
                                 </div>
                             </div>
                         </div>
 
                         <div>
-                            <label class="form-label fw-semi-bold mb-1" for="add_station_name">Station <span class="text-muted fw-normal">(optional)</span></label>
+                            <label class="form-label fw-semi-bold mb-1" for="<?php echo $mode; ?>_station_name">Station <span class="text-muted fw-normal">(optional)</span></label>
                             <div class="input-group">
                                 <span class="input-group-text"><span class="fas fa-map-marker-alt"></span></span>
-                                <input type="text" name="station_name" id="add_station_name" class="form-control" placeholder="e.g. Shell Westlands" list="stationSuggestions" autocomplete="off" maxlength="100">
+                                <input type="text" name="station_name" id="<?php echo $mode; ?>_station_name" class="form-control" placeholder="e.g. Shell Westlands" list="stationSuggestions" autocomplete="off" maxlength="100">
                             </div>
                             <?php if (!empty($topStations)): ?>
-                                <div class="d-flex flex-wrap gap-2 mt-2" id="add_station_chips">
+                                <div class="d-flex flex-wrap gap-2 mt-2" id="<?php echo $mode; ?>_station_chips">
                                     <?php foreach ($topStations as $chipName): ?>
                                         <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill py-0 px-3" data-station="<?php echo htmlspecialchars($chipName, ENT_QUOTES); ?>"><?php echo htmlspecialchars($chipName); ?></button>
                                     <?php endforeach; ?>
@@ -613,80 +655,19 @@ if ($flash): ?>
                     <div class="modal-footer border-0 pt-0 justify-content-between flex-nowrap">
                         <div class="me-2">
                             <div class="fs-11 text-uppercase fw-bold text-muted">Total</div>
-                            <div class="fw-bold lh-1" style="font-size:1.35rem;" id="add_summary_total">&mdash;</div>
-                            <div class="fs-11 text-muted" id="add_summary_detail">&nbsp;</div>
+                            <div class="fw-bold lh-1" style="font-size:1.35rem;" id="<?php echo $mode; ?>_summary_total">&mdash;</div>
+                            <div class="fs-11 text-muted" id="<?php echo $mode; ?>_summary_detail">&nbsp;</div>
                         </div>
                         <div class="d-flex gap-2">
                             <button type="button" class="btn btn-falcon-default" data-bs-dismiss="modal">Cancel</button>
-                            <button type="submit" class="btn btn-primary px-4" id="add_fuel_submit"><span class="fas fa-save me-1"></span>Save</button>
+                            <button type="submit" class="btn btn-primary px-4" id="<?php echo $mode; ?>_fuel_submit"><span class="fas fa-save me-1"></span><?php echo $isEdit ? 'Update' : 'Save'; ?></button>
                         </div>
                     </div>
                 </form>
             </div>
         </div>
     </div>
-
-    <!-- Edit Fuel Modal -->
-    <div class="modal fade" id="edit-fuel-modal" tabindex="-1" aria-labelledby="editFuelModalLabel" aria-hidden="true">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="editFuelModalLabel">Edit Fuel Record</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                </div>
-                <form method="POST">
-                    <input type="hidden" name="action" value="edit">
-                    <input type="hidden" name="fuel_id" id="edit_fuel_id">
-                    <div class="modal-body">
-                        <div class="mb-3">
-                            <label class="form-label">Vehicle <span class="text-danger">*</span></label>
-                            <select name="vehicle_id" id="edit_vehicle_id" class="form-select" required>
-                                <option value="">Select vehicle...</option>
-                                <?php foreach ($vehicles as $v): ?>
-                                    <option value="<?php echo $v['id']; ?>"><?php echo sanitize($v['make'] . ' ' . $v['model']); ?></option>
-                                <?php endforeach; ?>
-                            </select>
-                        </div>
-                        <div class="row">
-                            <div class="col-md-6 mb-3">
-                                <label class="form-label">Date</label>
-                                <input type="date" name="fill_date" id="edit_fill_date" class="form-control">
-                            </div>
-                            <div class="col-md-6 mb-3">
-                                <label class="form-label">Mileage (km) <span class="text-danger">*</span></label>
-                                <input type="number" name="mileage" id="edit_mileage" class="form-control" required>
-                            </div>
-                        </div>
-                        <div class="row">
-                            <div class="col-md-4 mb-3">
-                                <label class="form-label">Price per Liter <span class="text-danger">*</span></label>
-                                <input type="number" name="price_per_liter" id="edit_price_per_liter" step="0.01" class="form-control" required>
-                            </div>
-                            <div class="col-md-4 mb-3">
-                                <label class="form-label">Liters <span class="text-danger">*</span></label>
-                                <input type="number" name="liters" id="edit_liters" step="0.01" class="form-control" required>
-                                <div class="form-text">Enter this or the total amount</div>
-                            </div>
-                            <div class="col-md-4 mb-3">
-                                <label class="form-label">Total Amount (<?php echo currencySymbol(); ?>)</label>
-                                <input type="number" id="edit_total_amount" step="0.01" class="form-control">
-                                <div class="form-text">Auto-fills liters</div>
-                            </div>
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label">Station</label>
-                            <input type="text" name="station_name" id="edit_station_name" class="form-control" placeholder="Station name" list="stationSuggestions" autocomplete="off">
-                        </div>
-                        <input type="hidden" name="full_tank" id="edit_full_tank">
-                    </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                        <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Update</button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    </div>
+    <?php endforeach; ?>
 
     <!-- Delete Fuel Modal -->
     <div class="modal fade" id="delete-fuel-modal" tabindex="-1" aria-labelledby="deleteFuelModalLabel" aria-hidden="true">
@@ -814,9 +795,9 @@ if ($flash): ?>
                     this.querySelector('form').reset();
                     priceEditedByUser = false;
                     document.getElementById('add_mileage_hint').textContent = '';
-                    refreshAddSummary();
-                    syncStationChips();
-                    resetSubmitButton();
+                    addPolish.refresh();
+                    addPolish.syncChips();
+                    addPolish.resetSubmit();
                     priceHint.textContent = lastPriceOverall != null ? 'Pre-filled with your last price — edit if it changed' : '';
                     mileageInput.min = 0;
                     mileageInput.placeholder = 'Enter mileage';
@@ -843,78 +824,10 @@ if ($flash): ?>
                 document.getElementById('edit_total_amount')
             );
 
-            // ---- Add Fuel modal polish ----
-            const addForm = document.getElementById('addFuelForm');
-            const litersInput = document.getElementById('add_liters');
-            const totalInput = document.getElementById('add_total_amount');
-            const stationInput = document.getElementById('add_station_name');
-            const submitBtn = document.getElementById('add_fuel_submit');
-            const currencySymbolJs = <?php echo json_encode($addCurrency); ?>;
-
-            // Live "Total" readout in the footer
-            function refreshAddSummary() {
-                const price = parseFloat(priceInput.value);
-                const liters = parseFloat(litersInput.value);
-                const total = parseFloat(totalInput.value);
-                const out = document.getElementById('add_summary_total');
-                const detail = document.getElementById('add_summary_detail');
-                if (total > 0) {
-                    out.textContent = currencySymbolJs + ' ' + total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-                    const bits = [];
-                    if (liters > 0) bits.push(liters.toFixed(2) + ' L');
-                    if (price > 0) bits.push('@ ' + price.toFixed(2));
-                    detail.textContent = bits.join(' ') || ' ';
-                } else {
-                    out.textContent = '—';
-                    detail.textContent = ' ';
-                }
-            }
-            // The form-level listener runs after the calculator's own field listeners,
-            // so it always sees the freshly computed values.
-            addForm.addEventListener('input', refreshAddSummary);
-            refreshAddSummary();
-
-            // Today / Yesterday quick dates (local date, not UTC)
-            addForm.querySelectorAll('[data-date-offset]').forEach(function (btn) {
-                btn.addEventListener('click', function () {
-                    const d = new Date();
-                    d.setDate(d.getDate() + parseInt(this.dataset.dateOffset, 10));
-                    const pad = function (n) { return String(n).padStart(2, '0'); };
-                    document.getElementById('add_fill_date').value = d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
-                });
-            });
-
-            // Station quick-pick chips
-            function syncStationChips() {
-                document.querySelectorAll('#add_station_chips [data-station]').forEach(function (chip) {
-                    const active = chip.dataset.station === stationInput.value;
-                    chip.classList.toggle('btn-primary', active);
-                    chip.classList.toggle('btn-outline-secondary', !active);
-                });
-            }
-            document.querySelectorAll('#add_station_chips [data-station]').forEach(function (chip) {
-                chip.addEventListener('click', function () {
-                    stationInput.value = this.dataset.station;
-                    syncStationChips();
-                });
-            });
-            stationInput.addEventListener('input', syncStationChips);
-
-            // Validation styling + double-submit guard
-            function resetSubmitButton() {
-                submitBtn.disabled = false;
-                submitBtn.innerHTML = '<span class="fas fa-save me-1"></span>Save';
-                addForm.classList.remove('was-validated');
-            }
-            addForm.addEventListener('submit', function (e) {
-                if (!addForm.checkValidity()) {
-                    addForm.classList.add('was-validated');
-                    return;
-                }
-                submitBtn.disabled = true;
-                submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Saving…';
-            });
-            window.addEventListener('pageshow', resetSubmitButton); // back-button safety
+            // ---- Shared modal polish (summary, quick dates, chips, rules, submit guard) ----
+            const addPolish = setupFuelForm('add', null);
+            const editPolish = setupFuelForm('edit', function () { return fuelEditOriginal; });
+            window.fuelEditPolish = editPolish;
 
             // Land the cursor where the user needs to type next
             addFuelModal.addEventListener('shown.bs.modal', function () {
@@ -925,7 +838,148 @@ if ($flash): ?>
                     vehicleSelect.focus();
                 }
             });
+            const editFuelModalEl = document.getElementById('edit-fuel-modal');
+            editFuelModalEl.addEventListener('shown.bs.modal', function () {
+                document.getElementById('edit_liters').focus();
+            });
+            editFuelModalEl.addEventListener('hidden.bs.modal', function () {
+                fuelEditOriginal = null;
+                editPolish.resetSubmit();
+            });
         });
+
+        // Limits mirrored from App\Services\FuelLogRules for instant feedback; the server enforces them too.
+        const FUEL_RULES = {
+            minTotal: <?php echo (int) $minFuelTotal; ?>,
+            maxPerDay: <?php echo (int) $maxFuelPerDay; ?>,
+            currency: <?php echo json_encode($addCurrency); ?>,
+            dayCounts: <?php echo json_encode((object) $fuelDayCounts); ?>
+        };
+        // The record currently open in the Edit modal (vehicle, date, total) — historic entries
+        // that predate the rules stay editable as long as those values are left alone.
+        let fuelEditOriginal = null;
+
+        // Wires one modal ("add" or "edit"): live total, Today/Yesterday, station chips,
+        // limit checks, validation styling and the double-submit guard.
+        function setupFuelForm(prefix, getOriginal) {
+            const form = document.getElementById(prefix + 'FuelForm');
+            const el = function (suffix) { return document.getElementById(prefix + '_' + suffix); };
+            const vehicleSel = el('vehicle_id');
+            const dateInput = el('fill_date');
+            const priceInput = el('price_per_liter');
+            const litersInput = el('liters');
+            const totalInput = el('total_amount');
+            const stationInput = el('station_name');
+            const submitBtn = el('fuel_submit');
+            const ruleMsg = el('rule_msg');
+            const submitHtml = submitBtn.innerHTML;
+            const fmt = function (n) { return n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }); };
+
+            function refreshSummary() {
+                const price = parseFloat(priceInput.value);
+                const liters = parseFloat(litersInput.value);
+                const total = parseFloat(totalInput.value);
+                const out = el('summary_total');
+                const detail = el('summary_detail');
+                if (total > 0) {
+                    out.textContent = FUEL_RULES.currency + ' ' + fmt(total);
+                    const bits = [];
+                    if (liters > 0) bits.push(liters.toFixed(2) + ' L');
+                    if (price > 0) bits.push('@ ' + price.toFixed(2));
+                    detail.textContent = bits.join(' ') || ' ';
+                } else {
+                    out.textContent = '—';
+                    detail.textContent = ' ';
+                }
+            }
+
+            function validateRules() {
+                const original = getOriginal ? getOriginal() : null;
+                const total = parseFloat(totalInput.value);
+                const totalUnchanged = original && Math.abs(total - original.total) < 0.005;
+
+                let minMsg = '';
+                if (total > 0 && total < FUEL_RULES.minTotal && !totalUnchanged) {
+                    minMsg = 'Minimum fuel purchase is ' + FUEL_RULES.currency + ' ' + FUEL_RULES.minTotal.toLocaleString() + '.';
+                }
+                totalInput.setCustomValidity(minMsg);
+
+                let dayMsg = '';
+                let info = '';
+                if (vehicleSel.value && dateInput.value) {
+                    const sameSlot = original && original.vehicle === vehicleSel.value && original.date === dateInput.value;
+                    const count = FUEL_RULES.dayCounts[vehicleSel.value + '|' + dateInput.value] || 0;
+                    if (!sameSlot && count >= FUEL_RULES.maxPerDay) {
+                        dayMsg = 'Limit reached: this vehicle already has ' + count + ' fuel records on that date (max ' + FUEL_RULES.maxPerDay + ' per day).';
+                    } else if (!sameSlot && count > 0) {
+                        info = count + ' of ' + FUEL_RULES.maxPerDay + ' daily fuel records already logged for this vehicle on that date.';
+                    }
+                }
+                dateInput.setCustomValidity(dayMsg);
+
+                const text = dayMsg || minMsg || info;
+                ruleMsg.textContent = text;
+                ruleMsg.classList.toggle('d-none', text === '');
+                ruleMsg.classList.toggle('text-danger', !!(dayMsg || minMsg));
+                ruleMsg.classList.toggle('text-muted', !(dayMsg || minMsg));
+            }
+
+            function refresh() {
+                refreshSummary();
+                validateRules();
+            }
+
+            // Runs after the calculator's own field listeners, so it sees freshly computed values.
+            form.addEventListener('input', refresh);
+            vehicleSel.addEventListener('change', refresh);
+            dateInput.addEventListener('change', refresh);
+
+            // Today / Yesterday quick dates (local date, not UTC)
+            form.querySelectorAll('[data-date-offset]').forEach(function (btn) {
+                btn.addEventListener('click', function () {
+                    const d = new Date();
+                    d.setDate(d.getDate() + parseInt(this.dataset.dateOffset, 10));
+                    const pad = function (n) { return String(n).padStart(2, '0'); };
+                    dateInput.value = d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+                    refresh();
+                });
+            });
+
+            // Station quick-pick chips
+            function syncChips() {
+                document.querySelectorAll('#' + prefix + '_station_chips [data-station]').forEach(function (chip) {
+                    const active = chip.dataset.station === stationInput.value;
+                    chip.classList.toggle('btn-primary', active);
+                    chip.classList.toggle('btn-outline-secondary', !active);
+                });
+            }
+            document.querySelectorAll('#' + prefix + '_station_chips [data-station]').forEach(function (chip) {
+                chip.addEventListener('click', function () {
+                    stationInput.value = this.dataset.station;
+                    syncChips();
+                });
+            });
+            stationInput.addEventListener('input', syncChips);
+
+            // Validation styling + double-submit guard
+            function resetSubmit() {
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = submitHtml;
+                form.classList.remove('was-validated');
+            }
+            form.addEventListener('submit', function () {
+                if (!form.checkValidity()) {
+                    form.classList.add('was-validated');
+                    return;
+                }
+                submitBtn.disabled = true;
+                submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Saving…';
+            });
+            window.addEventListener('pageshow', resetSubmit); // back-button safety
+
+            refresh();
+            return { refresh: refresh, syncChips: syncChips, resetSubmit: resetSubmit };
+        }
 
         // Keeps Liters and Total Amount in sync using Price per Liter, so the
         // user only needs to type in whichever one they know
@@ -966,6 +1020,17 @@ if ($flash): ?>
             document.getElementById('edit_mileage').value = fuel.mileage;
             document.getElementById('edit_station_name').value = fuel.station_name || '';
             document.getElementById('edit_full_tank').value = fuel.full_tank;
+
+            fuelEditOriginal = {
+                vehicle: String(fuel.vehicle_id),
+                date: fuel.fill_date,
+                total: parseFloat(fuel.total_cost)
+            };
+            if (window.fuelEditPolish) {
+                window.fuelEditPolish.refresh();
+                window.fuelEditPolish.syncChips();
+                window.fuelEditPolish.resetSubmit();
+            }
 
             const editModal = new bootstrap.Modal(document.getElementById('edit-fuel-modal'));
             editModal.show();
