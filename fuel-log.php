@@ -120,6 +120,38 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     }
 }
 
+// Last-used price per liter (per vehicle, plus the most recent overall) to pre-fill the
+// Add Fuel modal, and the distinct station names this user has used, most-used first,
+// to suggest as they type. Both scoped to the current user's own vehicles.
+$lastPriceByVehicle = [];
+$lastPriceOverall = null;
+$stmt = $pdo->prepare("
+    SELECT fl.vehicle_id, fl.price_per_liter
+    FROM fuel_log fl
+    JOIN vehicles v ON v.id = fl.vehicle_id
+    WHERE v.user_id = ? AND fl.price_per_liter > 0
+    ORDER BY fl.id DESC
+");
+$stmt->execute([$userId]);
+foreach ($stmt->fetchAll() as $row) {
+    $lastPriceOverall ??= (float) $row['price_per_liter'];
+    $lastPriceByVehicle[(int) $row['vehicle_id']] ??= (float) $row['price_per_liter'];
+}
+
+$stmt = $pdo->prepare("
+    SELECT fl.station_name, COUNT(*) AS uses
+    FROM fuel_log fl
+    JOIN vehicles v ON v.id = fl.vehicle_id
+    WHERE v.user_id = ? AND fl.station_name IS NOT NULL AND TRIM(fl.station_name) <> ''
+    GROUP BY fl.station_name
+    ORDER BY uses DESC, MAX(fl.id) DESC
+    LIMIT 50
+");
+$stmt->execute([$userId]);
+// station_name is stored HTML-escaped (sanitize()), so decode for display in the list;
+// it is re-escaped on save like any typed value.
+$stationSuggestions = array_map(fn($r) => html_entity_decode($r['station_name'], ENT_QUOTES, 'UTF-8'), $stmt->fetchAll());
+
 // Get fuel logs — always scoped to the current user's own vehicles
 $where = "WHERE v.user_id = " . (int)$userId;
 if ($vehicleFilter) {
@@ -459,6 +491,12 @@ if ($flash): ?>
     </div>
 
     <!-- Add Fuel Modal -->
+    <datalist id="stationSuggestions">
+        <?php foreach ($stationSuggestions as $stationName): ?>
+            <option value="<?php echo htmlspecialchars($stationName, ENT_QUOTES); ?>"></option>
+        <?php endforeach; ?>
+    </datalist>
+
     <div class="modal fade" id="add-fuel-modal" tabindex="-1" aria-labelledby="addFuelModalLabel" aria-hidden="true">
         <div class="modal-dialog">
             <div class="modal-content">
@@ -491,7 +529,8 @@ if ($flash): ?>
                         <div class="row">
                             <div class="col-md-4 mb-3">
                                 <label class="form-label">Price per Liter <span class="text-danger">*</span></label>
-                                <input type="number" name="price_per_liter" id="add_price_per_liter" step="0.01" class="form-control" required>
+                                <input type="number" name="price_per_liter" id="add_price_per_liter" step="0.01" class="form-control" required<?php echo $lastPriceOverall !== null ? ' value="' . htmlspecialchars((string) $lastPriceOverall) . '"' : ''; ?>>
+                                <div class="form-text" id="add_price_hint"><?php echo $lastPriceOverall !== null ? 'Pre-filled with your last price — edit if it changed' : ''; ?></div>
                             </div>
                             <div class="col-md-4 mb-3">
                                 <label class="form-label">Liters <span class="text-danger">*</span></label>
@@ -506,7 +545,7 @@ if ($flash): ?>
                         </div>
                         <div class="mb-3">
                             <label class="form-label">Station</label>
-                            <input type="text" name="station_name" class="form-control" placeholder="Station name">
+                            <input type="text" name="station_name" class="form-control" placeholder="Station name" list="stationSuggestions" autocomplete="off">
                         </div>
                     </div>
                     <div class="modal-footer">
@@ -567,7 +606,7 @@ if ($flash): ?>
                         </div>
                         <div class="mb-3">
                             <label class="form-label">Station</label>
-                            <input type="text" name="station_name" id="edit_station_name" class="form-control" placeholder="Station name">
+                            <input type="text" name="station_name" id="edit_station_name" class="form-control" placeholder="Station name" list="stationSuggestions" autocomplete="off">
                         </div>
                         <input type="hidden" name="full_tank" id="edit_full_tank">
                     </div>
@@ -641,9 +680,35 @@ if ($flash): ?>
             <?php endforeach; ?>
         };
 
+            // Last-used price per liter, per vehicle (falls back to the most recent overall,
+            // which is already in the field on load). Stops auto-filling once the user has
+            // typed their own price so a changed pump price is never overwritten.
+            const lastPriceByVehicle = <?php echo json_encode((object) $lastPriceByVehicle); ?>;
+            const lastPriceOverall = <?php echo json_encode($lastPriceOverall); ?>;
+            const priceInput = document.getElementById('add_price_per_liter');
+            const priceHint = document.getElementById('add_price_hint');
+            let priceEditedByUser = false;
+            priceInput.addEventListener('input', function (e) {
+                if (e.isTrusted) {
+                    priceEditedByUser = true;
+                    priceHint.textContent = '';
+                }
+            });
+            function applyLastPrice(vehicleId) {
+                if (priceEditedByUser) return;
+                const price = lastPriceByVehicle[vehicleId] ?? lastPriceOverall;
+                if (price == null) return;
+                priceInput.value = price;
+                priceHint.textContent = lastPriceByVehicle[vehicleId] != null
+                    ? 'Pre-filled with this vehicle\'s last price — edit if it changed'
+                    : 'Pre-filled with your last price — edit if it changed';
+                priceInput.dispatchEvent(new Event('input')); // let the liters/total calc refresh
+            }
+
             // Update mileage when vehicle changes in ADD modal
             vehicleSelect.addEventListener('change', function() {
                 const vehicleId = this.value;
+                if (vehicleId) applyLastPrice(vehicleId);
 
                 if (vehicleId && vehicleData[vehicleId]) {
                     const currentMileage = vehicleData[vehicleId].currentMileage;
@@ -676,6 +741,8 @@ if ($flash): ?>
                 addFuelModal.addEventListener('hidden.bs.modal', function () {
                     // Reset form when modal closes
                     this.querySelector('form').reset();
+                    priceEditedByUser = false;
+                    priceHint.textContent = lastPriceOverall != null ? 'Pre-filled with your last price — edit if it changed' : '';
                     mileageInput.min = 0;
                     mileageInput.placeholder = 'Enter mileage';
                     mileageInput.setCustomValidity('');

@@ -219,8 +219,8 @@ if ($flash): ?>
                     </div>
                     <div>
                         <label class="form-label">Odometer Photo (optional)</label>
-                        <input type="file" name="odometer_photo" id="odometer_photo" class="form-control" accept="image/*" capture="environment" disabled>
-                        <div class="form-text">Snap a photo of the dashboard as proof of this reading.</div>
+                        <input type="file" name="odometer_photo" id="odometer_photo" class="form-control" accept="image/*">
+                        <div class="form-text">Take a photo of the dashboard or choose one from your gallery as proof of this reading.</div>
                         <div id="odometer-photo-preview" class="mt-2 d-none">
                             <img src="" alt="Odometer preview" class="img-thumbnail" style="max-height:140px;">
                         </div>
@@ -342,7 +342,6 @@ if ($flash): ?>
             const opt = this.options[this.selectedIndex];
             const mileageInput = document.getElementById('mileage');
             const notesInput = document.getElementById('notes');
-            const photoInput = document.getElementById('odometer_photo');
             const hintElement = document.getElementById('mileage-hint');
 
             if (this.value) {
@@ -352,7 +351,6 @@ if ($flash): ?>
                 // Enable inputs
                 mileageInput.disabled = false;
                 notesInput.disabled = false;
-                photoInput.disabled = false;
 
                 // Set min value
                 mileageInput.min = cur;
@@ -373,11 +371,8 @@ if ($flash): ?>
                 // Disable inputs
                 mileageInput.disabled = true;
                 notesInput.disabled = true;
-                photoInput.disabled = true;
                 mileageInput.value = '';
                 notesInput.value = '';
-                photoInput.value = '';
-                document.getElementById('odometer-photo-preview').classList.add('d-none');
                 hintElement.textContent = '';
                 document.getElementById('service-warning').style.display = 'none';
             }
